@@ -6,7 +6,11 @@
 ## 记录
 
 - 包号与名字：`<...>`
-- 审查者身份：`<谁，不是本包作者>`
+- agent: `<派发你的子代理名>`
+- dispatched_at: `<收到派发的时间>`
+- reviewer: `<审查者名，必须和卡末的审查者一致>`
+- designer: `<卡末的设计者名>`
+- reviewed_card_sha256: `<node skills/decision-maker/scripts/validate-card.mjs <card.md> --version 的输出>`
 - 结论：`<通过 / 有阻塞>`
 
 ## 九问原文

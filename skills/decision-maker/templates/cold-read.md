@@ -6,7 +6,11 @@
 ## 记录
 
 - 包号与名字：`<...>`
-- 冷读者身份：`<谁，不是本包作者>`
+- agent: `<派发你的子代理名>`
+- dispatched_at: `<收到派发的时间>`
+- reviewer: `<冷读者名，必须和卡末的审查者一致>`
+- designer: `<卡末的设计者名>`
+- reviewed_card_sha256: `<node skills/decision-maker/scripts/validate-card.mjs <card.md> --version 的输出>`
 - 读过的材料：`<卡 ref；上下文包 ref>`
 - 结论：`<过 / 不过>`；不过时写改什么。
 
@@ -22,4 +26,4 @@
 ## 改卡
 
 - 改了什么：`<...>`
-- 新读者：`<没参与修订的人；复读 ref>`；复读结论：`<过 / 不过>`。
+- 新读者：`<没参与修订的人；复读 ref>`；复读结论：`<过 / 不过>`；新的 reviewed_card_sha256：`<...>`。

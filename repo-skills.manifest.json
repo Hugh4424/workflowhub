@@ -4,7 +4,7 @@
   "source": "skills/catalog.yaml",
   "derived_from": {
     "catalog": "skills/catalog.yaml",
-    "catalog_sha256": "14e1bc114ab383734f9be8bf509adf247fbf93b39041d0f5518baccf8da7f65e",
+    "catalog_sha256": "dcc6d321b61f16ab2380b88dc5cafeedca3afd3280fe7bc04a793a03f12d6658",
     "reuse_registry": "skills/reuse-registry.md",
     "reuse_registry_sha256": "8adc897c20b1a8fc4b5ab359f24af73977b52f8dd6367f58eb88095100781b98"
   },
@@ -181,7 +181,7 @@
     {
       "name": "decision-maker",
       "path": "skills/decision-maker/SKILL.md",
-      "local_version": "0.1.0",
+      "local_version": "0.2.0",
       "status": "native",
       "used_by_stages": [
         "make-decision"
@@ -192,7 +192,7 @@
         "skills/talk-with-zhipeng",
         "skills/wh-review"
       ],
-      "local_changes": "workflowhub 原生；每包最多 3 个子代理；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；脚本只做机械检查，不代替冷读/对抗/用户判断。",
+      "local_changes": "workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。",
       "upstream": []
     },
     {

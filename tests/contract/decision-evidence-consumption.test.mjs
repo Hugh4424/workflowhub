@@ -5,7 +5,7 @@
 // self-reference code).
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -826,5 +826,283 @@ describe("ORACLE-P2-BOUND-HANDOFF bound original and named failures", () => {
     writeFileSync(path, `inserted line\n${lines.join("\n")}\n`);
     expect(spawnSync("git", ["show", blob], { cwd: dir }).stdout.equals(frozen)).toBe(true);
     expect(readFileSync(path).equals(frozen)).toBe(false);
+  });
+});
+// P3 ORACLE-P3-ROLE-SOURCES: a package card must be bound to the role originals
+// that really produced it and to a real package-level user reply. The machine
+// only judges shape and binding; whether the review was good enough is a human
+// read. This controlled fixture proves the checks can fail; it does not stand in
+// for the real three roles, the real reply or the real card version.
+const P3_VALIDATOR = join(ROOT, "skills/decision-maker/scripts/validate-card.mjs");
+const P3_STATUS = join(ROOT, "skills/decision-maker/scripts/status.mjs");
+const P3_QUOTE = "行为看实际页面，排版验收要求截图（推荐）";
+const P3_CALL = "call_controlled_p3_0001";
+
+function p3CardBody({ header = "| 格 | 内容 |\n| --- | --- |\n" } = {}) {
+  const template = readFileSync(join(ROOT, "skills/decision-maker/templates/card.md"), "utf8");
+  const table = template.slice(template.indexOf("| 格 |"), template.indexOf("## 卡末"));
+  const rows = table
+    .split("\n")
+    .slice(2)
+    .join("\n")
+    .replace(/\x60<[^>]+>\x60/g, "受控卡片输入：读取已存在的回执。")
+    .replace(/^\| 验收 \|.*$/m, "| 验收 | 通过条件：本地回执可读且退出 0；失败条件：回执缺失或退出非零；反例：删掉回执应失败；证据：验证器原始输出。 |");
+  return `# 受控卡\n\n${header}${rows}`;
+}
+
+function p3sha(file) {
+  return createHash("sha256").update(readFileSync(file)).digest("hex");
+}
+
+function p3Package({ header } = {}) {
+  const dir = temp("p3-roles-");
+  const roles = join(dir, "roles");
+  mkdirSync(roles);
+  const body = p3CardBody({ header });
+  const card = join(dir, "card.md");
+  writeFileSync(card, body);
+  const version = spawnSync(process.execPath, [P3_VALIDATOR, card, "--version"], { encoding: "utf8" }).stdout.trim();
+  expect(version).toMatch(/^[0-9a-f]{64}$/);
+  const files = {
+    research: join(roles, "research.md"),
+    design: join(roles, "design.md"),
+    cold: join(roles, "cold-read.md"),
+    adversarial: join(roles, "adversarial.md"),
+    answer: join(roles, "answer.md"),
+  };
+  const calls = {
+    research: "p3-researcher@2026-11-20T04:18:00+08:00",
+    design: "p3-designer@2026-11-20T04:31:00+08:00",
+    cold: "p3-reviewer@2026-11-20T05:02:00+08:00",
+    adversarial: "p3-reviewer@2026-11-20T05:02:00+08:00",
+  };
+  const spec = {
+    research: { agent: "p3-researcher", at: "2026-11-20T04:18:00+08:00" },
+    design: { agent: "p3-designer", at: "2026-11-20T04:31:00+08:00" },
+    cold: { agent: "p3-reviewer", at: "2026-11-20T05:02:00+08:00" },
+    adversarial: { agent: "p3-reviewer", at: "2026-11-20T05:02:00+08:00" },
+  };
+  const questions = (count) => Array.from({ length: count }, (_, index) => `${index + 1}. 受控答复 ${index + 1}`).join("\n");
+  writeFileSync(files.research, `agent: ${spec.research.agent}\ndispatched_at: ${spec.research.at}\n\n# 调研原件\n\n1. 受控事实；来源 cont/rors:1\n`);
+  writeFileSync(files.design, `agent: ${spec.design.agent}\ndispatched_at: ${spec.design.at}\ndesigner: p3-designer\n\n# 设计原件\n\n1. 受控方案。\n`);
+  writeFileSync(files.cold, `agent: ${spec.cold.agent}\ndispatched_at: ${spec.cold.at}\nreviewer: p3-reviewer\ndesigner: p3-designer\nreviewed_card_sha256: ${version}\n\n# 冷读原件\n\n## 六问原文\n\n${questions(6)}\n\n- 结论：过\n`);
+  writeFileSync(files.adversarial, `agent: ${spec.adversarial.agent}\ndispatched_at: ${spec.adversarial.at}\nreviewer: p3-reviewer\ndesigner: p3-designer\nreviewed_card_sha256: ${version}\n- 结论：通过\n\n## 九问原文\n\n${questions(9)}\n\n## 阻塞项\n\n- 无\n`);
+  writeFileSync(files.answer, `# 受控包级答复\n\n- 答复来源：受控问答 ${P3_CALL}。\n- 所属包：包 6\n\n1. 用户原文：${P3_QUOTE}\n`);
+  const machine = [
+    "## 卡末（校验器用，人可跳过）",
+    "",
+    "- 包号：包 6",
+    "- 设计者：p3-designer",
+    "- 审查者：p3-reviewer",
+    "- source_id：未分配",
+    "- modality：允许",
+    "- 来源身份：用户答复",
+    `- 答复原件：roles/answer.md；sha256=${p3sha(files.answer)}；调用=${P3_CALL}；包=包 6`,
+    `- 答复原文：「${P3_QUOTE}」`,
+    "- 选项与风险：推荐按示例范围写入计划；代价是范围被示例限定。",
+    `- 调研原件：roles/research.md；sha256=${p3sha(files.research)}；调用=${calls.research}`,
+    `- 设计原件：roles/design.md；sha256=${p3sha(files.design)}；调用=${calls.design}`,
+    `- 冷读原件：roles/cold-read.md；sha256=${p3sha(files.cold)}；调用=${calls.cold}`,
+    `- 对抗原件：roles/adversarial.md；sha256=${p3sha(files.adversarial)}；调用=${calls.adversarial}`,
+    "",
+  ].join("\n");
+  writeFileSync(card, `${body}${machine}`);
+  return { dir, card, files, version, body, calls };
+}
+
+function p3Run(script, args) {
+  const result = spawnSync(process.execPath, [script, ...args], { cwd: ROOT, encoding: "utf8", timeout: 30_000 });
+  return { ...result, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+}
+
+describe("ORACLE-P3-ROLE-SOURCES bound card, wrong source and wrong bytes", () => {
+  it("accepts a card whose role originals and package reply are bound to its own version", () => {
+    const pkg = p3Package();
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(finding.ok).toBe(true);
+    expect(run.status).toBe(0);
+    expect(finding.cardVersion).toBe(pkg.version);
+    const status = p3Run(P3_STATUS, [pkg.dir, "--json", "--require-complete"]);
+    const payload = JSON.parse(status.stdout);
+    expect(payload.evaluated).toBe(1);
+    expect(payload.rows.find((row) => row.file === "card.md")).toMatchObject({ complete: true });
+    expect(status.status).toBe(0);
+  });
+
+  it("accepts a card-shaped file that has no `| 格 |` header row", () => {
+    const pkg = p3Package({ header: "" });
+    expect(readFileSync(pkg.card, "utf8")).not.toMatch(/^\|\s*格\s*\|/m);
+    const status = p3Run(P3_STATUS, [pkg.dir, "--json", "--require-complete"]);
+    const payload = JSON.parse(status.stdout);
+    expect(payload.evaluated).toBe(1);
+    expect(payload.rows.find((row) => row.file === "card.md")).toMatchObject({ complete: true });
+    expect(status.status).toBe(0);
+  });
+
+  it("rejects an acceptance cell that writes 无 for every part", () => {
+    const pkg = p3Package();
+    const card = readFileSync(pkg.card, "utf8").replace(/^\| 验收 \|.*$/m, "| 验收 | 通过：无；失败：无；反例：无；证据：无 |");
+    writeFileSync(pkg.card, card);
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.acceptEmpty).toEqual(["通过", "失败", "反例", "证据"]);
+    expect(finding.reasons.join("\n")).toContain("验收写空：反例");
+  });
+
+  it("rejects one file standing in for several role originals", () => {
+    const pkg = p3Package();
+    const card = readFileSync(pkg.card, "utf8").replace(/(对抗原件：roles\/adversarial\.md)/, "$1；调用="+pkg.calls.adversarial).replace("roles/adversarial.md", "roles/cold-read.md");
+    writeFileSync(pkg.card, card);
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.gaps.join("\n")).toContain("角色原件重复");
+  });
+
+  it("rejects a role original with no dispatch identity", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.files.research, "# 调研原件（手写，无派发来源）\n\n1. 受控事实\n");
+    const card = readFileSync(pkg.card, "utf8").replace(/(调研原件：roles\/research\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.research)}`);
+    writeFileSync(pkg.card, card);
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(run.status).toBe(1);
+    expect(JSON.parse(run.stdout).gaps.join("\n")).toContain("原件没写派发来源：调研原件");
+  });
+
+  it("rejects a reviewer who is the card author", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.files.cold, readFileSync(pkg.files.cold, "utf8").replace("reviewer: p3-reviewer", "reviewer: p3-designer"));
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8")
+      .replace(/^- 审查者：.*$/m, "- 审查者：p3-designer")
+      .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.reasons.join("\n")).toContain("审查者与卡作者同一身份");
+    expect(p3Run(P3_STATUS, [pkg.dir, "--require-complete"]).status).toBe(1);
+  });
+
+  it("rejects role originals that reviewed different card bytes", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace("| 边界 | 受控卡片输入", "| 边界 | 受控卡片输入（审查后改过的字节）"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.gaps.join("\n")).toContain("卡版本不匹配");
+    expect(finding.cardVersion).not.toBe(pkg.version);
+  });
+
+  it("rejects a reply quote or call that is not in the answer original", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(`「${P3_QUOTE}」`, "「这是旧九包的整体确认原话」"));
+    const quoteRun = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(quoteRun.status).toBe(1);
+    expect(JSON.parse(quoteRun.stdout).gaps.join("\n")).toContain("答复原文不在原件中");
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(`调用=${P3_CALL}`, "调用=call_not_here_0000"));
+    const callRun = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(callRun.status).toBe(1);
+    expect(JSON.parse(callRun.stdout).gaps.join("\n")).toContain("调用来源不在答复原件中");
+  });
+
+  it("rejects a reply modality outside the legal enum", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace("- modality：允许", "- modality：同意"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(run.status).toBe(1);
+    expect(JSON.parse(run.stdout).gaps.join("\n")).toContain("答复语气不合法");
+  });
+
+  it("rejects a labeled acceptance cell that never states its own failure condition", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(/^\| 验收 \|.*$/m, "| 验收 | 通过条件：本地回执可读。反例：删掉回执应失败。证据：验证器原始输出。 |"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.acceptMissing).toContain("失败");
+    expect(finding.reasons.join("\n")).toContain("验收缺项：失败");
+  });
+
+  it("rejects a dispatch time in the future", () => {
+    const pkg = p3Package();
+    const future = "2099-01-01T00:00:00+08:00";
+    writeFileSync(pkg.files.cold, readFileSync(pkg.files.cold, "utf8").replace(/^dispatched_at: .*$/m, `dispatched_at: ${future}`));
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8")
+      .replace(/^- 冷读原件：.*$/m, (line) => line.replace(/调用=.*$/, `调用=p3-reviewer@${future}`))
+      .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.reasons.join("\n")).toContain("派发时间在未来");
+  });
+
+  it("rejects a placeholder failure condition such as 待补", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(/^\| 验收 \|.*$/m, "| 验收 | 通过条件：本地回执可读；失败条件：待补；反例：删掉回执应失败；证据：验证器原始输出。 |"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.acceptEmpty).toContain("失败");
+  });
+
+  it("rejects a dispatch time written after the original was saved", () => {
+    const pkg = p3Package();
+    const saved = new Date(Date.now() - 3600_000);
+    const dispatched = new Date(Date.now() - 1800_000).toISOString();
+    writeFileSync(pkg.files.cold, readFileSync(pkg.files.cold, "utf8").replace(/^dispatched_at: .*$/m, `dispatched_at: ${dispatched}`));
+    utimesSync(pkg.files.cold, saved, saved);
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8")
+      .replace(/^- 冷读原件：.*$/m, (line) => line.replace(/调用=.*$/, `调用=p3-reviewer@${dispatched}`))
+      .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.reasons.join("\n")).toContain("派发时间晚于原件写盘");
+  });
+
+  it("keeps a named gap in status when a role original is missing", () => {
+    const pkg = p3Package();
+    rmSync(pkg.files.adversarial);
+    const status = p3Run(P3_STATUS, [pkg.dir, "--json"]);
+    const payload = JSON.parse(status.stdout);
+    const row = payload.rows.find((entry) => entry.file === "card.md");
+    expect(row.complete).toBe(false);
+    expect(row.gaps.join("\n")).toContain("缺原件：对抗原件");
+    expect(p3Run(P3_STATUS, [pkg.dir, "--require-complete"]).status).toBe(1);
+  });
+
+  it("fails status on a directory with no evaluable card", () => {
+    const dir = temp("p3-empty-");
+    expect(p3Run(P3_STATUS, [dir, "--json"]).status).toBe(1);
+    expect(JSON.parse(p3Run(P3_STATUS, [dir, "--json"]).stdout).evaluated).toBe(0);
+    writeFileSync(join(dir, "notes.md"), "# 说明\n\n这里没有卡。\n");
+    const onlyNotes = p3Run(P3_STATUS, [dir, "--require-complete"]);
+    expect(onlyNotes.status).toBe(1);
+    expect(onlyNotes.stdout).toContain("没有可评估的卡");
+  });
+});
+
+// P3 ORACLE-P3-PORTABLE-TEMPLATE: the release closure must carry both the v1 and
+// the v2 decision-log template, byte for byte, and refuse a release that lost the
+// v2 file. The controlled isolation root is the only thing touched.
+describe("ORACLE-P3-PORTABLE-TEMPLATE v2 template travels with the old one", () => {
+  it("ships both decision-log templates and rejects a release that dropped v2", async () => {
+    const { buildSkillBundleRelease, validateSkillBundleRelease } = await import("../../runtime/distribution/skill-bundle-release.mjs");
+    const dir = temp("p3-portable-");
+    const bundle = join(dir, "skill-bundle");
+    await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: bundle });
+    const v2 = "skills/decision-log/templates/decision-log-template-v2.md";
+    const v1 = "skills/decision-log/templates/decision-log-template.md";
+    const manifest = JSON.parse(readFileSync(join(bundle, "skill-bundle.json"), "utf8"));
+    expect(manifest.files.map((row) => row.path)).toEqual(expect.arrayContaining([v1, v2]));
+    expect(readFileSync(join(bundle, v2))).toEqual(readFileSync(join(ROOT, v2)));
+    expect(readFileSync(join(bundle, v1))).toEqual(readFileSync(join(ROOT, v1)));
+    expect(validateSkillBundleRelease({ releaseRoot: bundle }).skill).toBe("workflowhub");
+    const stripped = join(dir, "stripped");
+    cpSync(bundle, stripped, { recursive: true });
+    rmSync(join(stripped, v2));
+    expect(() => validateSkillBundleRelease({ releaseRoot: stripped })).toThrow();
+    expect(readFileSync(join(ROOT, v2))).toEqual(readFileSync(join(bundle, v2)));
   });
 });
