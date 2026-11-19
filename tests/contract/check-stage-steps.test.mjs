@@ -70,7 +70,9 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       put(task, 'facts.jsonl', JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test observations, not actual user approval', evidence: { value: entries } }) + '\n');
       const producer = () => runFinalChainCheck({ taskPath: task, materialRoot: materials });
       expect(producer().workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual(Array(15).fill('completed'));
-      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已完成', state: 'completed' });
+      const projectionBeforeDelete = JSON.parse(invoke().stdout).stages[0].steps[7];
+      expect(projectionBeforeDelete).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+      expect(projectionBeforeDelete.gap).toContain('当次技能读取');
       const eighthPath = join(task, entries[7].ref), eighthBytes = readFileSync(eighthPath);
       rmSync(eighthPath);
       expect(producer().workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual([...Array(7).fill('completed'), 'unavailable', ...Array(7).fill('completed')]);
@@ -91,7 +93,9 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       expect(readFileSync(join(task, 'facts.jsonl'), 'utf8')).toBe(JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test observations, not actual user approval', evidence: { value: entries } }) + '\n');
       writeFileSync(eighthPath, eighthBytes);
       expect(producer().workflow_steps[7].state).toBe('completed');
-      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已完成', state: 'completed' });
+      const projectionAfterRestore = JSON.parse(invoke().stdout).stages[0].steps[7];
+      expect(projectionAfterRestore).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+      expect(projectionAfterRestore.gap).toContain('当次技能读取');
       const manifest = JSON.parse(readFileSync(join(repo, 'workflows/build-prd/steps.json'), 'utf8'));
       manifest.steps[0].observable_result = 'Controlled missing mapping marker';
       put(repo, 'workflows/build-prd/steps.json', manifest);
@@ -904,18 +908,20 @@ describe('declared originals are trace only', () => {
       expect(step.gap).toContain('共用目录/文件');
     }
   });
-  it('keeps a producer completed row complete when its declared physical piece is missing', () => {
+  it('does not complete a producer row without its current skill read when its declared physical piece is missing', () => {
     const row = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
-    expect(row).toMatchObject({ judgment: '已完成', state: 'completed' });
-    expect(row.gap).toContain('声明原件未取得');
+    expect(row).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+    expect(row.gap).toContain('当次技能读取');
   });
   it('a historical-looking heading is not the declared section', () => {
     expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线历史\n旧方向\n' })).toMatchObject({ judgment: '未留痕' });
     expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线（历史）\n旧方向\n' })).toMatchObject({ judgment: '未留痕' });
     expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线：走哪条路线？\n真实记录。\n' })).toMatchObject({ judgment: '已留痕' });
   });
-  it('only the existing producer can establish completed', () => {
-    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n', files: [['quality/evidence/case.json', human]], facts: humanFacts })).toMatchObject({ judgment: '已完成', state: 'completed' });
+  it('only the existing producer with the current skill read can establish completion', () => {
+    const row = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(row).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+    expect(row.gap).toContain('当次技能读取');
   });
   it('reads numeric and multiple invalidation lines', () => {
     const numeric = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n- 失效步骤：1；阶段：make-decision\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
@@ -1315,9 +1321,16 @@ describe('ORACLE-P1-CARD TCR-P1-001 current originals and unresolved gaps', () =
     try {
       await gapOriginal(f);
       const ref = completion(f);
-      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', '--card']);
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const read = await task.captureCommand({ cwd: f.repo, slug: 'p1-gap-skill-read', argv: [process.execPath, entry,
+        '--read-step-skill=workflows/make-decision/SKILL.md', '--stage=make-decision', '--step=1',
+        `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+      expect(read.exit_code).toBe(0);
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', '--card', `--current-read-receipt=${read.receipt_ref}`]);
       expect(result.status).toBe(0);
       expect(result.report.stages[0].steps[0]).toMatchObject({ state: 'completed' });
+      expect(result.report.stages[0].steps[0].gap).toContain('声明原件未取得');
       expect(result.report.card.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ ref, present: true })]));
       expect(result.report.closeout.gaps).toEqual([]);
       expect(existsSync(join(f.task, 'quality/evidence/steps/current.json'))).toBe(false);
@@ -1466,11 +1479,17 @@ describe('P7 terminal current-proof regression', () => {
       expect(result.report.stages[0].steps[0].state).not.toBe('completed');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
-  it.each([false, true])('keeps a legitimate current proof usable, Markdown=%s', markdown => {
+  it.each([false, true])('keeps a legitimate current proof usable, Markdown=%s', async markdown => {
     const f = p1CurrentCardFixture({ singleStep: true });
     try {
       original(f, { markdown });
-      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const read = await task.captureCommand({ cwd: f.repo, slug: `p7-skill-read-${markdown ? 'md' : 'json'}`, argv: [process.execPath, entry,
+        '--read-step-skill=workflows/make-decision/SKILL.md', '--stage=make-decision', '--step=1',
+        `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+      expect(read.exit_code).toBe(0);
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${read.receipt_ref}`]);
       expect(result.report.stages[0].steps[0].state).toBe('completed');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
@@ -1554,6 +1573,31 @@ describe('ORACLE-P1-CURRENT-SKILL-LOAD current step needs its own skill read rec
       device(staleStep !== undefined, '检查报告没有投影受控任务的第 1 步');
       expect.soft(staleStep.state, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：上一轮技能读取回执不得让当前步骤完成').not.toBe('completed');
       expect.soft(staleStep.judgment, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：陈旧加载下判定不得为已完成').not.toBe('已完成');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('a task with no skill load record at all cannot complete its step', () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const source = 'workflows/make-decision/steps.json';
+      const ref = 'quality/evidence/2026-11-20-no-load-observation.json';
+      f.put(f.repo, 'workflows/make-decision/SKILL.md', '# Controlled\n## 方法\nOwned observation.\n');
+      f.put(f.materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n');
+      f.put(f.materials, 'step-consumer-design.md', `| [controlled](../../${source}#L1) \`current-step\` | observation | human | owner |`);
+      f.put(f.task, ref, { task_id: 'card-case', source, step_slug: 'current-step', phase: 'P1',
+        reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+        criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [],
+        created_at: '2026-02-01T00:00:00.000Z' });
+      f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+        source: 'controlled', evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }]
+        .map(row => JSON.stringify(row)).join('\n') + '\n');
+      const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+      expect(producer.workflow_steps.find(row => row.source === source && row.step_slug === 'current-step')?.state).toBe('completed');
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.status).toBe(0);
+      const step = result.report.stages[0].steps[0];
+      expect(step.state).not.toBe('completed');
+      expect(step.judgment).toBe('未判定');
+      expect(step.gap).toContain('当次技能读取');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });

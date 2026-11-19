@@ -451,6 +451,8 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 
 `node tools/cli/check-stage-steps.mjs --stage=make-decision --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
 
+本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/make-decision/SKILL.md#<本步 method_anchor>","--stage=make-decision","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=make-decision --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
+
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。
 显式跳过用 `--skip-with-gap=N --reason=<原因> --owner=<负责人> --recovery=<恢复条件>`。

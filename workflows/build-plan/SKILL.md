@@ -231,7 +231,7 @@ confirm 发生在 make-decision、build-plan 和 build-prd 收口，保留用户
 
 ## 收口与安全
 
-执行纪律：缺失即未完成；跨包不合批；确认与推进分开问，分诊、骨架与最终确认分别问；少打扰不等于跳过步骤。步骤证据位置以本阶段 `steps.json` 为指针，研究、审查、确认、测试和问答原件仍放既有位置，不在决策日志新增步骤节；问答原件开头写明批次类型。收口前运行 `node tools/cli/check-stage-steps.mjs --stage=build-plan --task-path=<任务目录>`，逐项消费判定与缺口；检查器只报告、退出 0，不证明完成。入口推荐行使用可解析字面，如 `- 推荐级别：复杂`；既有日志不回改，未命中就报“未读到级别事实”。
+执行纪律：缺失即未完成；跨包不合批；确认与推进分开问，分诊、骨架与最终确认分别问；少打扰不等于跳过步骤。步骤证据位置以本阶段 `steps.json` 为指针，研究、审查、确认、测试和问答原件仍放既有位置，不在决策日志新增步骤节；问答原件开头写明批次类型。收口前运行 `node tools/cli/check-stage-steps.mjs --stage=build-plan --task-path=<任务目录> --material-root=<材料根>`，逐项消费判定与缺口；检查器只报告、退出 0，不证明完成。入口推荐行使用可解析字面，如 `- 推荐级别：复杂`；既有日志不回改，未命中就报“未读到级别事实”。
 
 当前材料决定工作内容，测试、审查和历史不替代材料，也不是继续修复的许可证。写材料前核目标工作区与写集；原子写入失败明确报告，共享写入冲突用记录锁，原始来源与失败保留单份。阶段事实仍由现有公共流程处理，本方法不增加认证包装或永久状态。主会话执行 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径，说明材料现状、已做/未做、证据、风险及 build-code 下一步。handoff 必须实际执行并报告返回路径；缺失写清原因与影响，披露不代替完成，不要求固定机器复盘或逐步发布。
 
@@ -257,6 +257,8 @@ confirm 发生在 make-decision、build-plan 和 build-prd 收口，保留用户
 调用检查器时显式给任务根、材料根、阶段和当前步；跳过使用可核当前 Phase 或真实 HEAD。
 
 `node tools/cli/check-stage-steps.mjs --stage=build-plan --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
+
+本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/build-plan/SKILL.md#<本步 method_anchor>","--stage=build-plan","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-plan --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
 
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。

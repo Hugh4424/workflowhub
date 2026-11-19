@@ -201,7 +201,9 @@ Standards 与 Spec 是每 Phase 必派的两个独立补充执行者，不是三
 
 ## 人为门与审查点
 
-执行纪律：缺失即未完成；跨包不合批；确认与推进分开问，分诊、骨架与最终确认分别问；少打扰不等于跳过步骤。步骤证据位置以本阶段 `steps.json` 为指针，研究、审查、确认、测试和问答原件仍放既有位置，不在决策日志新增步骤节；问答原件开头写明批次类型。收口前运行 `node tools/cli/check-stage-steps.mjs --stage=build-code --task-path=<任务目录>`，逐项消费判定与缺口；检查器只报告、退出 0，不证明完成。入口推荐行使用可解析字面，如 `- 推荐级别：复杂`；既有日志不回改，未命中就报“未读到级别事实”。
+执行纪律：缺失即未完成；跨包不合批；确认与推进分开问，分诊、骨架与最终确认分别问；少打扰不等于跳过步骤。步骤证据位置以本阶段 `steps.json` 为指针，研究、审查、确认、测试和问答原件仍放既有位置，不在决策日志新增步骤节；问答原件开头写明批次类型。收口前运行 `node tools/cli/check-stage-steps.mjs --stage=build-code --task-path=<任务目录> --material-root=<材料根>`，逐项消费判定与缺口；检查器只报告、退出 0，不证明完成。入口推荐行使用可解析字面，如 `- 推荐级别：复杂`；既有日志不回改，未命中就报“未读到级别事实”。
+
+全阶段报告（无 `--step`）会把没有当次技能读取回执的步骤如实列为未判定；收口按 `closeout.gaps` 与报告缺口逐项消费，不据此阻断阶段，也不把未判定当失败。需要某步完成态时，对该步传 `--current-read-receipt=<当次回执>`。
 
 用户授权进入实施或选定方向与实施计划后，持续覆盖本task实施、验证、独立审查、修复及交付必要commit/push/merge；阶段切换/新会话/handoff不重置。直接执行，不再要日常确认/本地提交授权/技术验收确认/用户承担严重风险；不借此扩方向/范围。真实平台限制、方向无法解决或外部条件缺失据实报告，继续可执行部分，不加人工gate。
 
@@ -369,6 +371,8 @@ BOUND001 首判可在报告前形成，不要求它回填未来 final-report has
 调用检查器时显式给任务根、材料根、阶段和当前步；跳过使用可核当前 Phase 或真实 HEAD。
 
 `node tools/cli/check-stage-steps.mjs --stage=build-code --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
+
+本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/build-code/SKILL.md#<本步 method_anchor>","--stage=build-code","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-code --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
 
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。
