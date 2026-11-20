@@ -21,7 +21,7 @@ async function fixture(taskId='cockpit'){
  writeFileSync(join(task.taskPath,'facts.jsonl'),'');
  const material=join(work,'specs',taskId);mkdirSync(join(material,'phases'),{recursive:true});
  writeFileSync(join(material,'decision-log.md'),'# 当前决策\n## 目标\n让失败可见\n- U-001 用户要求保留真实失败\n## WP1\n只读页面\n');
- writeFileSync(join(material,'spec.md'),"# 真实驾驶舱\n## 功能需求\nFR-ONE 只读生成\n- **FR-CARD-001**: R-001; 只读生成，缺数据标缺。\n\n## 实现设计（全局权威）\n### 代码锚点\n`phases/P1-真实交付.md`: Task T007 material; `owned-T007.mjs`: symbol result.\n### 接口与失败语义\n只读页面，失败保原件。\n### 全局验证策略\n`node custom-oracle.mjs` proves the fixture source condition only.\n### 需求到任务追踪\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-CARD-001 | AC-CARD-001 | P1/T007 | ORACLE-CARDS |\n\n## Appendix A\n- [ ] **AC-ONE**：缺数据标缺\n- **AC-CARD-001**: 缺数据标缺。\n## 风险\n风险：缺少原件\n");
+ writeFileSync(join(material,'spec.md'),"# 真实驾驶舱\n## 功能需求\nFR-ONE-001 只读生成\n- **FR-CARD-001**: R-001; 只读生成，缺数据标缺。\n\n## 实现设计（全局权威）\n### 代码锚点\n`phases/P1-真实交付.md`: Task T007 material; `owned-T007.mjs`: symbol result.\n### 接口与失败语义\n只读页面，失败保原件。\n### 全局验证策略\n`node custom-oracle.mjs` proves the fixture source condition only.\n### 需求到任务追踪\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-CARD-001 | AC-CARD-001 | P1/T007 | ORACLE-CARDS |\n\n## Appendix A\n- [ ] **AC-ONE**：缺数据标缺\n- **AC-CARD-001**: 缺数据标缺。\n## 风险\n风险：缺少原件\n");
  writeFileSync(join(material,'phases/index.md'),"# Index\n## Execution Index\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1-真实交付.md` | L0 — 来源卡片 | `owned-T007.mjs` | none | reader |\n");writeFileSync(join(material,'phases/P1-真实交付.md'),contractPhase('P1',[{id:'T007',title:'真实交付',acs:['AC-CARD-001']}]).replaceAll('node --version','node custom-oracle.mjs').replace('1）读取真实失败原件。\n2）核对保存后的来源指针。','只读页面'));
  writeFileSync(join(work,'changed.txt'),'real diff');git(work,['add','.']);git(work,['commit','-qm','real change']);
  await task.appendRecord({dir:'quality/tests',slug:'actual-test',ext:'json',bytes:JSON.stringify({argv:['node','--test','example.test.mjs'],exit_code:0})});await task.appendRecord({dir:'quality/reviews',slug:'actual-review',ext:'json',bytes:JSON.stringify({status:'completed',findings:[]})});
@@ -412,7 +412,7 @@ async function sourceCardFixture(truth=SMALL_CARD_TRUTH,{orphan=false,missingRaw
  const decision='# 当前决策\n状态：这里只是前言，不是工作包标题\n需求索引：`'+indexRef+'`\n逐字原件：`'+rawRef+'`\n\n| source_id | v1 原义 | 原文来源 | 当前落点 |\n| --- | --- | --- | --- |\n| v1主文 R-001 | 不得混入后建编号 | 原始需求:5 | WP2 |\n\n| 来源 | 最小决定 | 落点 |\n| --- | --- | --- |\n| U-001 | 失败必须保留原件 | WP1 |\n\n'+truth.workPackages.map(w=>'### '+w.id+' — '+w.title+'\n\n- **目标**：'+w.goal+'\n- **边界**：只读来源卡片，不写任务事实。\n- **已定做法**：'+(w.id==='WP1'?'采用 U-001。':'按本包显式AC声明承接。')+'\n').join('\n');
  writeFileSync(join(f.material,'decision-log.md'),decision);
  const allAcs=[...new Set(truth.tasks.flatMap(t=>t.acs.length?t.acs:['AC-CARD-001']))];
- const spec='# 卡片真实来源\n\n- **FR-CARD-001**: R-001; render sourced cards; '+allAcs.join(', ')+'.\n\n## 实现设计（全局权威）\n\n### 代码锚点\n\nOwned modules and material source cards.\n\n### 接口与失败语义\n\nLocal inputs produce sourced cards; missing stays missing.\n\n### 全局验证策略\n\n`node --version` is a fixture command, not product acceptance. Named source and missing cases remain falsifiable.\n\n### 需求到任务追踪\n\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n'+truth.tasks.map(t=>'| R-001 | FR-CARD-001 | '+(t.acs.length?t.acs:['AC-CARD-001']).join(' ')+' | '+t.phase+'/'+t.id+' | ORACLE-CARDS |').join('\n')+'\n\n### WP1…WP7 与 F1…F8\n\n| 来源 | 落点 |\n| --- | --- |\n'+truth.workPackages.map(w=>'| '+w.id+' | '+w.acs.join('、')+' |').join('\n')+'\n\n## Appendix A\n\n'+allAcs.map(ac=>'- **'+ac+'**: source cards preserve real input and missing conditions.').join('\n')+'\n\n## 风险\n\n风险：无源关系必须保持未知。\n';
+ const spec='# 卡片真实来源\n\n- **FR-CARD-001**: R-001; render sourced cards; '+allAcs.join(', ')+'.\n\n## 实现设计（全局权威）\n\n### 代码锚点\n\n`owned-T001.mjs`: owned module; `phases/P1-cards.md`: material source card.\n\n### 接口与失败语义\n\nLocal inputs produce sourced cards; missing stays missing.\n\n### 全局验证策略\n\n`node --version` is a fixture command, not product acceptance. Named source and missing cases remain falsifiable.\n\n### 需求到任务追踪\n\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n'+truth.tasks.map(t=>'| R-001 | FR-CARD-001 | '+(t.acs.length?t.acs:['AC-CARD-001']).join(' ')+' | '+t.phase+'/'+t.id+' | ORACLE-CARDS |').join('\n')+'\n\n### WP1…WP7 与 F1…F8\n\n| 来源 | 落点 |\n| --- | --- |\n'+truth.workPackages.map(w=>'| '+w.id+' | '+w.acs.join('、')+' |').join('\n')+'\n\n## Appendix A\n\n'+allAcs.map(ac=>'- **'+ac+'**: source cards preserve real input and missing conditions.').join('\n')+'\n\n## 风险\n\n风险：无源关系必须保持未知。\n';
  writeFileSync(join(f.material,'spec.md'),spec);
  rmSync(join(f.material,'phases'),{recursive:true,force:true});mkdirSync(join(f.material,'phases'));
  const phases=[...new Set(truth.tasks.map(t=>t.phase))];
@@ -538,10 +538,10 @@ test.each([
  ['supplement heading only','## 补充材料\n'],
  ['internal supplement pointers only','## 补充材料\n- decision-log：[内部决定](decision-log.md#U-001)\n- [内部结论](../internal.md)\n- `quality/evidence/research/internal.md`\n'],
 ])('ORACLE-COCKPIT-GEN: %s is missing external evidence',async(_name,supplement)=>{
- const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture();const spec=join(f.material,'spec.md');writeFileSync(spec,'# 真实任务\n## 功能需求\nFR-ONE\n'+supplement);const projected=await buildPageData(f),external=projected.pageData.objects.find(o=>o.kind==='eres');expect(external.status.text).toBe('缺');expect(external.src.some(s=>s.path===spec)).toBe(true);
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture();const spec=join(f.material,'spec.md');writeFileSync(spec,'# 真实任务\n## 功能需求\nFR-ONE-001\n'+supplement);const projected=await buildPageData(f),external=projected.pageData.objects.find(o=>o.kind==='eres');expect(external.status.text).toBe('缺');expect(external.src.some(s=>s.path===spec)).toBe(true);
 });
 test('ORACLE-COCKPIT-GEN: external supplement URL keeps a source pointer without pretending to fetch it',async()=>{
- const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture(),spec=join(f.material,'spec.md');writeFileSync(spec,'# 真实任务\n## 功能需求\nFR-ONE\n## 补充材料\n- [内部](decision-log.md)\n- [外部来源](https://authoritative.example/paper#section)\n');const external=(await buildPageData(f)).pageData.objects.find(o=>o.kind==='eres');expect(external.status.text).not.toBe('缺');expect(external.src.some(s=>s.path===spec&&s.loc.includes('https://authoritative.example/paper#section'))).toBe(true);expect(external.title+' '+external.summary).toContain('https://authoritative.example/paper#section');expect(external.summary).toContain('未抓取');
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture(),spec=join(f.material,'spec.md');writeFileSync(spec,'# 真实任务\n## 功能需求\nFR-ONE-001\n## 补充材料\n- [内部](decision-log.md)\n- [外部来源](https://authoritative.example/paper#section)\n');const external=(await buildPageData(f)).pageData.objects.find(o=>o.kind==='eres');expect(external.status.text).not.toBe('缺');expect(external.src.some(s=>s.path===spec&&s.loc.includes('https://authoritative.example/paper#section'))).toBe(true);expect(external.title+' '+external.summary).toContain('https://authoritative.example/paper#section');expect(external.summary).toContain('未抓取');
 });
 
 test('ORACLE-COCKPIT-GEN: only Phase authority cells are read while absolute non-authority paths preserve quality gaps',async()=>{
@@ -581,12 +581,12 @@ async function primaryCardsFixture(){
  const originals='/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-build-code-efficiency-verify-merge-20261026/quality/evidence';
  for(const name of ['spec.md','decision-log.md'])writeFileSync(join(f.material,name),readFileSync(join(base,name)));
  rmSync(join(f.material,'phases'),{recursive:true});mkdirSync(join(f.material,'phases'));
- const phases={};for(const name of readdirSync(join(base,'phases'))){if(name!=='index.md'&&!/^P\d+.*\.md$/.test(name))continue;const bytes=readFileSync(join(base,'phases',name),'utf8').replace(/^### (T\d{3}(?!\s+[—–-]\s+)[^\n]*)$/gm,'#### $1');writeFileSync(join(f.material,'phases',name),bytes);if(name!=='index.md')phases['phases/'+name]=bytes;}
+ const phases={};for(const name of readdirSync(join(base,'phases'))){if(name!=='index.md'&&!/^P\d+.*\.md$/.test(name))continue;const bytes=readFileSync(join(base,'phases',name),'utf8').replace(/^### (T\d{3}(?!\s+[—–-]\s+)[^\n]*)$/gm,'#### $1').replace(/^(### T\d{3,}\s+—[^\n]*)$/gm,'$1\n\n读者：本卡交付真实结果，失败保留原件。');writeFileSync(join(f.material,'phases',name),bytes);if(name!=='index.md')phases['phases/'+name]=bytes;}
  for(const ref of ['raw-requirements/2026-10-26-user-request.md','decision-log-refs/requirement-index.md']){const target=join(f.taskPath,'quality/evidence',ref);mkdirSync(join(target,'..'),{recursive:true});writeFileSync(target,readFileSync(join(originals,ref)));}
  const checked=validatePostPhaseContract({spec:readFileSync(join(f.material,'spec.md'),'utf8'),index:readFileSync(join(f.material,'phases/index.md'),'utf8'),phases,material_path:base});
  expect(checked.errors, 'fixture must be a real legal post Phase contract, not a target RED').toEqual([]);
  expect(checked.facts.task_count).toBe(15);
- return f;
+ return {...f};
 }
 const fixedRequirements=[
  '两任务设计、执行、验收、反复修复严重耗时与 token 痛点','研究两个指定会话及两套计划材料','每任务至少四子代理，分别研究设计、执行、验收、修复','找出 build-code 长耗时根因','优化 WorkflowHub 避免复发','所有 verify-code 工作迁入 build-code 最后 Phase，包括验证、全局审查、架构师审查、修复、测试','少一个 stage，build-code 末尾无 handoff','查合并可行性及 build-plan/build-code 修改','先 worktree，从 make-decision 起，不跳阶段','内外研究、大纲、发散、逐需求模块 Talk、方案与验收收敛','中文大白话，Talk/Grill 用提问工具，解释选项后果风险','主会话少读；方向/细节异源建议最好各一次，细节须在全部 Talk 收敛后','确认后停下汇报内容/进度/下一步，给当前阶段 handoff 路径'
@@ -764,8 +764,8 @@ test('installed Runner, alias and library read the same public terminal DTO agai
 test('finite pass from real public status reaches all three rendered stage consumers maps only explicit AC relations and preserves separate implementation',async()=>{
  const f=await sourceCardFixture(),m=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8')),task=openTask(f.taskPath,{projectName:m.project_name,taskId:m.task_id}),work=m.workspace_root;
  const {createHash}=await import('node:crypto'),h=b=>createHash('sha256').update(b).digest('hex'),{writeStageRow}=await import('../../runtime/task/task-store.mjs');
- const index=join(f.material,'phases/index.md');writeFileSync(index,readFileSync(index,'utf8').replace(/\| (P[0-9]+) \| (phases\/[^ |]+\.md) \|/g,'| `$1` | `$2` |'));
  const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('R-001 / FR-CARD-001 / AC-DEMO-001','R-001 / FR-CARD-001 / AC-DEMO-001 / AC-DEMO-002'));
+ const finiteSpec=join(f.material,'spec.md');writeFileSync(finiteSpec,readFileSync(finiteSpec,'utf8').replace('| R-001 | FR-CARD-001 | AC-DEMO-001 | P1/T001 |','| R-001 | FR-CARD-001 | AC-DEMO-001、AC-DEMO-002 | P1/T001 |'));
  const builder=new URL('../../skills/answer-as-page/scripts/build-page-data.mjs',import.meta.url).href,options={taskPath:f.taskPath,reportPath:f.reportPath};
  const source=`import assert from 'node:assert/strict';import{buildPageData}from ${JSON.stringify(builder)};const r=await buildPageData(${JSON.stringify(options)});assert.ok(r.pageData.objects.some(o=>o.kind==='task'&&/缺|未/.test(o.acceptance.text)));console.log(JSON.stringify({task_id:'cockpit',missing_is_explicit:true}));`;
  writeFileSync(join(work,'controlled-page-assertion.mjs'),source);
@@ -915,8 +915,8 @@ test('requirement source file references exclude JSON pointers without hiding mi
 
 for(const kind of ['partial','mixed','range-chain'])test('requirement AC denominator rejects partial shorthand '+kind,async()=>{
  const f=await sourceCardFixture({...SMALL_CARD_TRUTH,requirements:SMALL_CARD_TRUTH.requirements.map(r=>({...r,landing:'未声明归属'}))},{taskId:'req-partial-shorthand'}),task=openTask(f.taskPath,{projectName:'Demo',taskId:'req-partial-shorthand'}),source='quality/evidence/partial-processing.md';await task.createRecord(source,'受控真实材料声明，不代独立验收。\n');
- const spec=join(f.material,'spec.md'),landing=kind==='mixed'?'AC-DEMO-001、AC-DEMO-002/003':kind==='range-chain'?'AC-DEMO-001至AC-DEMO-002至AC-OTHER-003':'AC-DEMO-001/002';writeFileSync(spec,readFileSync(spec,'utf8')+'\n- **AC-OTHER-003**: controlled final endpoint, not an invented range denominator.\n\n### 需求处理\n| 来源 | 原义 | 落点 | 状态 | 结论来源ref | 代码AC适用说明 |\n| --- | --- | --- | --- | --- | --- |\n| 后建 R-001 | 受控需求 | '+landing+' | 本规格承接 | `'+source+'` | 原有全部分母不得缩减 |\n');
- const ref='quality/evidence/partial-ac-results.json';await task.createRecord(ref,JSON.stringify({phase_id:'P1',acceptance:[{ac:'AC-DEMO-001',tier:'pass'},...(kind==='mixed'?[{ac:'AC-DEMO-002',tier:'fail'}]:kind==='range-chain'?[{ac:'AC-DEMO-002',tier:'pass'},{ac:'AC-OTHER-003',tier:'pass'}]:[])]}));const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ const spec=join(f.material,'spec.md'),landing=kind==='mixed'?'AC-DEMO-001、AC-DEMO-002/003':kind==='range-chain'?'AC-DEMO-001至AC-DEMO-002至AC-OTHER-003':'AC-DEMO-001/002';writeFileSync(spec,readFileSync(spec,'utf8').replace('| R-001 | FR-CARD-001 | AC-DEMO-001 | P1/T001 | ORACLE-CARDS |','| R-001 | FR-CARD-001 | AC-DEMO-001 | P1/T001 | ORACLE-CARDS |\n| R-001 | FR-CARD-001 | AC-OTHER-003 | P1/T001 | ORACLE-CARDS |').replace('\n\n## 风险','\n- **AC-OTHER-003**: controlled final endpoint, not an invented range denominator.\n\n## 风险')+'\n\n### 需求处理\n| 来源 | 原义 | 落点 | 状态 | 结论来源ref | 代码AC适用说明 |\n| --- | --- | --- | --- | --- | --- |\n| 后建 R-001 | 受控需求 | '+landing+' | 本规格承接 | `'+source+'` | 原有全部分母不得缩减 |\n');
+ const ref='quality/evidence/partial-ac-results.json';await task.createRecord(ref,JSON.stringify({phase_id:'P1',acceptance:[{ac:'AC-DEMO-001',tier:'pass'},...(kind==='mixed'?[{ac:'AC-DEMO-002',tier:'fail'}]:kind==='range-chain'?[{ac:'AC-DEMO-002',tier:'pass'},{ac:'AC-OTHER-003',tier:'pass'}]:[])]}));const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('R-001 / FR-CARD-001 / AC-DEMO-001','R-001 / FR-CARD-001 / AC-DEMO-001 / AC-OTHER-003').replace('quality/tests/cards.output',ref));
  const rendered=await renderAnswerPage(f),req=data(rendered.htmlPath).objects.find(o=>o.source_id==='后建索引 R-001');expect(req.acceptance.text).toBe('验收归属未取得');expect(req.acceptance.text).not.toContain('验收通过');expect(req.status.text).toBe('材料记载：本规格承接');if(kind==='mixed')expect(req.acceptance.results.some(claim=>claim.tier==='fail')).toBe(true);
 });
 
@@ -1047,34 +1047,156 @@ test('ORACLE-COCKPIT-GEN new-shape missing mappings stay visible as named gaps',
  expect(reasons).toContain('变更 1');
  expect(reasons).toContain('任务 1');
  const originalFacts=readFileSync(join(f.taskPath,'facts.jsonl'));
- const rendered=await renderAnswerPage(f),shown=data(rendered.htmlPath);
- expect(shown.objects).toHaveLength(built.pageData.objects.length);
- expect(new Set(shown.objects.map(o=>o.id)).size).toBe(shown.objects.length);
- expect(shown.objects.every(o=>/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(o.id))).toBe(true);
- const missingIssues=shown.objects.filter(o=>o.kind==='risk'&&o.src.some(s=>s.path===join(f.material,'decision-log.md')));
- expect(missingIssues.map(o=>o.source_id)).toEqual(issueLabels);
- for(const issue of missingIssues){
-  expect(issue.title).toBe(`缺：${issue.source_id} 的 OI 编号映射`);
-  expect(issue.status).toEqual({text:'缺',tone:'unk'});
-  expect(issue.src[0].loc).toBe(issue.source_id);
- }
- const missingSpec=shown.objects.filter(o=>o.kind==='risk'&&o.src.some(s=>s.path===join(f.material,'spec.md')));
- expect(missingSpec.map(o=>o.source_id)).toEqual(['风险 1','未决 1']);
- expect(missingSpec.map(o=>o.status)).toEqual([{text:'缺',tone:'unk'},{text:'缺',tone:'unk'}]);
- for(let i=0;i<shown.objects.length;i++){
-  const {id:beforeId,...before}=built.pageData.objects[i],{id:afterId,contentDigest,...after}=shown.objects[i];
-  expect(after).toEqual(before);
- }
- const sourceEnds=(objects,edges)=>{const byId=new Map(objects.map(o=>[o.id,JSON.stringify([o.kind,o.source_id,o.src])]));return edges.map(edge=>edge.map(id=>byId.get(id)));};
- expect(sourceEnds(shown.objects,shown.edges)).toEqual(sourceEnds(built.pageData.objects,built.pageData.edges));
- expect(sourceEnds(shown.objects,shown.sideEdges)).toEqual(sourceEnds(built.pageData.objects,built.pageData.sideEdges));
- const firstBytes=readFileSync(rendered.htmlPath),firstNodes=readFileSync(rendered.nodesPath);
- const again=await renderAnswerPage(f),second=data(again.htmlPath);
- expect(second.objects.map(o=>o.id)).toEqual(shown.objects.map(o=>o.id));
- expect(second.objects.filter(o=>o.kind==='risk').map(o=>[o.source_id,o.title,o.src,o.status])).toEqual(shown.objects.filter(o=>o.kind==='risk').map(o=>[o.source_id,o.title,o.src,o.status]));
- expect(again.history).toHaveLength(2);
- expect(readFileSync(again.history[0])).toEqual(firstNodes);expect(readFileSync(again.history[1])).toEqual(firstBytes);
- expect(shown.rings).toEqual(JSON.parse(readFileSync(f.reportPath)).rings);
+ await expect(renderAnswerPage(f)).rejects.toThrow(/CONTRACT/);
+ expect(existsSync(join(f.outDir,f.htmlName))).toBe(false);
  expect(readFileSync(join(f.taskPath,'facts.jsonl'))).toEqual(originalFacts);
- expect(Object.keys(JSON.parse(readFileSync(rendered.nodesPath))).sort()).toEqual(['generated_at','nodes','schema','source_fingerprint']);
+});
+
+// ORACLE-PROGRESS-PAGE: the current decision-log shape (package directory table
+// plus ## 每包设计 → ### n.m) is structured input; the page must show every
+// declared package with its own acceptance, and a broken model must be rejected
+// by a named check before publication.
+async function currentPackageMaterials(f, { decision } = {}) {
+ const indexRef='quality/evidence/decision-log-refs/requirement-index.md';
+ const indexPath=join(f.taskPath,indexRef);mkdirSync(join(indexPath,'..'),{recursive:true});
+ writeFileSync(indexPath,'# 需求索引\n\n## 0. 十包定稿\n\n| 包 | 名称 | 依赖 | 覆盖需求 | 主 AC | 来源 |\n| --- | --- | --- | --- | --- | --- |\n| 1 | 包甲 | 无 | 1 | AC-P1-1 | `DL §4.1` |\n| 2 | 包乙 | 1 | 2 | AC-P2-1 | `DL §4.2` |\n');
+ const body=decision??`# 当前决策\n需求索引：\`${indexRef}\`\n\n| AC | 包 | 命令或人工操作 |\n| --- | --- | --- |\n| AC-P1-1 | 1 | \`node --version\` |\n| AC-P2-1 | 2 | \`node --version\` |\n\n## 4. 每包设计\n\n### 4.1 包甲\n\n- **原始需求**：真实失败要可见。\n- **最终决定**：保留真实失败。\n- **完整方案**：只读来源卡片，不写任务事实。\n- **配套与影响**：只读。\n- **验收**：AC-P1-1 可核。\n- **风险/回退**：无。\n\n### 4.2 包乙\n\n- **原始需求**：恢复要换路。\n- **最终决定**：没有新事实就换路。\n- **完整方案**：只读说明。\n- **配套与影响**：只读。\n- **验收**：AC-P2-1 可核。\n- **风险/回退**：无。\n`;
+ writeFileSync(join(f.material,'decision-log.md'),body);
+ writeFileSync(join(f.material,'spec.md'),"# \u771f\u5b9e\u9a7e\u9a76\u8231\n\n## \u529f\u80fd\u9700\u6c42\n\n- **FR-ONE-001**\uff1a\u53ea\u8bfb\u751f\u6210\u3002\n\n## \u5b9e\u73b0\u8bbe\u8ba1\uff08\u5168\u5c40\u6743\u5a01\uff09\n\n### \u4ee3\u7801\u951a\u70b9\n\n`phases/P1-\u771f\u5b9e\u4ea4\u4ed8.md`: task source; `owned.mjs`: symbol result.\n\n### \u63a5\u53e3\u4e0e\u5931\u8d25\u8bed\u4e49\n\n\u53ea\u8bfb\u6765\u6e90\u5361\u7247\uff1b\u7f3a\u5931\u4fdd\u6301 gap\uff0c\u4e0d\u8865\u8bcd\u3002\n\n### \u9700\u6c42\u5230\u4efb\u52a1\u8ffd\u8e2a\n\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-ONE-001 | AC-P1-001 | P1/T001 | ORACLE-PROGRESS |\n| R-001 | FR-ONE-001 | AC-P2-001 | P1/T001 | ORACLE-PROGRESS |\n\n### \u5168\u5c40\u9a8c\u8bc1\u7b56\u7565\n\n`node --version` \u53d7\u63a7\u547d\u4ee4\uff1b\u9875\u9762\u6a21\u578b\u65ad\u8a00\u3002\n\n## Appendix A \u2014 \u9a8c\u6536\u5224\u636e\n\n- [ ] **AC-P1-001** \u771f\u5b9e\u5931\u8d25\u53ef\u89c1\u3002\n\u5224\u5b9a\u65b9\u5f0f\uff1a\u673a\u5668\u53ef\u5224\u3002\n\u6210\u672c\uff1aevidence_tier=\u547d\u4ee4\u7ea7\u3002\n- [ ] **AC-P2-001** \u6062\u590d\u8981\u6362\u8def\u3002\n\u5224\u5b9a\u65b9\u5f0f\uff1a\u673a\u5668\u53ef\u5224\u3002\n\u6210\u672c\uff1aevidence_tier=\u771f\u5b9e\u73af\u5883\u7ea7\u3002\n\n## Appendix B \u2014 \u9700\u6c42\u4e0e\u7f16\u53f7\u5bf9\u7167\n\n| \u9a8c\u6536 | \u7f16\u53f7 | \u539f\u65e5\u5fd7 |\n| --- | --- | --- |\n| \u9a8c\u6536 1 | AC-P1-001 | \u539f\u65e5\u5fd7 AC-P1-1\uff5c\u9636\u6bb5 1\uff5cFR-ONE-001 |\n| \u9a8c\u6536 2 | AC-P2-001 | \u539f\u65e5\u5fd7 AC-P2-1\uff5c\u9636\u6bb5 2\uff5cFR-ONE-001 |\n\n## \u98ce\u9669\n\n\u98ce\u9669\uff1a\u7f3a\u5c11\u539f\u4ef6\n");
+ writeFileSync(join(f.material,'phases/index.md'),'# Index\n\n## Execution Index\n\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1-真实交付.md` | L0 — 来源卡片 | `owned.mjs` | none | reader |\n');
+ writeFileSync(join(f.material,'phases/P1-真实交付.md'),"# Phase P1 \u2014 \u6765\u6e90\u5361\u7247\n\n- **\u5168\u5c40\u89c4\u683c**: `spec.md#\u5b9e\u73b0\u8bbe\u8ba1\uff08\u5168\u5c40\u6743\u5a01\uff09`\n- **\u5199\u5165\u96c6**: `owned.mjs`\n- **\u4f9d\u8d56**: none\n- **\u6d88\u8d39\u8005**: reader\n- **gate_cmd**: `node --version`\n- **oracle**: ORACLE-PROGRESS\n- **evidence_path**: `quality/tests/cards.output`\n- **STOP**: \u4fdd\u7559\u7f3a\u5931\u8f93\u5165\u548c\u5931\u8d25\u539f\u4ef6\u3002\n- **Done**: \u771f\u5b9e\u5361\u6765\u6e90\u4e0e\u771f\u5b9e\u6267\u884c\u7ed3\u679c\u3002\n\n## L0 \u2014 \u6765\u6e90\u5361\u7247\n\nFR-ONE-001 / AC-P1-001 / AC-P2-001\n\n## L1 \u2014 executable contract\n\n### T001 \u2014 \u771f\u5b9e\u4ea4\u4ed8\n\n\u672c\u5361\u4ea4\u4ed8\u771f\u5b9e\u7ed3\u679c\uff0c\u5931\u8d25\u4fdd\u7559\u539f\u59cb\u9519\u8bef\u3002\n\n- **Source / FR / AC**: R-001 / FR-ONE-001 / AC-P1-001 / AC-P2-001\n- **Files / symbols**: `owned.mjs`; symbol: result\n- **Action**: 1\uff09\u8bfb\u53d6\u771f\u5b9e\u5931\u8d25\u539f\u4ef6\u30022\uff09\u6838\u5bf9\u6765\u6e90\u6307\u9488\u3002\n- **Inputs**: Owned local module and fixed source text.\n- **Outputs / failure**: Result is 1; wrong result is nonzero.\n- **Boundary / DO NOT TOUCH**: Other materials stay readonly.\n- **Dependency**: none\n- **Test tier / skill**: contract / backend-testing\n- **Scenario / fixture or service**: Local temporary fixture; no network.\n- **RED/GREEN gate_cmd**: `node --version`\n- **expected_exit**: RED nonzero; GREEN 0\n- **RED target failure**: ORACLE-PROGRESS expected result 1; result 0 assertion fails.\n- **GREEN oracle**: ORACLE-PROGRESS actual result is 1.\n- **Evidence**: Actual output and exit; no prefilled pass.\n- **STOP / recovery**: Preserve failure and return to original developer.\n- **Coverage limit**: Local package fixture only.\n- **Done**: AC-P1-001\u3001AC-P2-001 have actual result and evidence.\n\n## L2 \u2014 reference\n\nControlled.\n");
+ return f;
+}
+test('ORACLE-PROGRESS-PAGE: declared packages, acceptance and level reach the page; a broken model is rejected by name',async()=>{
+ const f=await currentPackageMaterials(await fixture()),first=await renderAnswerPage(f),d=data(first.htmlPath);
+ expect(d.objects.filter(o=>o.kind==='wp').map(o=>o.title)).toEqual(['包甲','包乙']);
+ expect(d.objects.filter(o=>o.kind==='wp').map(o=>o.ac_ids)).toEqual([['AC-P1-001'],['AC-P2-001']]);
+ expect(d.packageReconciliation).toEqual({declared:2,projected:2,issues:[]});
+ const acc=d.objects.filter(o=>o.kind==='acc');expect(acc.map(o=>[o.source_id,o.level.value])).toEqual([['AC-P1-001','命令级'],['AC-P2-001','真实环境级']]);
+ expect(acc[0].status.text).toContain('级别 命令级');
+ const { buildPageData }=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),{ checkPageContent }=await import('../../skills/answer-as-page/scripts/check-page-content.mjs');
+ const built=await buildPageData(f),html=readFileSync(first.htmlPath,'utf8'),nodes=readFileSync(first.nodesPath,'utf8');
+ const base={pageData:built.pageData,html,nodes};
+ const codes=async candidate=>(await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate})).errors.map(error=>error.code);
+ expect((await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:base})).ok,JSON.stringify((await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:base})).errors)).toBe(true);
+ const mutate=change=>{const copy=structuredClone(built.pageData);change(copy);return {...base,pageData:copy};};
+ expect(await codes(mutate(page=>{delete page.objects;}))).toContain('STRUCTURE_MISSING');
+ expect(await codes(mutate(page=>{page.objects[0].src[0].path='/nonexistent/missing原件.md';}))).toContain('MISSING_SOURCE');
+ expect(await codes(mutate(page=>{page.edges.push(['wp-pkg-1','missing-object']);}))).toContain('POINTER_MISMATCH');
+ expect(await codes(mutate(page=>{page.objects.find(o=>o.kind==='acc').level={value:'伪造级别',text:'级别 伪造级别',reason:''};}))).toContain('LEVEL_MISMATCH');
+ const badNodes=JSON.parse(nodes);badNodes.source_fingerprint={...badNodes.source_fingerprint,materials:{...badNodes.source_fingerprint.materials,altered:'x'}};
+ expect(await codes({...base,nodes:JSON.stringify(badNodes)})).toContain('FINGERPRINT_MISMATCH');
+ // A package claiming another package's acceptance is a named reconciliation error.
+ const misbound=await currentPackageMaterials(await fixture(),{decision:readFileSync(join(f.material,'decision-log.md'),'utf8').replace('AC-P2-1 可核','AC-P1-1 可核')});
+ const rejected=await checkPageContent({taskPath:misbound.taskPath,reportPath:misbound.reportPath,candidate:{pageData:(await buildPageData(misbound)).pageData}}).catch(error=>({ok:false,errors:[{code:'CHECK_FAILED',message:error.message}]}));
+ expect(rejected.ok).toBe(false);
+ expect(rejected.errors.map(error=>error.code),JSON.stringify(rejected.errors)).toContain('PACKAGE_RECONCILE');
+ await expect(renderAnswerPage(misbound)).rejects.toThrow(/PACKAGE_RECONCILE|包/);
+});
+test('ORACLE-PROGRESS-PAGE: a missing level declaration stays unknown instead of a resolved level',async()=>{
+ const f=await currentPackageMaterials(await fixture());
+ const spec=join(f.material,'spec.md');writeFileSync(spec,readFileSync(spec,'utf8').replace('成本：evidence_tier=命令级。\n',''));
+ const { buildPageData }=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f);
+ const acc=built.pageData.objects.find(o=>o.source_id==='AC-P1-001');
+ expect(acc.level.value).toBe('unknown');expect(acc.level.reason).toContain('缺证据级别声明');expect(acc.status.text).toContain('级别 unknown');
+ expect(built.pageData.objects.find(o=>o.source_id==='AC-P2-001').level.value).toBe('真实环境级');
+});
+test('ORACLE-PROGRESS-PAGE: only one changed Phase byte marks the existing pair expired and leaves its bytes readable',async()=>{
+ const f=await currentPackageMaterials(await fixture()),first=await renderAnswerPage(f);
+ const html=readFileSync(first.htmlPath),nodes=readFileSync(first.nodesPath),firstFingerprint=data(first.htmlPath).sourceFingerprint;
+ const phase=join(f.material,'phases/P1-真实交付.md');writeFileSync(phase,readFileSync(phase,'utf8')+'\n- 只改这一处 Phase 字节。\n');
+ const { checkPageContent }=await import('../../skills/answer-as-page/scripts/check-page-content.mjs');
+ const stale=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,htmlPath:first.htmlPath,nodesPath:first.nodesPath});
+ expect(stale.ok).toBe(false);
+ expect(stale.errors.map(error=>error.code)).toContain('STALE_PAGE');
+ expect(stale.errors.find(error=>error.code==='STALE_PAGE').message).toContain('P1-真实交付.md');
+ expect(readFileSync(first.htmlPath)).toEqual(html);expect(readFileSync(first.nodesPath)).toEqual(nodes);
+ const next=await renderAnswerPage(f);
+ expect(data(next.htmlPath).sourceFingerprint).not.toEqual(firstFingerprint);
+ const fresh=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,htmlPath:next.htmlPath,nodesPath:next.nodesPath});
+ expect(fresh.ok,fresh.errors.map(error=>error.code).join(',')).toBe(true);
+ expect(readFileSync(next.htmlPath)).not.toEqual(html);
+});
+test('ORACLE-PROGRESS-PAGE: one executed command becomes one node with a traceable pass count',async()=>{
+ const { buildPageData }=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');
+ const f=await fixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'});
+ const testFile=join(f.taskPath,'same-command.test.mjs');
+ writeFileSync(testFile,'import test from "node:test";test("controlled pass",()=>{});');
+ const first=await task.captureCommand({cwd:f.material,slug:'same-command-pass',argv:[process.execPath,'--test',testFile],timeoutMs:10000});
+ expect(first.exit_code).toBe(0);
+ writeFileSync(testFile,'import test from "node:test";test("controlled fail",()=>{throw Error("controlled failure");});');
+ const second=await task.captureCommand({cwd:f.material,slug:'same-command-fail',argv:[process.execPath,'--test',testFile],timeoutMs:10000});
+ expect(second.exit_code).not.toBe(0);
+ // A byte-identical copy is the same original reference, not a third real run.
+ const copy=await task.appendRecord({dir:'quality/tests',slug:'same-command-copy',ext:'json',bytes:readFileSync(first.receipt_ref)});
+ const built=await buildPageData(f);
+ const nodes=built.pageData.objects.filter(o=>o.kind==='test'&&o.command.includes('same-command.test.mjs'));
+ expect(nodes,nodes.map(o=>o.command).join('\n')).toHaveLength(1);
+ const [only]=nodes;
+ expect(only.status.text).toContain('同命令 2 次');
+ expect(only.pass).toBe(1);expect(only.fail).toBe(1);
+ expect(only.explain).toContain('重复引用同一原件只计一次');
+ expect(only.explain).toContain('失败、超时与取消不计通过');
+ const paths=new Set(only.src.map(source=>source.path));
+ expect(paths.has(first.receipt_ref)).toBe(true);
+ expect(paths.has(second.receipt_ref)).toBe(true);
+ expect(paths.has(first.output_ref)).toBe(true);
+ expect(paths.has(second.output_ref)).toBe(true);
+ expect(paths.has(copy)).toBe(false);
+});
+test('ORACLE-PROGRESS-PAGE: a post-contract error blocks publication by name',async()=>{
+ const f=await fixture(),spec=join(f.material,'spec.md');
+ writeFileSync(spec,readFileSync(spec,'utf8').replace(/### 接口与失败语义[\s\S]*?(?=### )/,''));
+ await expect(renderAnswerPage(f)).rejects.toThrow(/CONTRACT/);
+ expect(existsSync(join(f.outDir,f.htmlName))).toBe(false);
+});
+test('ORACLE-PROGRESS-PAGE: an acceptance with no owning package is a named publication error',async()=>{
+ const f=await currentPackageMaterials(await fixture()),spec=join(f.material,'spec.md');
+ writeFileSync(spec,readFileSync(spec,'utf8').replace('\n\n## Appendix B','\n- [ ] **AC-P3-001** 未挂到任何包。\n\n## Appendix B'));
+ const { buildPageData }=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f);
+ expect(built.pageData.packageReconciliation.issues.join('\n')).toMatch(/AC-P3-001.*(未挂到任何包|未在 5.0 AC 索引中声明归属包)/);
+ await expect(renderAnswerPage(f)).rejects.toThrow(/PACKAGE_RECONCILE|AC_UNBOUND|未挂到/);
+ expect(existsSync(join(f.outDir,f.htmlName))).toBe(false);
+});
+test('ORACLE-PROGRESS-PAGE: a current build-code stage row is shown without guessing phase or task',async()=>{
+ const f=await fixture(),{writeStageRow}=await import('../../runtime/task/task-store.mjs');
+ await writeStageRow(f.taskPath,{stage:'build-code',source:'actual current stage row without a phase cursor'});
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f),d=built.pageData;
+ expect(d.stageLabel).toBe('写代码');
+ expect(d.stages.filter(s=>s.state==='now').map(s=>s.id)).toEqual(['build-code']);
+ expect(d.stageLabel).not.toContain('P1');
+});
+test('ORACLE-PROGRESS-PAGE: without a stage row the position stays unknown',async()=>{
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(await fixture());
+ expect(built.pageData.stageLabel).toBe('当前位置未取得');
+});
+test('ORACLE-PROGRESS-PAGE: a sidecar without a kind summary is rejected',async()=>{
+ const f=await currentPackageMaterials(await fixture()),first=await renderAnswerPage(f),{buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f),nodes=JSON.parse(readFileSync(first.nodesPath,'utf8'));
+ nodes.nodes=nodes.nodes.filter(node=>node.stable_id!=='kind:wp');
+ const {checkPageContent}=await import('../../skills/answer-as-page/scripts/check-page-content.mjs'),r=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:{pageData:built.pageData,html:readFileSync(first.htmlPath,'utf8'),nodes:JSON.stringify(nodes)}});
+ expect(r.ok).toBe(false);expect(r.errors.map(error=>error.code)).toContain('SIDECAR_MISMATCH');
+});
+test('ORACLE-PROGRESS-PAGE: conflicting acceptance owners are named',async()=>{
+ const f=await currentPackageMaterials(await fixture()),dl=join(f.material,'decision-log.md');
+ writeFileSync(dl,readFileSync(dl,'utf8').replace('| AC-P1-1 | 1 |','| AC-P1-1 | 1 |\n| AC-P1-1 | 2 |'));
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f);
+ expect(built.pageData.packageReconciliation.issues.join('\n')).toMatch(/AC-P1-001.*归属冲突/);
+ await expect(renderAnswerPage(f)).rejects.toThrow(/PACKAGE_RECONCILE|归属冲突/);
+});
+test('ORACLE-PROGRESS-PAGE: a package without acceptance is a named gap, not an undefined placeholder',async()=>{
+ const f=await currentPackageMaterials(await fixture()),idx=join(f.taskPath,'quality/evidence/decision-log-refs/requirement-index.md'),dl=join(f.material,'decision-log.md');
+ writeFileSync(idx,readFileSync(idx,'utf8').replace('| AC-P2-1','| '));
+ writeFileSync(dl,readFileSync(dl,'utf8').replace('| AC-P2-1 | 2 |','|  |  |').replace('AC-P2-1 可核','无验收'));
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f),wp=built.pageData.objects.find(o=>o.source_id==='包 2');
+ expect(built.pageData.packageReconciliation.issues.join('\n')).toMatch(/包 2 缺验收编号/);
+ expect(JSON.stringify(wp.items)).not.toContain('undefined');
+ await expect(renderAnswerPage(f)).rejects.toThrow(/PACKAGE_RECONCILE|缺验收/);
+});
+test('ORACLE-PROGRESS-PAGE: a caller-supplied page reports the checks it actually ran',async()=>{
+ const f=await currentPackageMaterials(await fixture()),{buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f);
+ const r=await renderAnswerPage({...f,decisionLogPath:join(f.material,'decision-log.md'),pageData:built.pageData});
+ expect(r.content_check.mode).toBe('caller');
+ expect(r.content_check.checks.derived_model).toBe(false);
+ expect(r.content_check.fingerprint_checked).toBe(false);
+ expect(r.content_check.pair_fingerprint_checked).toBe(true);
 });
