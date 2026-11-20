@@ -248,14 +248,14 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 - 影响范围：包 2/3/4、现有任务完成门、新会话可见性。
 
 **验收**：
-- **AC-P1-1 完成门只认本次加载事件**：命令 `node tools/cli/check-stage-steps.mjs --stage=<stage>`。期望通过：exit 0，输出含本次 `{stage, step, skill_path, sha256, bytes, at}` 事件，且材料/检查两项齐、`complete` 由检查器给出。期望失败：缺事件/缺材料/缺检查 → `unknown`（不得当 pass）；检查非 pass → `failed` 且 exit≠0。反例：同任务旧版本事件冒充本次、只读主技能 0 子技能、自写 `complete=true`。证据：`quality/tests/2026-11-19-p1-stage-steps.txt`（stdout 原文）。观察者：运行时 owner（不写本包代码者）。时点：build-code 实现后。
+- **AC-P1-1 完成门只认本次加载事件**：命令 `node tools/cli/check-stage-steps.mjs --stage=<stage>`。期望通过：exit 0，输出含本次 `{stage, step, skill_path, sha256, bytes, at}` 事件，且材料/检查两项齐、`complete` 由检查器给出。期望失败：缺事件/缺材料/缺检查 → `unknown`（不得当 pass）；检查非 pass → `failed` 且 exit≠0。反例：同任务旧版本事件冒充本次、只读主技能 0 子技能、自写 `complete=true`。证据：`quality/tests/2026-11-19-p1-stage-steps.txt`（**未取得：任务库 `quality/tests/` 无此文件，stdout 原件未产出**；owner=运行时 owner/包 1；恢复条件=包 1 实现后重跑 `check-stage-steps` 并把 stdout 存为该路径并登记 sha，或改引届时真实产出的读数文件；取得前本 AC 不得判通过）。观察者：运行时 owner（不写本包代码者）。时点：build-code 实现后。
   可跑性：命令现在可跑，但实现前缺材料/缺检查仍 exit 0，**现状读数不得判通过**；owner=包 1。
 - **AC-P1-2 安装可见且 baseline 有 sha**：人工操作：在配置的宿主根执行 `ls`，并读 `reading_baseline`。期望通过：新会话能发现技能，baseline 行含 bytes+sha256。期望失败：只装 repo 根、baseline 无 sha。反例：装 repo 根后别的项目看不到、baseline 只有字节数。证据：安装根记录 + baseline 输出。观察者：运行时 owner。时点：build-code 实现后。
 - 对应决定/索引：D-002；AC 索引见 5.0。
 
 **风险/回退**：不同宿主根可能不同；事件只证明读取；回退到“只安装”，完成门记缺口。
 
-**未决/消费者/证据**：宿主根清单谁维护；包 2/3/4 消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：宿主根清单谁维护；包 2/3/4 消费；证据：`quality/evidence/research/2026-11-19-prior-audit-synthesis.md`；sha256 `0129a36f4842aee3d844405afcc66add5639ace420a257115ef82bd0e81061a8`（§2.4 技能可发现性、T13/T8 审计段；2026-11-20 读取）。
 ### 4.2 证据与交接
 
 **原始需求**：证据靠补记、交接靠摘要；U 表指向日志自身，下游没读。来源：2026-11-19 对话。
@@ -294,7 +294,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：行号会随 blob 变；旧任务要例外；回退保留旧交接和回执。
 
-**未决/消费者/证据**：backfilled 何时换真实记录；build-plan/build-code 消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：backfilled 何时换真实记录；build-plan/build-code 消费；证据：`quality/evidence/original-request.md`；sha256 `a7d0dc0e7144fd809701d3615c65b2930c602bbcea1b52fd3e2ce3217f1afde6`；`quality/evidence/decision-log-refs/four-checks-2026-11-19.md`；sha256 `a116b7df3a98cf826f68d49e24f29fbca8dc08a18b787039d1b68c9c6338be4f`（2026-11-20 读取）。
 ### 4.3 decision-maker
 
 **原始需求**：最初只是“优化逐包收敛”这个过程，并没有 decision-maker 技能这个概念；目标是让每包收敛有调研、有方案、有验收，不再把需求转译成卡。
@@ -311,7 +311,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 - 内部失败模式：12 包逐项失败，横向 12 类（转译、错误 owner、证据倒填、验收不可执行、过度设计、黑话、路径错、冷读形式化、边界不清、只加不删、提前写收敛、补丁式修复）。
 - 外部：ADR/RFC/Design Doc 都要求“背景、目标、方案+备选、接口、数据、验收、风险、依赖、开放问题、来源”；只写决定+指针会丢理由/备选。
 - 成本：T13 56 个子代理占输入 90.1%；5 角色×12 包约 60 次，复制病因。
-来源：`2026-11-19-decision-maker-failure-modes.md`、`2026-11-19-dl-external-research.md`。
+来源：`2026-11-19-decision-maker-failure-modes.md`、`2026-11-19-dl-external-research.md`（**未取得：任务库中不存在该文件**；owner=日志/调研负责人；恢复条件=补交该外部调研原件并登记 sha，或改引真实存在的 `2026-11-19-dl-build-plan-input-audit.md` 外部格式段）。
 
 **最终决定**：
 - 做成独立技能 `decision-maker`；每包 3 个角色；每包最多 3 个子代理；主会话唯一 writer；不搞五角色×12。
@@ -349,7 +349,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：角色交接丢信息；审查一人做冷读+对抗可能漏；子代理成本仍可能高；回退保留旧卡和回传，按包回滚。
 
-**未决/消费者/证据**：卡校验字段清单；make-decision 各包消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：卡校验字段清单；make-decision 各包消费；证据：`quality/evidence/research/2026-11-19-decision-maker-failure-modes.md`；sha256 `b9ba5e435e9f88ff51a1020241932c2560bfed3bf91443c856b6a9968132ab4e`（2026-11-20 读取）。
 
 ### 4.4 开工就绪
 
@@ -391,7 +391,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：材料漂移；探针成本；跨项目命令不能本仓验；回退保留就绪表。
 
-**未决/消费者/证据**：哪些机器/人判；build-code 消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：哪些机器/人判；build-code 消费；证据：`quality/evidence/research/2026-11-19-p6-readiness-design.md`；sha256 `8b487cd9f1367d3899ed283ef7468ee6048d50afdd3c679c15658c48a89809ab`（2026-11-20 读取）。
 ### 4.5 修复循环
 
 **原始需求**：十几轮返工、同因重复、验收标准被实现者改、写集漂移。来源：2026-11-19 对话。
@@ -432,7 +432,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：严重程度判断有偏见；一次测试漏；回退保留原测试和失败。
 
-**未决/消费者/证据**：谁做严重程度判断（独立审查者）；build-code 消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：谁做严重程度判断（独立审查者）；build-code 消费；证据：`quality/evidence/research/2026-11-19-p7-repair-design.md`；sha256 `def2cdc739e94274ccd8a22d2183f8316ecc13ca249db8973d118bf0738715b2`（2026-11-20 读取）。
 ### 4.6 页面
 
 **原始需求**：answer-as-page 改了很多轮还是差；包全缺、契约错还发布。来源：2026-11-19 对话。
@@ -471,7 +471,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：模型 schema 维护；旧页迁移；截图看环境；回退保留旧页。
 
-**未决/消费者/证据**：模型 schema 谁定；用户/build-plan 消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：模型 schema 谁定；用户/build-plan 消费；证据：`quality/evidence/research/2026-11-19-p8-root-cause.md`；sha256 `eda3dd1f3fcc0aede88b22463f5b63df2d95c3cdb4e0e873292b749317dd4b97`（2026-11-20 读取）。
 ### 4.7 全链验收
 
 **原始需求**：门红了还写成功；交付声明没证据；六组负例 0 次执行。来源：2026-11-19 对话。
@@ -515,7 +515,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：原件已失；环境差异；签字独立性；回退保留原证据。
 
-**未决/消费者/证据**：案例谁维护；收口消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：案例谁维护；收口消费；证据：`quality/evidence/research/2026-11-19-p9-acceptance-design.md`；sha256 `da2a3ffb84bcb619d14871c3ab844497f46154ebd224aa7e82cf3de4a2bc8d97`（2026-11-20 读取）。
 ### 4.8 测试数据
 
 **原始需求**：测试默认用真实产品库；没有数据规划，磁盘/备份压力大。来源：2026-11-19 对话。
@@ -530,7 +530,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 **调研**：
 - `testing-system-blueprint` 已拥有每 Task 测试策略；`phase-template` 说准备不是 Phase；T13/T8 跳过准备。
 - 真实库、临时目录、反复全量备份造成磁盘压力。
-来源：`2026-11-19-test-data-audit.md`、`2026-11-19-test-db-lifecycle-audit.md`。
+来源：`2026-11-19-test-data-audit.md`、`2026-11-19-test-db-lifecycle-audit.md`（**未取得：任务库与工作树均无此文件**；owner=测试数据 owner（包 8）；恢复条件=补交该审计原件并登记 sha，或经内容核对后改引真实存在的 `2026-11-19-test-data-audit.md`/`2026-11-19-resource-lifecycle.md` 对应段；未核对前不当作同一原件）。
 
 **最终决定**：选 C；数据内容归测试标准 owner；build-plan 只写四件事；跨项目迁移记具名缺口。
 
@@ -552,7 +552,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：跨项目不能本仓验；数据大小；回退保留旧测试策略。
 
-**未决/消费者/证据**：迁移范围/备份保留 N/水位阈值（用户定）；build-code 消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：迁移范围/备份保留 N/水位阈值（用户定）；build-code 消费；证据：`quality/evidence/research/2026-11-19-test-data-audit.md`；sha256 `f41f8bcbea2ac42b5a28177e86f97c661bec7d02d424e060e4dcc3041d6c4301`（2026-11-20 读取）。
 ### 4.9 收口与知识图谱
 
 **原始需求**：归档漏、授权不够、图全量重抽、失败挡收口。来源：2026-11-19 对话。
@@ -590,7 +590,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 **风险/回退**：源目录被手删会假过；分支/merge 顺序；图滞后一个阶段；回退保留原归档和图。
 
-**未决/消费者/证据**：迁移范围/备份 N；下一个任务消费；证据 ref 见第 6 节。
+**未决/消费者/证据**：迁移范围/备份 N；下一个任务消费；证据：`quality/evidence/research/2026-11-19-close-order-audit.md`；sha256 `555d58838b4ddac0abd12531ed9dd2a6e542caaef5fcf7199f24a8451d2a9f6f`；`quality/evidence/research/2026-11-19-graph-update-audit.md`；sha256 `ad6c9e2d74d03eaf6d629f312f20e1ad26608813bdb6071b47ee3d1a2c75284d`（2026-11-20 读取）。
 ### 4.10 decision-log 优化
 
 **原始需求**：日志太薄，只有九包骨架、决定、包表；build-plan 需要的背景、调研、方案、接口、写集、验收、风险都丢了。
@@ -606,7 +606,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 - 内部审计：根因排序流程 30%、技能 25%、9 包合并 20%、模板 15%、material-writing 10%；模板本身有 11 列/十格卡/写集表/验收面，但被当“索引/摘要”，我们只填了 3 块。
 - 外部：ADR/RFC/Design Doc 的必需字段；只写决定+指针丢理由/备选；主文留必需字段，过程外置。
 - 字段映射：方向/非目标/包级依赖/风险够用；验收只有草案；代码锚点/接口/写集/RED/GREEN/oracle/证据为零。
-来源：`2026-11-19-dl-build-plan-input-audit.md`、`2026-11-19-dl-external-research.md`、`2026-11-19-dl-buildplan-input-map.md`。
+来源：`2026-11-19-dl-build-plan-input-audit.md`、`2026-11-19-dl-external-research.md`（**未取得：任务库中不存在该文件**；owner=日志/调研负责人；恢复条件=补交原件并登记 sha，或改引 `2026-11-19-dl-build-plan-input-audit.md` 的外部格式段）、`2026-11-19-dl-buildplan-input-map.md`（**未取得：任务库中不存在该文件**；owner=日志/调研负责人；恢复条件=补交字段映射原件并登记 sha，或把映射改引 `2026-11-19-dl-build-plan-input-audit.md` 的字段映射段）。
 
 **最终决定**：
 - 日志六段：入口、需求与确认、包目录、每包设计、跨包共享、证据索引。
@@ -652,12 +652,13 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 - **AC-P10-2 A 表**（本轮交付）：人工/文本：需求索引 §1 有 14 行（需求 → 原文 ref+sha → 答复位置 → 包 → 决定 → AC → 缺口）。期望通过：无空行、每行可回读。期望失败：需求只在合并句出现、A 表仍用旧 9 包。反例：A 表填旧 AC 槽位。证据：索引 §1。观察者：独立审查者。时点：make-decision 第 13 步。
 - **AC-P10-3 B/C 表**（设计已交、实施后验）：build-plan 第 6 步末粗查（包/需求→Phase/依赖/独立交付）、第 10 步审查后细查（十项 vs spec/phases、findings 闭合）；命令 `node skills/spec-plan/scripts/build-decision-baseline.mjs --task <task>` + 人工。期望通过：B 行齐、C 覆盖十项与 findings。期望失败：Phase 与包对不上、标 fixed 但 diff 里原断言还在。反例：需求只在合并句。证据：baseline 输出 + C 表。观察者：build-plan 作者 + 独立审查者。时点：build-plan 后（当前不写成已验）。
 - **AC-P10-4 合同测试**（设计已交、实施后验）：命令 `npx vitest run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs`。期望通过：exit 0。期望失败：任一失败 → build-code 修。反例：baseline 跑本日志仍 exit 1。证据：测试输出。观察者：日志 owner。时点：build-code 实现后。
+> A 表恢复条件（2026-11-20 补，P10 F14）：需求 8、11–14 的恢复条件已逐条落在 `quality/evidence/decision-log-refs/requirement-index.md` §1 对应行；本日志不复制 A 表行。
 - **A/B/C 与包 7/9/10 时序**：当前（make-decision 收口）**只做 A 表**；B 表在 build-plan 第 6 步末；C 表在第 10 步审查后。顺序是：包 7 交红证明/回放/三声明对账/签字结果 → 包 9 据此收口并交归档/图回执 → 包 10 用 A/B/C + 包 7/9 产物做最终签收。A/B/C 的验收一律写“设计已交、实施后验”，不写成当前已验。
 - 对应决定/索引：D-010；AC 索引见 5.0。
 
 **风险/回退**：主文变长；包目录与正文重复；引用过期；回退保留 v1，按 v2 逐包补。
 
-**未决/消费者/证据**：模板改动何时落 build-code（owner=包 10，时点=实现后）；build-plan 消费；证据 ref 见第 6 节与 5.4。
+**未决/消费者/证据**：模板改动何时落 build-code（owner=包 10，时点=实现后）；build-plan 消费；证据：`quality/evidence/research/2026-11-19-dl-build-plan-input-audit.md`；sha256 `5254825fa29434b0c0309a324935c1cc1ed5d9ec021df5a705fbd4eb11dadc0e`；`quality/evidence/decision-log-refs/requirement-index.md`；sha256 `152ffd214bc959edc2e355de4dd7940cc9d555bd0a1f2becfa6b9d758b8323ee`（A 表 14 行与恢复条件；2026-11-20 读取）；另见 5.4。
 
 ## 5. 跨包共享
 
@@ -891,7 +892,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 
 - `2026-11-19-decision-maker-failure-modes.md`：逐包失败、横向模式、技能设计。
 - `2026-11-19-p6-readiness-design.md`、`p7-repair-design.md`、`p8-root-cause.md`、`p9-acceptance-design.md`：四包专项。
-- `2026-11-19-dl-build-plan-input-audit.md`、`dl-external-research.md`、`dl-buildplan-input-map.md`：日志输入审计/外部格式/字段映射。
+- `quality/evidence/research/2026-11-19-dl-build-plan-input-audit.md`（真实存在）：日志输入审计；`2026-11-19-dl-external-research.md`（**未取得：任务库中不存在该文件**；owner=日志/调研负责人；恢复条件=补交原件并登记 sha，或改引上述审计的外部格式段）；`2026-11-19-dl-buildplan-input-map.md`（**未取得：任务库中不存在该文件**；owner=日志/调研负责人；恢复条件=补交字段映射原件并登记 sha，或改引上述审计的字段映射段）。
 - `quality/reviews/2026-11-19-005-make-decision-direction.json`、`006-make-decision-detail.json`、`007-spec-analyze.md`：方向/细节/一致性审查。
 - `quality/evidence/decision-log-refs/requirement-index.md`、`coverage-matrix-5d.md`：需求/覆盖索引（旧 12 包行只作素材）。
 
