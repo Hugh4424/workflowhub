@@ -22,6 +22,13 @@ const sidecarNodes = objects => [...new Set(objects.map(o => o.kind))].map(kind 
 }));
 
 // The model projection the page must show; presentation decorations are ignored.
+// A report file path is provenance for the same rings, not new page content: the
+// renderer already treats immutable-reference drift as no substantive change,
+// and the fingerprint gate below compares report content by its rings hash. So
+// pr sources compare by their recorded location, while a different report
+// content still fails STALE_PAGE / the pr status projection.
+const projectedSource = (object, source) => object.kind === 'pr' ? [source.loc] : [source.path, source.loc];
+
 function modelProjection(data) {
   return {
     task: data.task,
@@ -37,7 +44,7 @@ function modelProjection(data) {
       ac_ids: object.ac_ids ?? null,
       status: object.status ?? null, implementation: object.implementation ?? null, acceptance: object.acceptance ?? null,
       level: object.level?.value ?? null, level_reason: object.level?.reason ?? null,
-      src: (object.src ?? []).map(source => [source.path, source.loc]),
+      src: (object.src ?? []).map(source => projectedSource(object, source)),
     })),
   };
 }
