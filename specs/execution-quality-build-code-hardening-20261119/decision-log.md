@@ -214,6 +214,8 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 9. **收口与知识图谱** —— 先归档再提交；交接文档图、收口代码图。
 10. **decision-log 优化** —— 让日志成为 build-plan 的完整输入；最后一个包做完整验收。
 
+清单：`quality/evidence/decision-log-refs/convergence-checklist.md`
+
 ## 4. 每包设计
 
 ### 4.1 技能安装与完成门

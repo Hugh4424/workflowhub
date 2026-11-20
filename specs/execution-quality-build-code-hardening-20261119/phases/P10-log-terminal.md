@@ -358,31 +358,32 @@ P10 交单份既有终末报告、独立签字、授权确认、物理结果、�
 - **evidence_path**: planned: `quality/tests/log-terminal-effects.output`
 - **STOP**: 新解析或投递失真时只撤相关写入，旧模板及真实错投和失败保存。归档与推送发生后只补真实读回或授权后修复，不覆写已签字原件。 缺外部权限或绑定失配停该动作。
 - **覆盖 AC**: AC-P1-001, AC-P1-002, AC-P2-001, AC-P2-002, AC-P3-001, AC-P3-002, AC-P3-003, AC-P8-001, AC-P8-002, AC-P4-001, AC-P4-002, AC-P5-001, AC-P5-002, AC-P6-001, AC-P6-002, AC-P9-001, AC-P9-002, AC-P7-001, AC-P7-002, AC-P10-001, AC-P10-002, AC-P10-003, AC-P10-004, AC-P10-005, AC-P10-006, AC-P10-007, AC-P10-008
-- **Done**: 前置（不作完成条件）：命令与冻结原件可读。完成条件（只写效果）：下游能从日志、原件和现行阶段完成三次各自的对账，独立验收者能在同批材料上签，然后一次读回实际交付。
-  AC-P1-001 incomplete（计划，待证据）→ `phases/P1-skill-loading.md` 的 Done 指向实际单份原件。
-  AC-P1-002 incomplete（计划，待证据）→ `phases/P1-skill-loading.md` 的 Done 指向实际单份原件。
-  AC-P2-001 incomplete（计划，待证据）→ `phases/P2-evidence-handoff.md` 的 Done 指向实际单份原件。
-  AC-P2-002 incomplete（计划，待证据）→ `phases/P2-evidence-handoff.md` 的 Done 指向实际单份原件。
-  AC-P3-001 incomplete（计划，待证据）→ `phases/P3-package-decisions.md` 的 Done 指向实际单份原件。
-  AC-P3-002 incomplete（计划，待证据）→ `phases/P3-package-decisions.md` 的 Done 指向实际单份原件。
-  AC-P3-003 incomplete（计划，待证据）→ `phases/P3-package-decisions.md` 的 Done 指向实际单份原件。
-  AC-P8-001 incomplete（计划，待证据）→ `phases/P4-test-data.md` 的 Done 指向实际单份原件。
-  AC-P8-002 incomplete（计划，待证据）→ `phases/P4-test-data.md` 的 Done 指向实际单份原件。
-  AC-P4-001 incomplete（计划，待证据）→ `phases/P5-readiness.md` 的 Done 指向实际单份原件。
-  AC-P4-002 incomplete（计划，待证据）→ `phases/P5-readiness.md` 的 Done 指向实际单份原件。
-  AC-P5-001 incomplete（计划，待证据）→ `phases/P6-repair-cycle.md` 的 Done 指向实际单份原件。
-  AC-P5-002 incomplete（计划，待证据）→ `phases/P6-repair-cycle.md` 的 Done 指向实际单份原件。
-  AC-P6-001 incomplete（计划，待证据）→ `phases/P7-progress-page.md` 的 Done 指向实际单份原件。
-  AC-P6-002 incomplete（计划，待证据）→ `phases/P7-progress-page.md` 的 Done 指向实际单份原件。
-  AC-P9-001 incomplete（计划，待证据）→ `phases/P8-archive-graph.md` 的 Done 指向实际单份原件（计划 `quality/tests/archive-graph-effects.output`）。
-  AC-P9-002 incomplete（计划，待证据）→ `phases/P8-archive-graph.md` 的 Done 指向实际单份原件（计划 `quality/tests/archive-graph-effects.output`）。
-  AC-P7-001 incomplete（计划，待证据）→ `phases/P9-evidence-signoff.md` 的 Done 指向实际单份原件（计划 `quality/tests/claims-replay-effects.output`）。
-  AC-P7-002 incomplete（计划，待证据）→ `phases/P9-evidence-signoff.md` 的 Done 指向实际单份原件（计划 `quality/tests/claims-replay-effects.output`）。
-  AC-P10-001 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-002 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-003 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-004 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-005 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-006 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-007 incomplete（计划，尚未执行）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
-  AC-P10-008 incomplete（计划，尚未执行；owner=包 10，时点=build-code 实现后）→ `quality/tests/log-terminal-effects.output` 中对应原件，执行后回读。
+- **Done**: 前置（不作完成条件）：命令与冻结原件可读；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：本卡自身 8 条——AC-P10-001：pass，证据 `quality/tests/2026-11-20-079-build-code-p10-chain-scan.output`（10 包 10/10、0 warning、exit 0；decision-log 两处断链已标「未取得+owner+恢复条件」，10 包均有 ref+sha）。
+  AC-P10-002：pass，证据 `quality/evidence/decision-log-refs/requirement-index.md:44,47-50`（需求 8、11–14 已补恢复条件/时点，A 表 14 行可回读）。
+  AC-P10-003：partial，证据 `quality/evidence/build-code/findings-evidence-map.md`（28 条 fixed_proven 17 / open 5 / needs_human 6）；缺口 owner=实施 writer+独立测试作者+处置者，恢复=5 条 open 补证或人工复核、C 表接图、补独立测试作者。
+  AC-P10-004：pass，证据 `quality/tests/2026-11-20-085-p10-four-contracts-full.output`（182 passed / 2 skipped，gate exit 0、baseline 14/14、旧形态兼容）。
+  AC-P10-005：pass（具名缺口），证据 `quality/reviews/2026-11-20-p10-terminal-review.md:157`；缺口 owner=调研负责人（T8 可比归因、两份历史报告、同版图故障原文未取得），恢复=补原件或由用户明确接受具名缺口。
+  AC-P10-006：pass，证据 `quality/reviews/2026-11-20-p10-terminal-review.md:158`（只改记录节例外段，十一条与普通写作规则未动，十项唯一来源仍指 v2 模板）。
+  AC-P10-007：pass，证据 `quality/reviews/2026-11-20-p10-terminal-review.md:159`（十包四项非空非占位，抽样已改 §4.10 与 P5/P8）。
+  AC-P10-008：partial，证据 `quality/reviews/2026-11-20-p10-terminal-review.md:160`；缺口 owner=日志 owner+独立测试作者，恢复=补 A 表机器消费者或具名接受人工消费者、补 fixed 证据。
+  上游 19 条（本卡只承接，不重复为上游签名）：
+  AC-P1-001：incomplete，证据 `quality/tests/2026-11-20-068-p1-step1-with-read-receipt.output`；owner=运行时负责人，恢复=见 P1 卡 Done。
+  AC-P1-002：unavailable，证据 `quality/evidence/build-code/execution-checklist-p1.md:202`；owner=运行时负责人，恢复=见 P1 卡 Done。
+  AC-P2-001：fail，证据 `quality/tests/2026-11-19-084-p2-ac1-human-read.output:3–23`；owner=材料负责人/主会话，恢复=见 P2 卡 Done。
+  AC-P2-002：fail，证据 `quality/tests/2026-11-19-083-p2-independent-real-entry.output`；owner=规划与交接负责人/主会话，恢复=见 P2 卡 Done。
+  AC-P3-001：incomplete，证据 `quality/evidence/p3-package-roles/package-06-page-budget/README.md`；owner=技能负责人/主会话，恢复=见 P3 卡 Done。
+  AC-P3-002：incomplete，证据 `quality/evidence/decision-log-refs/talk/2026-11-19-015-all-packages-confirm-answer.md`；owner=主会话/日志 owner+spec owner，恢复=见 P3 卡 Done。
+  AC-P3-003：fail，证据 `quality/evidence/build-code/2026-11-19-003-p3-main-session-report-and-reads.md:23`；owner=主会话，恢复=见 P3 卡 Done。
+  AC-P8-001：incomplete，证据 `quality/tests/p4-isolated-test-data-manual-r3.output`；owner=测试数据负责人，恢复=见 P4 卡 Done。
+  AC-P8-002：incomplete，证据 `quality/tests/p4-isolated-test-data-manual-r3.output`；owner=测试数据负责人，恢复=见 P4 卡 Done。
+  AC-P4-001：incomplete，证据 `quality/tests/2026-11-20-065-readiness-p4.json`；owner=计划负责人，恢复=见 P5 卡 Done。
+  AC-P4-002：incomplete，证据 `quality/evidence/p5-readiness-observation.md:20–64`；owner=独立审查者/主会话，恢复=见 P5 卡 Done。
+  AC-P5-001：incomplete，证据 `quality/evidence/p6-repair-observation.md:92–95`；owner=本段独立审查者，恢复=见 P6 卡 Done。
+  AC-P5-002：incomplete，证据 `quality/tests/p6-write-set-report.output`；owner=独立审查者，恢复=见 P6 卡 Done。
+  AC-P6-001：pass，证据 `quality/reviews/2026-11-20-p7r-spec-recheck.md` 第六节。
+  AC-P6-002：pass，证据 `quality/reviews/2026-11-20-p7r-spec-recheck.md:40`；残留实体读屏 unavailable，owner=页面 owner。
+  AC-P9-001：partial，证据 `quality/reviews/2026-11-20-p8-spec-axis.md:13`；owner=收口负责人，恢复=见 P8 卡 Done。
+  AC-P9-002：fail，证据 `quality/reviews/2026-11-20-p8-spec-axis.md:14`；owner=图/收口负责人，恢复=见 P8 卡 Done。
+  AC-P7-001：partial，证据 `quality/evidence/2026-11-20-002-p9b-signer-check.json`；owner=验收/收口，恢复=见 P9 卡 Done。
+  AC-P7-002：partial，证据 `quality/reviews/2026-11-20-p9-spec-axis.md:14`；owner=验收负责人，恢复=见 P9 卡 Done。

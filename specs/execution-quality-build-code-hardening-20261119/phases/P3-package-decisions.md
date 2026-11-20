@@ -239,7 +239,11 @@ P2 交同版原件、同一收敛清单引用及真实入口的正反读回证�
   重生成后的清单字节、两条命令 stdout 与退出码拟归 `quality/tests/p3-skill-manifests-green.output`。
 - **Coverage limit**：已核模板字节与现有卡检查只证形状，真实独立作者消费及真实问答不由样本替代；历史十包各保原终态。新一包只证明当前机制；独立答复仍缺时本条总体 incomplete。
 - **STOP / recovery**：真实角色或答复来源未取得时，由主持人或原角色补可回读输入。保已完成的机械验证和历史整体确认，实际缺证保持未核。
-- **Done**：前置（不作完成条件）：同一目标命令实际跑过，保 cwd、退出与原始输出。完成条件（只写效果）：AC-P3-001：incomplete，一个真实工作包走完三角色；实跑/原始观察待实施，证据拟归 `quality/tests/p3-package-roles-green.output`；AC-P3-002：incomplete，实际答复绑到当前卡片；实跑/原始观察待实施，证据拟归 `quality/tests/p3-package-roles-green.output`。独立执行者按验收原判据观察。
+- **Done**：前置（不作完成条件）：同一目标命令实际跑过并保 cwd、退出与原始输出；本段回执现状见下，档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P3-001：incomplete——预算内 3 子代理跑完一包三角色、原件支持完成，Done 已回填后仍待独立复审；证据 `quality/evidence/p3-package-roles/package-06-page-budget/README.md`；缺口 owner=技能负责人/主会话，恢复=独立复审同一批原件。
+  AC-P3-002：incomplete——U-021 十包确认与包 6 答复可读，但 §2.1「已确认/无缺口」与 A 表/`decision-log.md:827` 矛盾、U-022 被误作包答复转写；证据 `quality/evidence/decision-log-refs/talk/2026-11-19-015-all-packages-confirm-answer.md`；缺口 owner=主会话/日志 owner+spec owner，恢复=统一确认状态、改正 U-022 引用或补真实接受原件。
+  AC-P3-003：fail——research 派发 06:42 早于用户汇报 06:55，「先汇报后派发」不成立且时序不可回补；证据 `quality/evidence/build-code/2026-11-19-003-p3-main-session-report-and-reads.md:23`；缺口 owner=主会话，恢复=只作具名保留，或在用户明确接受该缺口后由独立读者按历史事实记录。
+  独立执行者按验收原判据观察。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -252,5 +256,9 @@ P2 交同版原件、同一收敛清单引用及真实入口的正反读回证�
 - **evidence_path**： planned: `quality/tests/p3-package-roles-green.output`
 - **STOP**：真实角色或答复来源未取得时，由主持人或原角色补可回读输入。保已完成的机械验证和历史整体确认，实际缺证保持未核。
 - **覆盖 AC**：AC-P3-001、AC-P3-002、AC-P3-003
-- **Done**：前置（不作完成条件）：已冻结目标断言并实跑。完成条件（只写效果）：AC-P3-001：incomplete，一个真实工作包走完三角色；实跑/原始观察待实施，证据拟归 `quality/tests/p3-package-roles-green.output`；AC-P3-002：incomplete，实际答复绑到当前卡片；实跑/原始观察待实施，证据拟归 `quality/tests/p3-package-roles-green.output`。交接引用使用实际字节与未验边界。
+- **Done**：前置（不作完成条件）：已冻结目标断言并实跑；本段回执现状见下。
+  完成条件（只写效果）：AC-P3-001：incomplete——一包三角色原件可读、支持完成，待独立复审；证据 `quality/evidence/p3-package-roles/package-06-page-budget/README.md`；缺口 owner=技能负责人/主会话，恢复=独立复审。
+  AC-P3-002：incomplete——U-021 确认可读，§2.1 与 `decision-log.md:827` 的确认状态矛盾、U-022 引用有误；证据 `quality/evidence/decision-log-refs/talk/2026-11-19-015-all-packages-confirm-answer.md`；缺口 owner=主会话/日志 owner+spec owner，恢复=统一确认状态并改正 U-022 引用或补真实接受原件。
+  AC-P3-003：fail——06:42 派发早于 06:55 汇报，时序不可回补；证据 `quality/evidence/build-code/2026-11-19-003-p3-main-session-report-and-reads.md:23`；缺口 owner=主会话，恢复=具名保留，或用户明确接受后由独立读者按历史事实记录。
+  交接引用使用实际字节与未验边界。
 

@@ -202,7 +202,10 @@ Git 对象和任务原件分别守版本与身份。下游首次实际读取才�
   实际证据身份、退出码和读回由既有 task facts 发布。
 - **Coverage limit**：受控 Git 对象证明读取路径和版本失配。缺消息 ID 与历史逐包原件维持缺口，不能靠补写或链检查推定真实互动。
 - **STOP / recovery**：原件未冻结、绑定的对象或来源不符时，停该证据轴，交材料 owner 补具名版本。原确认、原错误及转录说明照存；可安全阅读的材料继续。
-- **Done**：前置（不作完成条件）：隔离子判据已有修前读数。实施前分别跑现有 gate 的两个命令段并保 cwd、退出与原始输出；旧交接目标及整组 Vitest 尚未实跑。完成条件（只写效果）：AC-P2-001：incomplete，来源指针与确认落在同一原件；实跑/原始观察待实施，证据拟归 `quality/tests/p2-bound-handoff-green.output`；AC-P2-002：incomplete，规划入口确实消费同一个交接版本。真实步骤检查入口读回当前 v2 同包清单及原件并核到同一字节，对缺引用、不可读、越界、错包或旧版报告具名缺口。P3 沿现消费入口接收同一清单引用及正反读回证据；实跑/原始观察待实施，证据拟归 `quality/tests/p2-bound-handoff-green.output`。独立执行者按验收原判据观察。
+- **Done**：前置（不作完成条件）：隔离子判据已有修前读数；本段真实回执现状见下，档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P2-001：fail——确认件 head `ad708bff` 不含 spec（`git cat-file` exit 128），材料首现 `b5f7751f` 且 mtime 晚于确认，来源指针与确认未落在同一原件；证据 `quality/tests/2026-11-19-084-p2-ac1-human-read.output:3–23`；缺口 owner=材料负责人/主会话，恢复=对最终材料重新确认并绑 `commit:path`+blob+sha 后独立读回。
+  AC-P2-002：fail——真实步骤入口 `convergence.source=null`、`complete:false`、`gaps=["收敛清单指针未取得"]`，下游未消费同一个交接版本；证据 `quality/tests/2026-11-19-083-p2-independent-real-entry.output`；缺口 owner=规划与交接负责人/主会话，恢复=产出唯一收敛清单并重跑真实入口至 `complete:true`。
+  独立执行者按验收原判据观察。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -215,5 +218,8 @@ Git 对象和任务原件分别守版本与身份。下游首次实际读取才�
 - **evidence_path**： planned: `quality/tests/p2-bound-handoff-green.output`
 - **STOP**：原件未冻结、绑定的对象或来源不符时，停该证据轴，交材料 owner 补具名版本。原确认、原错误及转录说明照存；可安全阅读的材料继续。
 - **覆盖 AC**：AC-P2-001、AC-P2-002
-- **Done**：前置（不作完成条件）：隔离子判据已有修前读数。实施前冻结并实跑现有 gate 的目标断言；旧交接目标及整组 Vitest 尚未实跑。完成条件（只写效果）：AC-P2-001：incomplete，来源指针与确认落在同一原件；实跑/原始观察待实施，证据拟归 `quality/tests/p2-bound-handoff-green.output`；AC-P2-002：incomplete，规划入口确实消费同一个交接版本。真实步骤检查入口读回当前 v2 同包清单及原件并核到同一字节，对缺引用、不可读、越界、错包或旧版报告具名缺口。P3 沿现消费入口接收同一清单引用及正反读回证据；实跑/原始观察待实施，证据拟归 `quality/tests/p2-bound-handoff-green.output`。交接引用使用实际字节与未验边界。
+- **Done**：前置（不作完成条件）：隔离子判据已有修前读数；本段真实回执现状见下。
+  完成条件（只写效果）：AC-P2-001：fail——确认件 head `ad708bff` 不含 spec、材料 mtime 晚于确认；证据 `quality/tests/2026-11-19-084-p2-ac1-human-read.output:3–23`；缺口 owner=材料负责人/主会话，恢复=对最终材料重新确认并绑 `commit:path`+blob+sha 后独立读回。
+  AC-P2-002：fail——真实入口 `convergence.source=null`、`complete:false`；证据 `quality/tests/2026-11-19-083-p2-independent-real-entry.output`；缺口 owner=规划与交接负责人/主会话，恢复=产出唯一收敛清单并重跑真实入口至 `complete:true`。
+  交接引用使用实际字节与未验边界。
 

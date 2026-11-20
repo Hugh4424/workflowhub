@@ -227,6 +227,6 @@ P2 若先改 `skills/stage-handoff/SKILL.md`，先交认证读回再由本段接
 - **evidence_path**: planned: `quality/tests/archive-graph-effects.output`
 - **STOP**: 在尚未提交的自有夹具，只还原本次声明路径。对真实已提交或已推送字节保留实际事实，停有歧义动作，回收口 owner 按实际授权与提交位置恢复。晚到图结果不能改已留原记录。 缺外部权限或绑定失配停该动作。
 - **覆盖 AC**: AC-P9-001, AC-P9-002
-- **Done**: 前置（不作完成条件）：命令与冻结原件可读。完成条件（只写效果）：收口负责人能在隔离仓复放整目录移动、同一交付提交及两路推送，图失败仍留下明确结果。
-  AC-P9-001 incomplete（计划，尚未执行）→ `quality/tests/archive-graph-effects.output` 中对应原件，执行后回读。
-  AC-P9-002 incomplete（计划，尚未执行）→ `quality/tests/archive-graph-effects.output` 中对应原件，执行后回读。
+- **Done**: 前置（不作完成条件）：命令与冻结原件可读；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P9-001：partial——隔离仓四项通过条件成立（整目录与交付同一提交、源不再活动、字节一致、两路 push 在夹具），真实任务分支/目标分支推送与远端读回未发生；证据 `quality/reviews/2026-11-20-p8-spec-axis.md:13`；缺口 owner=收口负责人，恢复=用户授权后真实 close + 两路 push 回执 + 远端读回。
+  AC-P9-002：fail——首判 fail（「无变化」语义错、交接图回执为 0）；能力已由 `core/task-close.mjs:249-253`、`skills/stage-handoff/SKILL.md:24-32` 补齐，但本任务 handoff 图回执仍为 0，无真实 close 图回执与复审；证据 `quality/reviews/2026-11-20-p8-spec-axis.md:14`；缺口 owner=图/收口负责人，恢复=发布本任务 handoff 图回执与真实 close 图回执后复审。

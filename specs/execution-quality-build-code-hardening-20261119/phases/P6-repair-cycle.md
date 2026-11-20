@@ -210,7 +210,8 @@ G-2 以独立读者按现方法读回同一组正反输入。当前已完成隔�
   本段原 owner 定位并复验，历史失败留原件。
 - **完成**：前置（不作完成条件）：真实 stdin 报告和范围可读。
   完成条件（只写效果）：独立读者按两个正反观察判出分诊、冻判和真实差异。
-  AC-P5-001、AC-P5-002 仍为 incomplete，真实分诊、实际差异、冻结判据及修后复验待独立首判。
+  AC-P5-001：incomplete，证据 `quality/evidence/p6-repair-observation.md:92–95`；缺口 owner=本段独立审查者，恢复=真实两轮修复与验收原件（历史不可重建，只能具名保留）。
+  AC-P5-002：incomplete，证据 `quality/tests/p6-write-set-report.output`；缺口 owner=独立审查者，恢复=提交前冻结判据哈希与独立裁决（历史不可重建，只能具名保留）。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -224,6 +225,6 @@ G-2 以独立读者按现方法读回同一组正反输入。当前已完成隔�
 - **evidence_path**： planned: `quality/evidence/p6-repair-observation.md`
 - **STOP**：原失败、基准或授权裁决不可回读时暂停相关结论，原 writer 修后复验。
 - **覆盖 AC**：AC-P5-001、AC-P5-002
-- **Done**：前置（不作完成条件）：stdin 报告、工作区和真实差异可读。
-  完成条件（只写效果）：AC-P5-001 与 AC-P5-002 独立读回级，均 incomplete。
-  观察覆盖同因反例、实际差异、原判据、成本原件及修后独立定向复验。
+- **Done**：前置（不作完成条件）：stdin 报告、工作区和真实差异可读；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P5-001：incomplete——方法侧五要素与两轮回看可读，无真实两轮修复与验收原件，语义反例自记未执行；证据 `quality/evidence/p6-repair-observation.md:92–95`；缺口 owner=本段独立审查者，恢复=真实两轮修复/验收原件（历史不可重建，只能具名保留）。
+  AC-P5-002：incomplete——声明写集与真实 diff 可对账（3 路径 matched、README.md 反例 out_of_scope），冻结判据哈希与提交前独立裁决未取得；证据 `quality/tests/p6-write-set-report.output`；缺口 owner=独立审查者，恢复=提交前冻结判据哈希与独立裁决（历史不可重建，只能具名保留）。

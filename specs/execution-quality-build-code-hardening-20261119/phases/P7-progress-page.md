@@ -338,7 +338,8 @@ node skills/answer-as-page/scripts/check-page-content.mjs --task-path "$WH_TASK"
   完成条件（只写效果）：受控错模型拒绝和正常入口追溯可复验，
   逐包对账无漏绑错绑，同命令测试汇总的通过、失败分别可追。
   真实页面可辨当前阶段与上一版过期，排版截图可读。
-  AC-P6-001、AC-P6-002 当前 incomplete，正式行为与签字未取得。
+  AC-P6-001：pass，证据 `quality/reviews/2026-11-20-p7r-spec-recheck.md` 第六节（合同错误阻断、27/27 挂包、卡内指定报告源可复现、N1 由 `7bdb3ffe` 闭合）。
+  AC-P6-002：pass，证据 `quality/reviews/2026-11-20-p7r-spec-recheck.md:40`（阶段条键盘可达/激活、三视口+200%、过期标识有真实浏览器原件）；残留具名不冒通过：实体读屏 unavailable（owner=页面 owner，恢复=可用读屏环境复跑）、来源失败态未观察、真实 INP/字号未测。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -354,7 +355,6 @@ node skills/answer-as-page/scripts/check-page-content.mjs --task-path "$WH_TASK"
 - **evidence_path**： planned: `quality/evidence/p7-browser-observation.md`
 - **STOP**：校验失败不发布，保原错误、旧件及范围，再由独立读者复验。
 - **覆盖 AC**：AC-P6-001、AC-P6-002
-- **Done**：前置（不作完成条件）：现生成链、失败退回原件及隔离浏览器输入可用。
-  完成条件（只写效果）：AC-P6-001 命令级、AC-P6-002 真实环境级，当前均 incomplete。
-  需实际结构反例、只改 Phase 的过期检测、可读上一版、真实包和来源交互、
-  排版截图及独立验收签字。缺浏览器时对应真实环境项 unavailable 并留恢复条件。
+- **Done**：前置（不作完成条件）：现生成链、失败退回原件及隔离浏览器输入可用；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P6-001：pass——合同错误阻断、27/27 挂包、10/10 包、卡内报告源 `check-page-content` exit 0、负例可读；证据 `quality/reviews/2026-11-20-p7r-spec-recheck.md` 第六节。
+  AC-P6-002：pass——阶段条键盘可达/Enter 激活、三视口与 200% 无横向溢出、三视口过期标识可辨；证据 `quality/reviews/2026-11-20-p7r-spec-recheck.md:40`；残留具名不冒通过：实体读屏 unavailable（owner=页面 owner，恢复=可用读屏环境复跑）、来源失败态未观察、真实 INP/字号未测。

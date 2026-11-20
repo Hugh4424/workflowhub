@@ -236,6 +236,6 @@ P9 writer 交 P10 已核的拒绝行为、单份原件指针、环境缺口和�
 - **evidence_path**: planned: `quality/tests/claims-replay-effects.output`
 - **STOP**: 不删门原输出或签字。仅撤接线自己的受影响改动，重新定位唯一原指针，权威材料变化时申请按当前版本重新独立签。 缺外部权限或绑定失配停该动作。
 - **覆盖 AC**: AC-P7-001, AC-P7-002
-- **Done**: 前置（不作完成条件）：命令与冻结原件可读。完成条件（只写效果）：独立验收者能用冻结材料和匹配环境回放，查三种声明，并在签后漂移或下游没有实际读回时留下明确失败。
-  AC-P7-001 incomplete（计划，尚未执行）→ `quality/tests/claims-replay-effects.output` 中对应原件，执行后回读。
-  AC-P7-002 incomplete（计划，尚未执行）→ `quality/tests/claims-replay-effects.output` 中对应原件，执行后回读。
+- **Done**: 前置（不作完成条件）：命令与冻结原件可读；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P7-001：partial——implemented/verified 机器链与独立签字（`quality/evidence/verdict.json`，sha256 `31a6c5c0…`）真实，但 accepted 因无下游 close 读回仍 fail；证据 `quality/evidence/2026-11-20-002-p9b-signer-check.json`（`no downstream close readback exists`）；缺口 owner=验收/收口，恢复=真实 close 写出读回使 accepted 转 pass，补独立测试作者或具名记录。
+  AC-P7-002：partial——受控 T6 + 匹配环境成立，错环境/夹具失配/目标本通过/非法 argv 四态捕获、案例集来源绑定与 T16 具名记录仍缺，T6/T16 原版 unavailable（`quality/tests/p9-unavailable-t6.output`）；证据 `quality/reviews/2026-11-20-p9-spec-axis.md:14`；缺口 owner=验收负责人，恢复=补四态捕获与案例集绑定后复审。

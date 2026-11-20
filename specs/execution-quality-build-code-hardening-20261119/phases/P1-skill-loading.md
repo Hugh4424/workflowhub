@@ -201,7 +201,10 @@ CLI 亚秒基线详见任务库测试蓝图。当前无可比活动账，实施�
 - **Evidence**：隔离子判据目标 RED 已保脚本 `quality/tests/2026-11-19-023-build-plan-p1-current-skill-load-target-red.mjs` 与输出 `quality/tests/2026-11-19-024-build-plan-p1-current-skill-load-target-red.output`。完整 Vitest 未实跑，修前读数拟记 `quality/tests/p1-current-skill-load-red.output`，同命令绿色与具名坏例拟记 `quality/tests/p1-current-skill-load-green.output`。实际证据身份、退出码和读回由既有 task facts 发布。
 - **Coverage limit**：受控夹具证明代码路径。宿主发现依实际新会话；历史没有读取证据只记未知，安装可见性不能填补历史记录。
 - **STOP / recovery**：目标输入和任务身份不可用时停该轴。运行时负责人提供同次真实回执、合法安装根或新会话；保老结果。从同一入口修复后重验受影响用例。
-- **Done**：前置（不作完成条件）：隔离子判据已有修前读数。实施前实跑完整目标命令并保 cwd、退出与原始输出；完整 Vitest 尚未实跑。完成条件（只写效果）：AC-P1-001：incomplete，只有当次加载、材料和检查支持完成；实跑/原始观察待实施，证据拟归 `quality/tests/p1-current-skill-load-green.output`；AC-P1-002：incomplete，从另一项目的新宿主会话发现同版技能；实跑/原始观察待实施，证据拟归 `quality/tests/p1-current-skill-load-green.output`。独立执行者按验收原判据观察。
+- **Done**：前置（不作完成条件）：隔离子判据已有修前读数；本段真实命令与回执现状见下，档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P1-001：incomplete——步骤检查仍「已留痕/`unavailable`」，步骤完成与独立复审未取得；证据 `quality/tests/2026-11-20-068-p1-step1-with-read-receipt.output`；缺口 owner=运行时负责人，恢复=在认证任务上完成该步读取与带 receipt 的步骤检查、补收敛清单指针后独立复审。
+  AC-P1-002：unavailable——无仓外隔离宿主根与另一项目新会话的任何回执，按 AC 缺失处理；证据 `quality/evidence/build-code/execution-checklist-p1.md:202`「未取得」；缺口 owner=运行时负责人，恢复=提供已配置宿主根与新项目会话后实测发现路径与 reading_baseline 的字节、哈希。
+  独立执行者按验收原判据观察。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -214,5 +217,8 @@ CLI 亚秒基线详见任务库测试蓝图。当前无可比活动账，实施�
 - **evidence_path**： planned: `quality/tests/p1-current-skill-load-green.output`
 - **STOP**：目标输入和任务身份不可用时停该轴。运行时负责人提供同次真实回执、合法安装根或新会话；保老结果。从同一入口修复后重验受影响用例。
 - **覆盖 AC**：AC-P1-001、AC-P1-002
-- **Done**：前置（不作完成条件）：隔离子判据已有修前读数。实施前冻结并实跑完整目标命令的判据；完整 Vitest 尚未实跑。完成条件（只写效果）：AC-P1-001：incomplete，只有当次加载、材料和检查支持完成；实跑/原始观察待实施，证据拟归 `quality/tests/p1-current-skill-load-green.output`；AC-P1-002：incomplete，从另一项目的新宿主会话发现同版技能；实跑/原始观察待实施，证据拟归 `quality/tests/p1-current-skill-load-green.output`。交接引用使用实际字节与未验边界。
+- **Done**：前置（不作完成条件）：隔离子判据已有修前读数；本段真实命令与回执现状见下。
+  完成条件（只写效果）：AC-P1-001：incomplete——步骤检查仍「已留痕/`unavailable`」；证据 `quality/tests/2026-11-20-068-p1-step1-with-read-receipt.output`；缺口 owner=运行时负责人，恢复=完成该步并留带 receipt 的检查回执后独立复审。
+  AC-P1-002：unavailable——无仓外隔离宿主根与新项目会话；证据 `quality/evidence/build-code/execution-checklist-p1.md:202`；缺口 owner=运行时负责人，恢复=提供隔离宿主根与另一项目新会话。
+  交接引用使用实际字节与未验边界。
 

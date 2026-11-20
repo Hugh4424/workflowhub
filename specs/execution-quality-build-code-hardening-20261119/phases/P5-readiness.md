@@ -224,7 +224,8 @@ UI 不适用。写集仅开工文档、CLI、运行时材料检查和配套测�
 - **完成**：前置（不作完成条件）：同一命令实际跑并保原件。
   完成条件（只写效果）：适用机器项可回读且反例非零拒绝，
   独立读者回核前后 diff 字节相同、facts 无新派发行，并保正常恢复证据。
-  AC-P4-001、AC-P4-002 目前 incomplete，尚未实施和独立判定。
+  AC-P4-001：incomplete，证据 `quality/tests/2026-11-20-065-readiness-p4.json`（status pass、3 机器探针 exit 0、1 人判 unverified）；缺口 owner=计划负责人，恢复=独立复审，外部服务/权限记 unavailable 或补测。
+  AC-P4-002：incomplete，证据 `quality/evidence/p5-readiness-observation.md:20–64`（受控红条件不派发、写集不变）；缺口 owner=独立审查者/主会话，恢复=真实红条件派发回执与前后 Git diff（历史不可重建，只能具名保留）。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -241,6 +242,6 @@ UI 不适用。写集仅开工文档、CLI、运行时材料检查和配套测�
 - **evidence_path**： planned: `quality/evidence/p5-readiness-observation.md`
 - **STOP**：客观错误或原件不可回读时停相关派发，交原输入负责人，修后独立复验。
 - **覆盖 AC**：AC-P4-001、AC-P4-002
-- **Done**：前置（不作完成条件）：结构、命令和退出原件。
-  完成条件（只写效果）：AC-P4-001 命令级、AC-P4-002 独立读回级，
-  均 incomplete。真实探针、非零拒绝、前后 diff 字节相同、facts 无新派发行及正常恢复回读齐后，由原独立读者分别判。
+- **Done**：前置（不作完成条件）：结构、命令和退出原件；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P4-001：incomplete——065 入口复跑 status=pass（3 机器项 exit 0、1 人判 unverified），真实外部服务/权限未覆盖；证据 `quality/tests/2026-11-20-065-readiness-p4.json`；缺口 owner=计划负责人，恢复=独立复审，外部服务/权限记 unavailable 或补测。
+  AC-P4-002：incomplete——受控红条件下入口不派发、写集不变可读，无真实派发回执与真实写集变更；证据 `quality/evidence/p5-readiness-observation.md:20–64`；缺口 owner=独立审查者/主会话，恢复=真实红条件派发回执与前后 Git diff（历史不可重建，只能具名保留）。

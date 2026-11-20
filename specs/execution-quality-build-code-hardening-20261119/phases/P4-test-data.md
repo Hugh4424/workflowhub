@@ -193,7 +193,10 @@ P4 和 P5 同路径依真实数据准备先供给的顺序串行。
 - **Evidence**：预写目标失败拟记 `quality/tests/p4-isolated-test-data-red.output`，同命令绿色与具名坏例拟记 `quality/tests/p4-isolated-test-data-green.output`。当前均未执行。实际证据身份、退出码和读回由既有 task facts 发布。
 - **Coverage limit**：S 层合成数据证明本仓测试隔离。实际跨项目迁移/产品库访问完全超出范围；真实备份保留数字和水位无既定值。
 - **STOP / recovery**：路径或归属无法验证时停数据动作并保原错误。测试数据负责人提供合法隔离根或修版本输入后原命令重跑；禁止试真库恢复。
-- **Done**：前置（不作完成条件）：同一目标命令实际跑过，保 cwd、退出与原始输出。完成条件（只写效果）：AC-P8-001：incomplete，隔离数据可重跑，版本落后给出具名错误；实跑/原始观察待实施，证据拟归 `quality/tests/p4-isolated-test-data-green.output`；AC-P8-002：incomplete，fixture 级隔离路径不回退产品库（真实入口记具名缺口）；实跑/原始观察待实施，证据拟归 `quality/tests/p4-isolated-test-data-green.output`。独立执行者按验收原判据观察。
+- **Done**：前置（不作完成条件）：同一目标命令实际跑过并保 cwd、退出与原始输出；本段回执现状见下，档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P8-001：incomplete——同 seed 复跑同字节、版本落后 exit 3、清理可读，但 gate 只跑 1/14 用例、RED 是装置失败；证据 `quality/tests/p4-isolated-test-data-manual-r3.output`；缺口 owner=测试数据负责人，恢复=把 14 用例纳入 gate 或把 r3 手工记录作 AC 原件后独立复审。
+  AC-P8-002：incomplete——fixture 级隔离成立（缺根/仓内/相对/符号链接根均 exit 2），真实测试入口解析者不在写集（AC 自带具名边界）；证据 `quality/tests/p4-isolated-test-data-manual-r3.output`；缺口 owner=测试数据负责人，恢复=真实入口纳入写集后复验，或按 AC 接受该具名边界。
+  独立执行者按验收原判据观察。
 
 ## 机器字段（校验器用，人可跳过）
 
@@ -206,5 +209,8 @@ P4 和 P5 同路径依真实数据准备先供给的顺序串行。
 - **evidence_path**： planned: `quality/tests/p4-isolated-test-data-green.output`
 - **STOP**：路径或归属无法验证时停数据动作并保原错误。测试数据负责人提供合法隔离根或修版本输入后原命令重跑；禁止试真库恢复。
 - **覆盖 AC**：AC-P8-001、AC-P8-002
-- **Done**：前置（不作完成条件）：实施前冻结目标断言并实跑；当前未执行。完成条件（只写效果）：AC-P8-001：incomplete，隔离数据可重跑，版本落后给出具名错误；实跑/原始观察待实施，证据拟归 `quality/tests/p4-isolated-test-data-green.output`；AC-P8-002：incomplete，fixture 级隔离路径不回退产品库（真实入口记具名缺口）；实跑/原始观察待实施，证据拟归 `quality/tests/p4-isolated-test-data-green.output`。交接引用使用实际字节与未验边界。
+- **Done**：前置（不作完成条件）：实施前冻结目标断言并实跑；本段回执现状见下。
+  完成条件（只写效果）：AC-P8-001：incomplete——复跑同字节、版本落后 exit 3、清理可读，gate 只跑 1/14、RED 为装置失败；证据 `quality/tests/p4-isolated-test-data-manual-r3.output`；缺口 owner=测试数据负责人，恢复=14 用例纳入 gate 或 r3 手工记录作 AC 原件后独立复审。
+  AC-P8-002：incomplete——fixture 级隔离成立，真实测试入口解析者不在写集（具名边界）；证据 `quality/tests/p4-isolated-test-data-manual-r3.output`；缺口 owner=测试数据负责人，恢复=真实入口纳入写集后复验或按 AC 接受具名边界。
+  交接引用使用实际字节与未验边界。
 
