@@ -342,6 +342,8 @@ node tools/cli/check-acceptance-object.mjs --spec specs/<task-id>/spec.md --cont
 
 错在范围修：检查错时修检查本身或收窄其范围，不绕过检查、不在上下游加豁免。通过太易时先查观察方法：核断言、替身与夹具是否真能失败，再动实现。检查可信度的三值结论分为已验证/未验证/无法判断，不把未知写成通过；不替换 AC 的既有结果档位。同一修正复发时，把教训落为具名检查，先在有源真实历史错误上失败，再验证当前修复。
 
+门命令经 `verify --action=execute` 捕获时，同一次真实回执另落 `quality/evidence/gate-results/` 普通原件（实际 argv、退出/取消、输出字节与回执哈希、实施提交 diff、材料与环境指纹、时点），facts 证据仍只保留 command/exit/failure_signature，gate 指针写在 build-code source；不另建门状态账本。终末用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>` 读 implemented/verified/accepted 三声明各自绑定的原件：缺原件、门红、签字人是实施作者、签后换字节或无实际收口读回即 exit 1，不得写成完成。历史回放用 `node tools/cli/check-replay.mjs --cases=<冻结案例>`，只认环境可比且命中预先命名的目标失败；环境不符记不可比、夹具被换记夹具失配、目标本来通过记未观察到红，都不算通过。真实签字身份与任何 Git 动作不在这些检查内。
+
 依赖升级先读changelog，major另读migration notes；逐项或具理由关联小组升级，同一受影响行为前后验证。核直接/传递lockfile diff，包管理器生成、不手改；安装成功、缺notes/lockfile/前后行为不能当完成。无升级给实际diff依据，不凑依赖。
 
 逐项报告diff五类削弱的路径/来源/理由：阈值/严重级降低；新增.skip、删case/唯一结果断言；@ts-ignore/eslint-disable/istanbul ignore等静音；抛错stub/空catch/TODO代实现；无真实决定的新allow/exception。等价重构/收紧不误报，旧有源例外按原范围；exit0不盖无源削弱。

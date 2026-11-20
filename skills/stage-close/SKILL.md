@@ -135,6 +135,8 @@ execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name
 
 完成：最终scope和真实答复原ref可读，归档/保留逐项实际结果可定位；拒绝或未答无对应副作用。
 
+收口执行前，`core/task-close.mjs` 从当前任务原件重读三种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹）、验证声明读同次 gate 退出 0 与捕获回执、接受声明读 `quality/evidence/verdict.json` 的独立签字人、被审材料指纹、所审 gate 引用和实际下游读回。gate 红、缺证据、签字人属于实施作者、签后材料字节变化或没有读回时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。声明通过时在同一 close 证据区写 `close-claims-readback`，记录本次实际读回的门、签字、材料指纹与计划。只读核对用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。质量签字只证明被审材料，不代 Git 授权；commit/push/merge/archive/cleanup 仍逐项按本节取得并保存真实范围答复。
+
 ## 7. 安全移除、分支删除与逐项读回
 
 先证明任务交付已在目标分支，工作区是本task-owned、已交付且无未交付或未知独有字节。已合入提交用真实Git ancestry/内容读回；未合入、目标漂移、同名远端包含独有提交时保留并报告，不能强删。读取 `runtime/task/workspace.mjs` 的 `inspectWorktreeCleanup(worktreeRoot)` 分类tracked/untracked、execution_sidecars、ignored_generated、ignored_unknown。**ignored不等于可丢**；graphify-out不在该自动生成白名单内，按knowledge-graph已知创建事实处理具名临时物；未知项逐件保管或在最终确认中明确可弃，未解决就保留该worktree。

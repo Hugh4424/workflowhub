@@ -5,7 +5,7 @@ import { closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync,
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
@@ -23,6 +23,7 @@ import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { withLock } from "../../runtime/interface/record-lock.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
 import { confirmClosePlan } from "../../core/task-close.mjs";
+import { environmentFingerprint, graphifyIdentity, workspaceIdentity, pendingSummary } from "../../runtime/task/delivery-claims.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails, workflowHubConfigPath } from "../../runtime/evidence/storage-root.mjs";
 import { precheckForActions } from "../../runtime/distribution/precheck.mjs";
@@ -1036,6 +1037,100 @@ function captureOutputSettlement(input, recordDir, slug) {
   return { resolveOutputRef };
 }
 
+export { environmentFingerprint, workspaceIdentity, pendingSummary };
+
+function gitCaptureBytes(cwd, argv) {
+  return execFileSync("git", argv, { cwd, env: gitMetadataEnvironment(), stdio: ["ignore", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 });
+}
+
+function taskRelative(taskPath, path) {
+  if (typeof path !== "string" || !isAbsolute(path)) return null;
+  const rel = relative(taskPath, path);
+  return rel && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel) ? rel.split(sep).join("/") : null;
+}
+
+// Only the three current material files and the indexed Phase files are bound;
+// a malformed index binds no Phase bytes rather than inventing a file list.
+function gateMaterials(context) {
+  const read = (file) => {
+    try { return context.artifacts.read(file); }
+    catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  };
+  const spec = read("spec.md"), index = read("phases/index.md"), phases = {};
+  if (index !== null) {
+    let names = [];
+    try { names = phaseFilesFromIndex(index); } catch { names = []; }
+    for (const file of names) { const body = read(file); if (body !== null) phases[file] = body; }
+  }
+  return { spec, index, phases };
+}
+
+// One ordinary gate-results original per real capture. It binds the actual
+// argv/exit, the output bytes and receipt, the implementation diff, the
+// current material fingerprint and the environment, without a second ledger.
+export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receipt, materials, now = new Date().toISOString() }) {
+  if (typeof taskId !== "string" || !taskId) throw new TypeError("gate result requires the current task id");
+  if (!receipt || typeof receipt !== "object") throw new TypeError("gate result requires the actual capture receipt");
+  if (typeof receipt.output_ref !== "string") throw new Error("gate result requires the captured output original");
+  const output = readFileSync(receipt.output_ref);
+  const head = String(gitCaptureBytes(worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
+  const manifest = JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"));
+  let baseline = null, committedDiff = Buffer.alloc(0);
+  if (GIT_OID.test(manifest.baseline_commit ?? "")) {
+    try { gitCaptureBytes(worktreeRoot, ["cat-file", "-e", `${manifest.baseline_commit}^{commit}`]); baseline = manifest.baseline_commit; }
+    catch { baseline = null; }
+  }
+  if (baseline !== null) committedDiff = gitCaptureBytes(worktreeRoot, ["diff", "--no-ext-diff", "--no-textconv", "--binary", `${baseline}..${head}`]);
+  const worktreeDiff = gitCaptureBytes(worktreeRoot, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "HEAD", "--"]);
+  const untrackedHash = createHash("sha256");
+  for (const name of gitCaptureBytes(worktreeRoot, ["ls-files", "--others", "--exclude-standard", "-z"]).toString("utf8").split("\0").filter(Boolean).sort()) {
+    untrackedHash.update(name); untrackedHash.update("\0");
+    try { const bytes = readFileSync(join(worktreeRoot, name)); untrackedHash.update(`${bytes.length}\0${sha256(bytes)}`); }
+    catch (error) { if (error.code !== "ENOENT") throw error; untrackedHash.update("absent"); }
+    untrackedHash.update("\0");
+  }
+  const pending = pendingSummary({ worktreeRoot });
+  if (pending === null) throw new Error("gate result requires the current task worktree for its pending implementation summary");
+  const workspace = workspaceIdentity({ worktreeRoot });
+  const spec = materials?.spec ?? null, index = materials?.index ?? null, phases = materials?.phases ?? {};
+  return {
+    schema_version: "gate-results.v1",
+    capture_route: "verify:execute",
+    capture_surface: "stage-runtime verify --action=execute (capture-tests)",
+    task_id: taskId,
+    stage: "build-code",
+    command: JSON.stringify(receipt.argv ?? []),
+    argv: [...(receipt.argv ?? [])],
+    exit_code: Number.isInteger(receipt.exit_code) ? receipt.exit_code : null,
+    cancelled: receipt.cancelled === true,
+    timed_out: receipt.timed_out === true,
+    error: receipt.error ? { code: receipt.error.code ?? null, message: receipt.error.message ?? null } : null,
+    output_ref: taskRelative(taskPath, receipt.output_ref) ?? receipt.output_ref,
+    output_sha256: sha256(output),
+    output_bytes: output.length,
+    receipt_ref: taskRelative(taskPath, receipt.receipt_ref) ?? receipt.receipt_ref ?? null,
+    receipt_sha256: typeof receipt.receipt_ref === "string" ? sha256(readFileSync(receipt.receipt_ref)) : null,
+    started_at: receipt.started_at ?? null,
+    ended_at: receipt.ended_at ?? null,
+    cwd: worktreeRoot,
+    head, baseline,
+    diff_sha256: baseline === null ? null : sha256(committedDiff),
+    pending,
+    pending_digest: pending.digest,
+    implementation_sha256: sha256(JSON.stringify({ baseline, head, committed: baseline === null ? null : sha256(committedDiff), pending: pending.digest })),
+    worktree_diff_sha256: sha256(worktreeDiff),
+    untracked_sha256: untrackedHash.digest("hex"),
+    material_sha256: materialFingerprint({ spec: spec ?? "", index: index ?? "", phases }),
+    material_missing: [...(spec === null ? ["spec.md"] : []), ...(index === null ? ["phases/index.md"] : [])],
+    material_files: [...(spec === null ? [] : ["spec.md"]), ...(index === null ? [] : ["phases/index.md"]), ...Object.keys(phases)],
+    environment: { platform: process.platform, arch: process.arch, node: process.version, node_major: process.versions.node.split(".")[0], graphify: graphifyIdentity() },
+    environment_sha256: environmentFingerprint(),
+    workspace,
+    workspace_sha256: workspace.sha256,
+    created_at: now,
+  };
+}
+
 async function recordBuildCodeCommandEvidence(context, receipt) {
   return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
     const current = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
@@ -1049,9 +1144,24 @@ async function recordBuildCodeCommandEvidence(context, receipt) {
         failure_signature: receipt.output_disposition && !signature.includes(receipt.output_disposition)
           ? `${signature}; ${receipt.output_disposition}` : signature });
     }
+    // The gate original is the only additional pointer; the evidence entry
+    // keeps its exact three ordinary fact keys. A failed binding is named in
+    // the source so the claim reader rejects the declaration instead of
+    // treating a missing marker as "no contract required".
+    let gateMarker;
+    try {
+      const artifact = buildGateResultArtifact({ taskId: context.identity.taskId, taskPath: context.task.taskPath,
+        worktreeRoot: context.workspace.worktreeRoot, receipt, materials: gateMaterials(context) });
+      const bytes = Buffer.from(`${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+      const phase = current?.phase_progress?.phase_id?.toLowerCase();
+      const ref = await context.task.appendRecord({ dir: "quality/evidence/gate-results", slug: `build-code-${phase ?? "unphased"}`, ext: "json", bytes });
+      gateMarker = `; gate: ${relative(context.task.taskPath, ref).split(sep).join("/")}#sha256=${sha256(bytes)}`;
+    } catch (error) {
+      gateMarker = `; gate: unavailable (${error.code ?? error.name ?? "GATE_BINDING"}: ${String(error.message).replace(/[\r\n;]+/g, " ")})`;
+    }
     await writeStageRow(context.task.taskPath, { ...prior, record_kind: "stage", task_id: context.identity.taskId, stage: "build-code",
-      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}`
-        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}`,
+      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}${gateMarker}`
+        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}${gateMarker}`,
       evidence: evidence.length ? { value: evidence } : { value: null, reason: `no integer command exit; receipt: ${receipt.receipt_ref}` } });
   });
 }
@@ -1790,6 +1900,34 @@ function terminalAssessmentQuality(context, row) {
     coverage_limits:[...new Set(coverage)],gaps,evidence_refs:refs};
 }
 
+const REPLAY_CASES_REF = /^quality\/evidence\/replay-cases\/[A-Za-z0-9._-][A-Za-z0-9._/-]*$/;
+
+// Bind one frozen replay-cases original to the build-code row. Only the real
+// run entry writes this pointer; the replay CLI then re-reads the exact bytes.
+async function writeReplayCasesBinding(context, reference) {
+  return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
+    if (!reference || Object.keys(reference).sort().join("\0") !== "ref\0sha256"
+        || typeof reference.ref !== "string" || !REPLAY_CASES_REF.test(reference.ref) || reference.ref.includes("\\")
+        || reference.ref.split("/").some((part) => !part || part === "." || part === "..")
+        || !/^[a-f0-9]{64}$/.test(reference.sha256 ?? "")) throw new TypeError("replay_cases_ref must name a task-relative quality/evidence/replay-cases original with sha256");
+    const bytes = context.task.readRecordBytes(reference.ref);
+    if (sha256(bytes) !== reference.sha256) throw new Error("replay_cases_ref sha256 mismatch");
+    let value;
+    try { value = JSON.parse(bytes.toString("utf8")); }
+    catch { throw new Error("replay_cases_ref must name a readable replay cases JSON original"); }
+    if (!value || typeof value !== "object" || !Array.isArray(value.cases)) throw new Error("replay_cases_ref must name a replay cases JSON original with a cases array");
+    const current = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
+    if (!current) throw new Error("replay case binding requires an existing build-code facts row");
+    const prior = Object.fromEntries([...STAGE_ROW_KEYS, "phase_progress"].filter(key => Object.hasOwn(current, key)).map(key => [key, current[key]]));
+    const marker = `; replay-cases: ${reference.ref}#sha256=${reference.sha256}`;
+    const source = String(current.source ?? "replay cases binding").includes(marker) ? String(current.source) : `${current.source ?? "replay cases binding"}${marker}`;
+    const saved = await writeStageRow(context.task.taskPath, { ...prior, source });
+    const row = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
+    if (!String(row?.source ?? "").includes(marker)) throw new Error("replay case binding readback differs");
+    return { status: "recorded", task_id: context.identity.taskId, stage: "build-code", replay_cases_ref: { ref: reference.ref, sha256: reference.sha256 }, ref: saved.ref };
+  });
+}
+
 async function writeTerminalAssessmentReference(context, reference) {
   return withLock(context.task.taskPath,"workflowhub-build-code-row",async()=>{
     if(!reference||Object.keys(reference).sort().join("\0")!=="ref\0sha256"||typeof reference.ref!=="string"||!reference.ref.startsWith("quality/evidence/")||reference.ref.includes("\\")||reference.ref.split("/").some(p=>!p||p==="."||p==="..")||!/^[a-f0-9]{64}$/.test(reference.sha256??""))throw new TypeError("terminal_assessment_ref must contain a safe evidence ref and sha256");
@@ -2083,6 +2221,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       return { ...result, exit_code: result.state === "failed" ? 1 : 0 };
     }
     if(input && values.stage === "build-code" && Object.keys(input).join("\0") === "terminal_assessment_ref") return writeTerminalAssessmentReference(context,input.terminal_assessment_ref);
+    if(input && values.stage === "build-code" && Object.keys(input).join("\0") === "replay_cases_ref") return writeReplayCasesBinding(context,input.replay_cases_ref);
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).join("\0") !== "phase_progress" || values.stage !== "build-code") {
       throw new TypeError("run --action=execute only records the existing build-code phase_progress cursor; official stage execution is retired");
     }

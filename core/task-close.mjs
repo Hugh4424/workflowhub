@@ -13,6 +13,7 @@ import { readTaskFacts } from "../runtime/task/task-store.mjs";
 import { openTask } from "../runtime/task/task-handle.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
+import { readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
 const AUTH = fileURLToPath(new URL("../runtime/interface/git-authorize.mjs", import.meta.url));
@@ -888,7 +889,12 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   }
   const physical = derivePhysicalDeliveryStatus({ task_id: plan.task_id, plan, facts, step_records: verifiedActions, workspace_mode: c.manifest.workspace_mode,
     ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}) });
-  return { task_id: plan.task_id, plan_ref: planRef, facts, remote, pushes, graph: graphReadback(c, planRef), archive_readback: archiveReadback, step_records: actions, quality_status: "unknown", known_gaps: plan.known_gaps, ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}), ...(pr ? { pr } : {}), physical_delivery_status: physical.status };
+  // Read-only projection of the three delivery claims. Quality stays "unknown"
+  // as before; this field never becomes a close or Git permit by itself.
+  let deliveryClaims;
+  try { deliveryClaims = readDeliveryClaims({ taskPath: c.taskDir }); }
+  catch (error) { deliveryClaims = { status: "unavailable", reason: error.message, claims: {} }; }
+  return { task_id: plan.task_id, plan_ref: planRef, facts, remote, pushes, graph: graphReadback(c, planRef), archive_readback: archiveReadback, step_records: actions, quality_status: "unknown", delivery_claims: deliveryClaims, known_gaps: plan.known_gaps, ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}), ...(pr ? { pr } : {}), physical_delivery_status: physical.status };
 }
 export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal, until, graphTimeoutMs } = {}) {
   assertPostWriter(taskDir);
@@ -900,6 +906,17 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
   acceptedConfirmation(c, planRef, confirmationRef, plan);
   const directory = evidenceDirectory(c.taskDir);
   return withLock(dirname(directory), "close.execution", async () => {
+    // The current task's real claims are re-read from their originals before
+    // any Git action. A failed or missing claim rejects the close instead of
+    // publishing a success it cannot source; nothing is deleted on rejection.
+    let claimsReadback;
+    try { claimsReadback = await recordCloseClaimsReadback({ taskPath: c.taskDir, planRef, worktreeRoot: c.worktree }); }
+    catch (error) {
+      const ref = await writeEvidence(c, "close-action", { operation: "claims", status: "failed", plan_ref: planRef,
+        error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
+      return { status: "failed", operation: "claims", error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records: [],
+        physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+    }
     let sourceHead = plan.source.head, targetHead = plan.target_head;
     const records = [];
     const priorActions = actionFacts(c, planRef);
@@ -1191,7 +1208,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         return { status: "failed", operation: currentAction, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       }
     }
-    return { status: plan.mode === "planning" ? "executed" : "completed", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+    return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claimsReadback, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
   });
 }
 // The supplied real user reply covers the displayed action set. Record each
