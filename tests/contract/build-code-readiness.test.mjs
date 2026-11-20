@@ -428,6 +428,29 @@ it("ORACLE-PHASE-READINESS: 材料侧只读回入口原件，双调用不新增�
   expect.soft(readinessFiles(fixture), "材料侧读回不得新增就绪原件").toEqual(filesAfterFirst);
 });
 
+it("ORACLE-PHASE-READINESS: 材料侧校验证据列形状，绝对路径具名失败", () => {
+  // 五列表证据列是任务证据根相对的计划路径；入口只判非空，材料侧补形状校验。
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  const phasePath = join(fixture.materialRoot, PHASE_REF);
+  writeFileSync(phasePath, readFileSync(phasePath, "utf8")
+    .replace("quality/tests/p5-readiness.output", "/tmp/p5-absolute.output"));
+  expect(fixture.runEntry(cursorInput()).exit, "入口不判证据列路径形状，仍应通过").toBe(0);
+  const run = runChecks(fixture, "build-code");
+  expect.soft(run.status, `证据列绝对路径必须非零：${run.stdout.slice(-600)} ${run.stderr.slice(-300)}`).not.toBe(0);
+  expect.soft(run.stdout).toMatch(/证据列必须是任务证据根相对的 quality\/\.\.\. 路径/);
+});
+
+it("ORACLE-PHASE-READINESS: 证据列计划路径记 planned，真实原件存在时记 resolved", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  expect.soft(fixture.runEntry(cursorInput()).exit, "先由入口记录通过原件").toBe(0);
+  const testsDir = join(fixture.taskDir, "quality", "tests");
+  mkdirSync(testsDir, { recursive: true });
+  writeFileSync(join(testsDir, "p5-readiness.output"), "declared original\n");
+  const run = runChecks(fixture, "build-code");
+  expect.soft(run.status, `证据列已生成时材料侧应通过：${run.stdout.slice(-600)} ${run.stderr.slice(-300)}`).toBe(0);
+  expect.soft(run.stdout).toMatch(/evidence_status=resolved/);
+});
+
 it("ORACLE-PHASE-READINESS: 就绪表只由标题声明，代码围栏与正文提及不误触", () => {
   const fenced = ["# Phase P1", "```md", "### 开工就绪表", "| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |", "```", ""].join("\n");
   const prose = "# Phase P1\n\n正文里提到 开工就绪表 但这里没有表。\n";

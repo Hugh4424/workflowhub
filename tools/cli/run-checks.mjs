@@ -299,6 +299,208 @@ function inferMaterialStage(root, hasPhase, hasDecisionLog) {
   return !archived && canonicalMaterial && hasPhase && hasDecisionLog ? "build-code" : null;
 }
 
+// Readiness evidence column semantics: the five-column table names the planned
+// original path under the task evidence root (`quality/...`); the real original
+// is the entry-stored receipt/output referenced by the stored readiness record.
+// This reader therefore rejects a malformed declaration (absolute path, `..`,
+// backslash) and reports whether the declared path already resolves; a planned
+// path is allowed only because the stored original was checked first.
+export function readinessEvidenceStatus(evidence, { recordRoot = null, materialRoot = null } = {}) {
+  const declared = String(evidence ?? "").trim();
+  if (!declared) return Object.freeze({ status: "missing", problem: "证据列为空" });
+  const parts = declared.split("/");
+  const invalid = !/^quality\/[^\\]+$/.test(declared) || parts.some((part) => !part || part === "." || part === "..")
+    || /[\\:*?"<>|]/.test(declared);
+  if (invalid) {
+    return Object.freeze({ status: "invalid",
+      problem: `证据列必须是任务证据根相对的 quality/... 路径，不得为绝对路径、反斜杠、通配符或含 ..（实际 ${JSON.stringify(declared)}）` });
+  }
+  for (const base of [recordRoot, materialRoot].filter(Boolean)) {
+    const absolute = join(base, declared);
+    if (!existsSync(absolute)) continue;
+    try { readFileSync(absolute); return Object.freeze({ status: "resolved", resolved: absolute }); }
+    catch (error) { return Object.freeze({ status: "invalid",
+      problem: `证据列声明的原件不可读：${declared}（${error.code ?? error.message}）` }); }
+  }
+  return Object.freeze({ status: "planned", resolved: null });
+}
+
+function sectionBody(text, name) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  const start = lines.findIndex((line) => new RegExp(`^##\\s+${name}\\s*$`, "i").test(line));
+  if (start < 0) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^##\s+/.test(line));
+  return (end < 0 ? rest : rest.slice(0, end)).join("\n");
+}
+
+function meaningfulText(value) {
+  const text = String(value ?? "").replace(/[*_`]/g, "").trim();
+  return text.length >= 2 && !/^(?:无|没有|空|—|-|n\/?a|未取得|unknown|tbd|todo|待补|待定|暂无)$/i.test(text);
+}
+
+const FAILURE_ELEMENTS = ["轮次", "新事实", "严重度", "结果", "选择"];
+
+function failureRows(body) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  const header = lines.find((line) => /^\s*\|/.test(line) && FAILURE_ELEMENTS.every((name) => line.includes(name)));
+  if (header) {
+    const columns = header.split("|").slice(1, -1).map((cell) => cell.trim());
+    const index = Object.fromEntries(FAILURE_ELEMENTS.map((name) => [name, columns.indexOf(name)]));
+    const rows = [];
+    for (const line of lines.slice(lines.indexOf(header) + 1)) {
+      if (!/^\s*\|/.test(line)) break;
+      if (/^\s*\|\s*[-: ]+\|/.test(line)) continue;
+      const cells = line.split("|").slice(1, -1);
+      if (cells.every((cell) => /^\s*$/.test(cell))) continue;
+      rows.push(Object.fromEntries(FAILURE_ELEMENTS.map((name) => [name, (cells[index[name]] ?? "").trim()])));
+    }
+    return rows;
+  }
+  const rows = [];
+  for (const line of lines) {
+    const found = {};
+    for (const name of FAILURE_ELEMENTS) {
+      const match = line.match(new RegExp(`${name}\\s*[：:]\\s*([^；;|\\n]*)`));
+      if (match) found[name] = match[1].trim();
+    }
+    if (Object.keys(found).length >= 2) rows.push(found);
+  }
+  return rows;
+}
+
+/** 五要素、两轮锚与三类伪新事实的最小可执行记录校验。 */
+export function failureDispositionProblems(text, label = "failures") {
+  const body = sectionBody(text, "failures");
+  if (body === null) return [`${label}：执行清单缺 failures 段`];
+  if (/未发生失败|没有实际失败|本\s*Phase\s*无失败|无失败轮次/.test(body)) return [];
+  const rows = failureRows(body);
+  if (rows.length === 0) {
+    return [`${label}：failures 未取得五要素记录（轮次/新事实/严重度/结果/选择），也没有声明「本 Phase 无失败」`];
+  }
+  const problems = [];
+  for (const [offset, row] of rows.entries()) {
+    for (const name of FAILURE_ELEMENTS) {
+      const filled = name === "轮次" ? /^\d+$/.test(String(row[name] ?? "").trim()) : meaningfulText(row[name]);
+      if (!filled) problems.push(`${label}：第 ${offset + 1} 行缺${name}或写空`);
+    }
+  }
+  if (rows.length >= 2 && !/两轮/.test(body)) problems.push(`${label}：缺两轮锚（每两轮修复加验收后必须回看本段）`);
+  else if (rows.length < 2 && !/未到两轮|不足两轮|仅一轮/.test(body)) problems.push(`${label}：缺两轮锚（不足两轮要写明未到两轮及原因）`);
+  for (const row of rows) {
+    const fact = String(row["新事实"] ?? "");
+    if (/^(?:仅|只|只是|单纯)?\s*(?:改|换|移动|调整|挪)?\s*(?:报错)?行号|^只(?:是)?换(?:了)?夹具|^(?:只|仅)?(?:改|调整)断言/.test(fact.replace(/[*_`。；;]/g, ""))) {
+      problems.push(`${label}：新事实写成「${row["新事实"]}」，只改行号/只换夹具/改断言都不算新事实`);
+    }
+  }
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = rows[index - 1], current = rows[index];
+    const none = (value) => /^(?:无|没有|none)$/i.test(String(value ?? "").replace(/[*_`。；;\s]/g, ""));
+    if (none(previous["新事实"]) && none(current["新事实"]) && /继续修/.test(String(current["选择"] ?? ""))) {
+      problems.push(`${label}：连续两轮同因且新事实都写「无」仍选「继续修」，应停原样修复并转查根因`);
+    }
+  }
+  return problems;
+}
+
+// AC-P8-001：数据来源、每任务上限依据、单命令复跑、版本校验与清理五件，
+// 只能从任务证据根里真实可读的原件判；没有可读原件就不算通过。
+function jsonObjects(text) {
+  const objects = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== "{") continue;
+    let depth = 0, inString = false, escaped = false;
+    for (let cursor = index; cursor < text.length; cursor += 1) {
+      const char = text[cursor];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === "{") depth += 1;
+      else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          try { objects.push(JSON.parse(text.slice(index, cursor + 1))); } catch { /* not an object */ }
+          index = cursor;
+          break;
+        }
+      }
+    }
+  }
+  return objects;
+}
+
+export function acceptanceP8Problems(phaseBody, { recordRoot = null, materialRoot = null } = {}) {
+  const declared = [...String(phaseBody ?? "").matchAll(/quality\/[A-Za-z0-9._/-]+/g)].map((match) => match[0]);
+  const readable = [];
+  for (const path of [...new Set(declared)]) {
+    for (const base of [recordRoot, materialRoot].filter(Boolean)) {
+      const absolute = join(base, path);
+      if (!existsSync(absolute)) continue;
+      try { readable.push({ path, text: readFileSync(absolute, "utf8") }); } catch { /* unreadable stays missing */ }
+      break;
+    }
+  }
+  if (readable.length === 0) {
+    return ["AC-P8-001：Phase 声明的证据路径下没有可读原件，无法核数据来源/上限依据/单命令/版本校验/清理"];
+  }
+  const objects = readable.flatMap((entry) => jsonObjects(entry.text));
+  const prepare = objects.find((entry) => entry?.action === "prepare" && entry.data_source);
+  const clean = objects.find((entry) => entry?.action === "clean" && entry.complete === true);
+  const problems = [];
+  if (!prepare) problems.push("AC-P8-001：可读原件中缺 prepare 回执（数据来源与上限依据无处核）");
+  else {
+    const source = prepare.data_source ?? {};
+    if (source.kind !== "synthetic-seed" || !meaningfulText(source.seed) || !meaningfulText(source.sample_version)) {
+      problems.push("AC-P8-001：数据来源不是可回读的 synthetic-seed（含 seed 与 sample_version）");
+    }
+    const limit = prepare.per_task_limit_basis ?? {};
+    if (!(Number(limit.bytes) > 0) || !(Number(limit.records) > 0 || Number(limit.files) > 0) || !meaningfulText(limit.basis)) {
+      problems.push("AC-P8-001：每任务上限依据缺正数 bytes/记录数或依据说明");
+    }
+    const version = prepare.version_check ?? {};
+    if (!meaningfulText(version.requested) || !meaningfulText(version.required) || !meaningfulText(version.status)) {
+      problems.push("AC-P8-001：版本校验缺 requested/required/status");
+    }
+    const command = String(prepare.reproduce_command ?? "");
+    if (!/^node\s+\S*prepare-test-data\.mjs\s+.*--data-root\s+\S+.*--sample-version\s+\S+/.test(command) || /[;&|]/.test(command)) {
+      problems.push("AC-P8-001：缺单条可复跑命令（一条 node … --data-root … --sample-version …，不得串联多命令）");
+    }
+    const cleanup = prepare.cleanup ?? {};
+    if (!meaningfulText(cleanup.owner) || !meaningfulText(cleanup.completion_signal)) {
+      problems.push("AC-P8-001：清理缺负责人 owner 或完成信号 completion_signal");
+    }
+  }
+  if (!clean) problems.push("AC-P8-001：可读原件中缺清理回执（complete:true 的 clean 原件）");
+  return problems;
+}
+
+/** 从执行清单读 P6 失败处置记录；清单不在时不新增缺件结论，交给材料 owner。 */
+function runFailureRecordChecks(root, facts, recordRoot) {
+  const errors = [];
+  for (const phase of facts?.phase_rows ?? []) {
+    const acs = phase.acs ?? [];
+    if (!acs.includes("AC-P5-001") && !acs.includes("AC-P5-002")) continue;
+    if (!recordRoot) {
+      errors.push(`${root} ${phase.path} 失败处置记录需要认证任务根才能读（owner=实施负责人）`);
+      continue;
+    }
+    const checklist = join(recordRoot, "quality", "evidence", "build-code", `execution-checklist-${String(phase.id).toLowerCase()}.md`);
+    if (!existsSync(checklist)) continue;
+    let text;
+    try { text = readFileSync(checklist, "utf8"); }
+    catch (error) {
+      errors.push(`${root} ${phase.path} 执行清单不可读：${checklist}（${error.code ?? error.message}）`);
+      continue;
+    }
+    for (const problem of failureDispositionProblems(text, `${phase.id} ${checklist}`)) errors.push(`${root} ${problem}`);
+  }
+  return errors;
+}
+
 async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = false } = {}) {
   const phases = facts?.readiness?.phases ?? [];
   if (phases.length === 0) return [];
@@ -357,6 +559,11 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
     let failed = false;
     let machineIndex = 0;
     for (const row of phase.rows) {
+      const evidence = readinessEvidenceStatus(row.evidence, { recordRoot, materialRoot: root });
+      if (evidence.status === "invalid" || evidence.status === "missing") {
+        fail(`${root} readiness phase=${phase.phase_id} row=${JSON.stringify(row.command)} ${evidence.problem} (owner=${row.owner})`);
+        failed = true;
+      }
       if (row.kind === "human") continue;
       // The original stores machine probes only, in table order; align by that
       // counter rather than by the raw table row index.
@@ -373,7 +580,7 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
       const status = drift ? "drift" : "pass";
       console.log(`[run-checks][material] readiness phase=${phase.phase_id} probe=${JSON.stringify(row.command)} `
         + `expected=${row.expected} exit=${probe?.exit_code ?? "unknown"} status=${status} owner=${row.owner} `
-        + `evidence=${row.evidence} receipt=${probe?.receipt_ref ?? "missing"}`);
+        + `evidence=${row.evidence} evidence_status=${evidence.status} receipt=${probe?.receipt_ref ?? "missing"}`);
       if (drift) {
         fail(`${root} readiness original drift: phase=${phase.phase_id} machine_row=${machineIndex} `
           + `does not match command/expected/exit/argv/receipt in ${ref} (owner=${row.owner}); rerun the build-code entry`);
@@ -445,8 +652,27 @@ async function runMaterialChecks(root, { stage } = {}) {
       if (item.resolution_source === "task_root") console.log(`[run-checks][material] resolution_source=task_root phase=${item.phase_id} path=${item.path} resolved=${item.resolved}`);
     }
     const effectiveStage = stage ?? inferMaterialStage(root, hasPhase, typeof inspection.files["decision-log.md"] === "string" && inspection.files["decision-log.md"].trim() !== "");
-    const readinessErrors = result.ok ? await runReadinessChecks(root, result.facts, await materialTaskRecordRoot(root), effectiveStage, { explicit: stage !== undefined }) : [];
-    const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases), ...readinessErrors];
+    const recordRoot = result.ok ? await materialTaskRecordRoot(root) : null;
+    const readinessErrors = result.ok ? await runReadinessChecks(root, result.facts, recordRoot, effectiveStage, { explicit: stage !== undefined }) : [];
+    // AC-P8-001 与 P6 失败处置记录只在显式 build-code 面上强制；省略 --stage 时
+    // 与就绪检查同样只打印诊断，不改变旧材料的历史退出码。
+    const enforcement = stage === "build-code";
+    const acceptanceErrors = [], failureRecordErrors = [];
+    const note = (bucket, message) => {
+      if (enforcement) bucket.push(message);
+      else console.log(`[run-checks][material] ${message} (diagnostic only: --stage was omitted; rerun with --stage=build-code to enforce)`);
+    };
+    if (result.ok && effectiveStage === "build-code") {
+      // AC-P8-001 只在首个承接 Phase（P4 测试数据段）判一次；P10 等终末段也会
+      // 在覆盖表里点名全部 AC，重复判会把同一缺口报成多份。
+      const p8 = (result.facts.phase_rows ?? []).find((phase) => (phase.acs ?? []).includes("AC-P8-001"));
+      if (p8) {
+        const body = phases[p8.path] ?? inspection.files[p8.path] ?? "";
+        for (const problem of acceptanceP8Problems(body, { recordRoot, materialRoot: root })) note(acceptanceErrors, `${root} ${p8.path} ${problem}`);
+      }
+      for (const error of runFailureRecordChecks(root, result.facts, recordRoot)) note(failureRecordErrors, error);
+    }
+    const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases), ...readinessErrors, ...acceptanceErrors, ...failureRecordErrors];
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
     if (errors.length) {
       logEvidencePathSummary(result.facts);

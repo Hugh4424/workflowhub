@@ -416,6 +416,8 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
     const cold = `# 受控冷读 ${id}\n\n- 读者：subagent:reader-${id}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cards}#工作包-${id}\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
     put(task, cards, `${card}${cardsExtra}`);
     put(task, coldRef, cold);
+    const packageEvidence = `quality/evidence/convergence/package-evidence-${id}.md`;
+    put(task, packageEvidence, `包 ${id} 的真实原件字节。\n`);
     const batch = batchFor(id);
     const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n用户原话：可以。\n批次：${batch}\n`;
     const discussionRef = `quality/evidence/talk/discussion-p${id}.md`;
@@ -433,7 +435,7 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
     if (deferValue !== undefined) marks.push(`可推迟：${deferValue}`);
     rows.push(format === 'ten'
       ? `| ${id} | D-00${id} | D-00${id} | D-00${id} | AC-01 | D-00${id} | 无 | consumer | ${pendingFor(id)} | 已收敛 | 已答 | 已答 | 已答 | 已答 | 已答 |`
-      : `| ${id} | 已收敛 | 本文件“工作包 ${id}” | evidence-${id} | ${pendingFor(id)} |`);
+      : `| ${id} | 已收敛 | 本文件“工作包 ${id}” | \`${packageEvidence}\` | ${pendingFor(id)} |`);
     sections.push([
       `## 工作包 ${id}：受控包 ${id}`, "",
       "### 五段过程", "", "| 段 | 结论 | 原件指针 | 批次 |", "| --- | --- | --- | --- |",
@@ -555,6 +557,7 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
     ].join("\n"));
     const card = "## 工作包 1：受控包 1\n\n一句话结果：受控结果。";
     put(task, "quality/evidence/convergence/cards.md", card);
+    put(task, "quality/evidence/convergence/package-evidence-1.md", "包 1 的真实原件字节。\n");
     const cold = `# 受控冷读 1\n\n- 读者：subagent:reader-1，未参与本包写作，只读本包卡。\n- 读的卡：\`quality/evidence/convergence/cards.md#工作包-1\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：改。\n② 为什么：因。\n③ 边界：界。\n④ 怎么验：验。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
     if (withCold) put(task, "quality/evidence/cold-read-p1.md", cold);
     const coldRef = withCold ? "quality/evidence/cold-read-p1.md" : "quality/evidence/missing-cold-read-p1.md";
@@ -564,7 +567,7 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
     put(task, "quality/evidence/decision-log-refs/convergence-checklist.md", [
       "# 收敛清单", "",
       "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |",
-      "| 1 | 已收敛 | 本文件“工作包 1” | evidence-1 | 无 |", "",
+      "| 1 | 已收敛 | 本文件“工作包 1” | `quality/evidence/convergence/package-evidence-1.md` | 无 |", "",
       "## 工作包 1：受控包 1", "", "### 收敛格（本轮）", "", "| 项 | 值 |", "| --- | --- |",
       `| 当前卡节 | \`quality/evidence/convergence/cards.md#工作包-1\`；sha256 \`${p5Sha(card)}\` |`,
       ...(coldLine ? [coldLine] : []),
@@ -1020,6 +1023,23 @@ describe("ORACLE-P3-ROLE-SOURCES bound card, wrong source and wrong bytes", () =
     expect(run.status).toBe(1);
     expect(finding.acceptEmpty).toEqual(["通过", "失败", "反例", "证据"]);
     expect(finding.reasons.join("\n")).toContain("验收写空：反例");
+  });
+
+  it("ORACLE-P3-ROLE-SOURCES rejects a card whose eight rows are present but empty", () => {
+    // 只判「有没有这一行」会让 11 格留空 8 格仍 exit 0。空行必须在基础检查里具名失败，
+    // 不依赖 --bind；这里是 AC-P3-001 登记命令选中本用例句的同一机器判据。
+    const rows = ["一句话结果", "对应需求", "现状缺口", "方案与取舍", "边界", "数据与状态", "风险与回退", "未决"];
+    let card = p3CardBody();
+    for (const name of rows) card = card.replace(new RegExp(`^\\| ${name} \\|.*$`, "m"), `| ${name} |  |`);
+    const dir = temp("p3-empty-cells-");
+    const path = join(dir, "card.md");
+    writeFileSync(path, card);
+    const run = p3Run(P3_VALIDATOR, [path, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.missing).toEqual([]);
+    expect(finding.empty).toEqual(rows);
+    expect(finding.reasons.join("\n")).toContain("格写空：一句话结果");
   });
 
   it("rejects one file standing in for several role originals", () => {

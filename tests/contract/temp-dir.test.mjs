@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { spawn, execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const roots = [];
@@ -113,30 +113,96 @@ it("ORACLE-P4-ISOLATED-TEST-DATA: 缺显式隔离根、实际配置缺失与过�
     throw new Error("装置失败：tests/fixtures/execution-quality/prepare-test-data.mjs 未实现，未到目标断言，不判为目标 RED/GREEN。");
   }
 
+  // 读侧哨兵：--require 前置探针在子进程开工前替换 open/read 出口，把落在受控根外的
+  // 读打开记录到 audit。它只观察，不改夹具行为；文件不存在时视为零读。
+  const probeDir = join(root, "probe"), watchdog = join(root, "outside-sentinel");
+  mkdirSync(probeDir);
+  mkdirSync(watchdog);
+  const productCopy = join(watchdog, "product-library-copy.json");
+  writeFileSync(productCopy, JSON.stringify({ product: "P4-MUST-NOT-READ" }));
+  const audit = join(probeDir, "reads.jsonl");
+  const probeScript = join(probeDir, "read-probe.cjs");
+  writeFileSync(probeScript, `
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const { syncBuiltinESMExports } = require("node:module");
+    const audit = process.env.WH_READ_AUDIT;
+    const watch = (process.env.WH_READ_WATCH || "").split(path.delimiter).filter(Boolean).map((entry) => path.resolve(entry));
+    const { fileURLToPath } = require("node:url");
+    // URL 与 file: 串不是路径：不先归一就 path.resolve 会拼出 cwd/file:/... 的假命中。
+    const asPath = (target) => {
+      try {
+        if (target instanceof URL) return target.protocol === "file:" ? fileURLToPath(target) : null;
+        if (typeof target !== "string") return null;
+        if (/^file:/i.test(target)) return fileURLToPath(target);
+        return path.isAbsolute(target) ? target : null;
+      } catch { return null; }
+    };
+    const watched = (absolute) => watch.some((entry) => absolute === entry || absolute.startsWith(entry + path.sep));
+    const record = (op, target) => {
+      const absolute = asPath(target);
+      if (!audit || !absolute || !watched(absolute)) return;
+      try { fs.appendFileSync(audit, JSON.stringify({ op, path: absolute, pid: process.pid }) + "\\n"); } catch {}
+    };
+    const wrap = (owner, name, op) => {
+      const original = owner[name];
+      if (typeof original !== "function") return;
+      owner[name] = function (...args) { record(op, args[0]); return original.apply(this, args); };
+    };
+    for (const [name, op] of [["openSync", "open"], ["open", "open"], ["readFileSync", "read"], ["readFile", "read"], ["createReadStream", "read"]]) wrap(fs, name, op);
+    for (const name of ["open", "readFile"]) wrap(fs.promises, name, "read");
+    syncBuiltinESMExports();
+  `);
+  const probeEnv = {
+    ...env,
+    NODE_OPTIONS: `--require=${probeScript}`,
+    WH_READ_AUDIT: audit,
+    WH_READ_WATCH: [watchdog, fallbackCwd].join(delimiter),
+  };
+  const readAudit = () => {
+    try { return readFileSync(audit, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)); }
+    catch { return []; }
+  };
+
+  // 回退反例（受控假解析器）：证明探针真的抓得到「去掉隔离参数后按产品库路径读」。
+  // 真实夹具没有可回退解析器——缺 --data-root 在产生样本前 exit 2——所以这一反例
+  // 只能由假解析器承担；下面用同一探针断言真实夹具受控根外零读。
+  const fallbackShim = join(probeDir, "fallback-resolver.mjs");
+  writeFileSync(fallbackShim, `import { readFileSync } from "node:fs";\nprocess.stdout.write(readFileSync(process.argv[2], "utf8"));\n`);
+  const control = spawnSync(process.execPath, [fallbackShim, productCopy], { env: probeEnv, encoding: "utf8" });
+  expect(control.status, "读侧探针反例：假解析器本身必须跑通").toBe(0);
+  expect(readAudit().some((entry) => entry.path === productCopy), "读侧探针必须记到假解析器对产品库副本的读").toBe(true);
+  rmSync(audit, { force: true });
+
   const textOf = (result) => `${result.stdout}${result.stderr}`;
-  const expectNamedFailure = (result, label) => {
-    expect(result.status, `ORACLE-P4-ISOLATED-TEST-DATA: ${label} 必须非零退出`).toBeGreaterThan(0);
+  const expectNamedFailure = (result, label, expectedExit) => {
+    // 版本失败=3、配置/参数失败=2：粗断言 >0 会把两类混成一个结果。
+    expect(result.status, `ORACLE-P4-ISOLATED-TEST-DATA: ${label} 必须以 ${expectedExit} 退出`).toBe(expectedExit);
     const text = textOf(result);
     expect(text, `ORACLE-P4-ISOLATED-TEST-DATA: ${label} 不得回退读出准备结果`).not.toContain(preparedToken);
     return text;
   };
 
   // A. 省略 --data-root：不得回退默认根，也不得从 cwd 读出准备结果。
-  const missingRoot = expectNamedFailure(runP4Prepare([], { cwd: fallbackCwd, env }), "省略 --data-root");
+  const missingRoot = expectNamedFailure(runP4Prepare([], { cwd: fallbackCwd, env: probeEnv }), "省略 --data-root", 2);
   expect(missingRoot, "ORACLE-P4-ISOLATED-TEST-DATA: 缺根失败须具名指出 --data-root").toContain("--data-root");
   expect(readdirSync(fallbackCwd), "ORACLE-P4-ISOLATED-TEST-DATA: 回退目录不得被写入或复制").toEqual(["prepared-test-data.json"]);
   expect(readdirSync(env.TMPDIR), "ORACLE-P4-ISOLATED-TEST-DATA: 默认临时根不得被当作回退目标").toEqual([]);
 
   // B. 实际配置缺失（显式隔离根已给，但夹具要求的样本版本未具名）：须具名失败，
   // 不得改读 cwd 准备结果，也不得先产生样本（夹具只接受显式 --data-root 与样本版本）。
-  const missingConfig = expectNamedFailure(runP4Prepare(["--data-root", dataRoot], { cwd: fallbackCwd, env }), "样本版本配置缺失");
+  const missingConfig = expectNamedFailure(runP4Prepare(["--data-root", dataRoot], { cwd: fallbackCwd, env: probeEnv }), "样本版本配置缺失", 2);
   expect(missingConfig, "ORACLE-P4-ISOLATED-TEST-DATA: 配置缺失失败须具名指出 --sample-version").toContain("--sample-version");
   expect(readdirSync(dataRoot), "ORACLE-P4-ISOLATED-TEST-DATA: 具名失败前不得生成样本").toEqual([]);
 
   // C. 过期样本版本：须报出请求版本并给出要求/现状版本，不得静默放行。
-  const staleVersion = expectNamedFailure(runP4Prepare(["--data-root", dataRoot, "--sample-version", "0.0.0"], { cwd: fallbackCwd, env }), "过期样本版本");
+  const staleVersion = expectNamedFailure(runP4Prepare(["--data-root", dataRoot, "--sample-version", "0.0.0"], { cwd: fallbackCwd, env: probeEnv }), "过期样本版本", 3);
   expect(staleVersion, "ORACLE-P4-ISOLATED-TEST-DATA: 过期失败须点名请求版本").toContain("0.0.0");
   expect(staleVersion, "ORACLE-P4-ISOLATED-TEST-DATA: 过期失败须带版本诊断").toMatch(/stale|outdated|older|required|expected|current|过期|要求/i);
+
+  // 读侧总断言：三次失败路径都不得读取受控根以外的哨兵或回退目录副本。
+  expect(readAudit(), "ORACLE-P4-ISOLATED-TEST-DATA: 受控根以外无读取（读哨兵/产品库副本不得被打开）").toEqual([]);
+  expect(readdirSync(watchdog), "ORACLE-P4-ISOLATED-TEST-DATA: 受控哨兵目录不得被创建副本").toEqual(["product-library-copy.json"]);
 });
 
 // 追加的生命周期用例：不进入上面的 ORACLE-P4-ISOLATED-TEST-DATA 用例，

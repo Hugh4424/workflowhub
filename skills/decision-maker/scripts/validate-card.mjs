@@ -220,6 +220,9 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   const warnings = [];
 
   const missing = CARD_ROWS.filter((name) => !values.has(name));
+  // 有这一行不等于填过：空、占位词、纯标点都按写空失败。验收格另有逐项判法，
+  // 通用判据只负责确认整格不是空的，避免同一缺陷报两遍。
+  const empty = CARD_ROWS.filter((name) => values.has(name) && !meaningful(values.get(name), 4));
   const fourMissing = SUPPORT_ITEMS.filter((item) => !(values.get('配套与影响') ?? '').includes(item));
   const acceptanceCell = values.get('验收') ?? '';
   const problems = values.has('验收') ? acceptanceProblems(acceptanceCell) : [];
@@ -227,6 +230,10 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   const acceptEmpty = problems.filter((p) => p.kind === 'empty').map((p) => p.item);
 
   for (const name of missing) reasons.push(`缺格：${name}`);
+  for (const name of empty) {
+    if (name === '验收' && (acceptMissing.length || acceptEmpty.length)) continue;
+    reasons.push(`格写空：${name}（空、占位词或纯标点不算填过）`);
+  }
   for (const item of fourMissing) reasons.push(`配套与影响缺项：${item}`);
   for (const item of acceptMissing) reasons.push(`验收缺项：${item}`);
   for (const item of acceptEmpty) reasons.push(`验收写空：${item}（写「无」或没有实际内容不算有验收）`);
@@ -360,7 +367,7 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   }
 
   const ok = reasons.length === 0 && gaps.length === 0;
-  return { file, ok, missing, fourMissing, acceptMissing, acceptEmpty, reasons, gaps, warnings, cardVersion: cardVersion(text), answer };
+  return { file, ok, missing, empty, fourMissing, acceptMissing, acceptEmpty, reasons, gaps, warnings, cardVersion: cardVersion(text), answer };
 }
 
 function main() {
