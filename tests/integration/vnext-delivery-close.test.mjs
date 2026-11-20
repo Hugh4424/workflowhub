@@ -310,10 +310,37 @@ it("isolated archive before delivery names an unreadable consumed push receipt i
 import{createHash}from"node:crypto";import{environmentFingerprint,stageRuntimeCliMain}from"../../tools/cli/stage-runtime.mjs";
 const CLAIMS_CLI=fileURLToPath(new URL("../../tools/cli/check-delivery-claims.mjs",import.meta.url));
 const REPLAY_CLI=fileURLToPath(new URL("../../tools/cli/check-replay.mjs",import.meta.url));
-function claimPhases(f){
+// The claims fixture declares the real Phase gate: the gate identity is the
+// captured command matched against the current Phase card's `gate_cmd`, so a
+// captured command that is not the declared gate can never be the delivery gate.
+function claimPhases(f,phases=[{phase:"P1",file:"phases/P1-owned.md",command:`${process.execPath} ${join(f.root,"owned-gate.mjs")}`}]){
   const root=join(f.wt,"specs",f.taskId);mkdirSync(join(root,"phases"),{recursive:true});
-  writeFileSync(join(root,"phases/index.md"),"# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1-owned.md` | `phase-p1` | `owned.txt` | `none` | build-code |\n");
-  writeFileSync(join(root,"phases/P1-owned.md"),"# Phase P1 — owned claim bytes\n");
+  const rows=phases.map(({phase,file})=>`| \`${phase}\` | \`${file}\` | \`phase-${phase.toLowerCase()}\` | \`owned.txt\` | \`none\` | build-code |`).join("\n");
+  writeFileSync(join(root,"phases/index.md"),"# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n"+rows+"\n");
+  for(const{file,command}of phases)writeFileSync(join(root,file),`# Phase ${file}\n\n- **gate_cmd**：\`${command}\`\n`);
+}
+// A capture is only a gate when its exact command is the declared Phase gate.
+async function captureVerify(f,{argv,shell,slug}){
+  const input=join(f.taskDir,"quality","evidence",`${slug}-verify-input.json`);
+  mkdirSync(dirname(input),{recursive:true});
+  writeFileSync(input,JSON.stringify({...(shell===undefined?{argv}:{shell}),slug,timeoutMs:30000})+"\n");
+  const prior=process.env.WORKFLOWHUB_TASK_DIR;
+  process.env.WORKFLOWHUB_TASK_DIR=f.storage;
+  try{return await stageRuntimeCliMain(["verify","--action=execute","--stage=build-code","--project=workflowhub",`--task=${f.taskId}`,`--task-path=${f.taskDir}`,`--input=${input}`],{cwd:f.wt});}
+  finally{if(prior===undefined)delete process.env.WORKFLOWHUB_TASK_DIR;else process.env.WORKFLOWHUB_TASK_DIR=prior;}
+}
+function gateMarkersOf(f){
+  const row=factsRows(f).find(value=>value.record_kind==="stage"&&value.stage==="build-code");
+  return [...String(row?.source??"").matchAll(/; gate: ([^\n;]+)/g)].map(match=>({raw:match[1].trim()})).map(({raw})=>{
+    const bound=/^([A-Za-z0-9._/-]+)#sha256=([a-f0-9]{64})$/.exec(raw);
+    if(!bound)throw new Error(`SETUP: unbound gate pointer ${raw}`);
+    return{ref:bound[1],sha256:bound[2]};
+  });
+}
+function phaseCursor(f,phaseId){
+  const row={record_kind:"stage",task_id:f.taskId,stage:"build-code",source:"phase-progress-cursor",created_at:"2026-11-20T00:00:00.000Z",review_origin:"not_run",finding_dispositions:[],spec_analyze:{value:null,reason:"cursor"},evidence:{value:null,reason:"cursor"},serious_issue_disposition:{value:null,reason:"cursor"},close_action:{value:null,reason:"cursor"},handoff:{value:null,reason:"cursor"},material_bytes:{value:null,reason:"cursor"},phase_progress:{phase_id:phaseId,task_id:"T001",phases_head:"0".repeat(40),base_head:"0".repeat(40),recorded_at:"2026-11-20T00:00:00.000Z"}};
+  const existing=factsRows(f).filter(value=>!(value.record_kind==="stage"&&value.stage==="build-code"));
+  writeFileSync(join(f.taskDir,"facts.jsonl"),[...existing,row].map(value=>JSON.stringify(value)).join("\n")+"\n");
 }
 const SETUP_GATE="SETUP: gate artifact must bind the controlled material fingerprint and exit";
 const factsRows=f=>readFileSync(join(f.taskDir,"facts.jsonl"),"utf8").trim().split("\n").filter(Boolean).map(row=>JSON.parse(row));
@@ -328,18 +355,13 @@ function gatePointer(f){
 // The fixture never builds a gate original itself: it supplies the controlled
 // command to the real public verify route, which performs the capture and writes
 // the one ordinary gate-results original plus its facts pointer.
-async function claimsFixture({gateExit=0,slug="owned-gate"}={}){
-  const f=await fixture();claimPhases(f);
+async function claimsFixture({gateExit=0,slug="owned-gate",phases=null,phaseId=null}={}){
+  const f=await fixture();
   const script=join(f.root,"owned-gate.mjs");
   writeFileSync(script,gateExit===0?"console.log('owned gate ok');\n":"console.error('owned gate failure: required original missing');\nprocess.exit(1);\n");
-  const input=join(f.taskDir,"quality","evidence",`${slug}-verify-input.json`);
-  mkdirSync(dirname(input),{recursive:true});
-  writeFileSync(input,JSON.stringify({argv:[process.execPath,script],slug,timeoutMs:30000})+"\n");
-  const prior=process.env.WORKFLOWHUB_TASK_DIR;
-  process.env.WORKFLOWHUB_TASK_DIR=f.storage;
-  let captured;
-  try{captured=await stageRuntimeCliMain(["verify","--action=execute","--stage=build-code","--project=workflowhub",`--task=${f.taskId}`,`--task-path=${f.taskDir}`,`--input=${input}`],{cwd:f.wt});}
-  finally{if(prior===undefined)delete process.env.WORKFLOWHUB_TASK_DIR;else process.env.WORKFLOWHUB_TASK_DIR=prior;}
+  claimPhases(f,phases??undefined);
+  if(phaseId!==null)phaseCursor(f,phaseId);
+  const captured=await captureVerify(f,{argv:[process.execPath,script],slug});
   expect(captured.exit_code,`SETUP: the real verify route must capture the controlled gate exit ${gateExit}`).toBe(gateExit);
   const gate=gatePointer(f),gateBytes=readFileSync(join(f.taskDir,gate.ref));
   expect(createHash("sha256").update(gateBytes).digest("hex"),"SETUP: the recorded gate pointer must hash the stored original bytes").toBe(gate.sha256);
@@ -348,6 +370,10 @@ async function claimsFixture({gateExit=0,slug="owned-gate"}={}){
   expect(artifact.exit_code,SETUP_GATE).toBe(gateExit);
   expect(artifact.material_missing,SETUP_GATE).toEqual([]);
   expect(artifact.worktree_diff_sha256,SETUP_GATE).toMatch(/^[a-f0-9]{64}$/);
+  // The real capture records which declared Phase gate it is; a capture that is
+  // not the declared gate records no identity and is never read back as a gate.
+  expect(artifact.gate_identity,SETUP_GATE).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
+  expect(artifact.gate_identity.gate_cmd_sha256,SETUP_GATE).toMatch(/^[a-f0-9]{64}$/);
   return{...f,gate,materialSha:artifact.material_sha256,gateArtifact:artifact,captured};
 }
 // Replace the captured gate original with hand-written bytes and rebind the facts
@@ -525,6 +551,118 @@ it("bound delivery claims: a hand-built gate original that never went through th
   expect(result.error.message).toMatch(/verify --action=execute/);
   expect(readbackFiles(forged)).toEqual([]);
   expect(forged.git(forged.repo,["rev-parse","HEAD"])).toBe(base);
+});
+
+it("bound delivery claims: a later green capture that is not the declared Phase gate cannot replace the red gate",async()=>{
+  const f=await claimsFixture({gateExit:1,slug:"owned-gate-red"});
+  const red=f.gate;
+  // A shortcut green command captured through the same real route is not the
+  // declared Phase gate; the fingerprint and exit alone must not make it one.
+  const shortcut=join(f.root,"owned-shortcut.mjs");
+  writeFileSync(shortcut,"console.log('shortcut green');\n");
+  const captured=await captureVerify(f,{argv:[process.execPath,shortcut],slug:"owned-shortcut"});
+  expect(captured.exit_code).toBe(0);
+  const markers=gateMarkersOf(f);
+  expect(markers).toHaveLength(2);
+  const shortcutPointer=markers.at(-1);
+  expect(shortcutPointer.ref).not.toBe(red.ref);
+  const shortcutArtifact=JSON.parse(readFileSync(join(f.taskDir,shortcutPointer.ref),"utf8"));
+  expect(shortcutArtifact.exit_code).toBe(0);
+  expect(shortcutArtifact.gate_identity).toBeNull();
+  // The forged strongest claim: sign the shortcut pointer as if it were the gate.
+  signClaims(f,{gate:shortcutPointer});
+  const run=runClaims(f);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.implemented.status).toBe("pass");
+  expect(body.claims.verified.status).toBe("fail");
+  expect(body.claims.verified.reasons.join(" ")).toMatch(/exit is 1, not 0/);
+  expect(body.claims.verified.evidence).toMatchObject(red);
+  expect(body.claims.accepted.status).toBe("fail");
+  expect(body.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
+  const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
+  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  const base=f.git(f.repo,["rev-parse","HEAD"]);
+  const result=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
+  expect(result.status).toBe("failed");expect(result.operation).toBe("claims");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
+  expect(result.error.message).toMatch(/exit is 1/);
+  expect(readbackFiles(f)).toEqual([]);
+  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
+  // The red declared-gate original is preserved, not replaced by the shortcut.
+  expect(createHash("sha256").update(readFileSync(join(f.taskDir,red.ref))).digest("hex")).toBe(red.sha256);
+});
+
+it("bound delivery claims: only a re-run of the declared gate replaces the red capture, and an earlier signature stays stale",async()=>{
+  const f=await claimsFixture({gateExit:1,slug:"owned-gate-red"});
+  const red=f.gate;
+  // A repair re-runs the same declared gate; that lawful capture is the new gate.
+  const gateScript=join(f.root,"owned-gate.mjs");
+  writeFileSync(gateScript,"console.log('owned gate ok after repair');\n");
+  const rerun=await captureVerify(f,{argv:[process.execPath,gateScript],slug:"owned-gate-green"});
+  expect(rerun.exit_code).toBe(0);
+  const markers=gateMarkersOf(f);
+  expect(markers).toHaveLength(2);
+  const green=markers.at(-1);
+  expect(green.sha256).not.toBe(red.sha256);
+  const greenArtifact=JSON.parse(readFileSync(join(f.taskDir,green.ref),"utf8"));
+  expect(greenArtifact.gate_identity).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
+  // A signature made against the red capture names a gate that is no longer current.
+  signClaims(f,{gate:red});
+  const stale=runClaims(f);expect(stale.status).toBe(1);
+  const staleBody=claimBody(stale);
+  expect(staleBody.claims.verified.status).toBe("pass");
+  expect(staleBody.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
+  // Re-signing the current declared-gate capture leaves only the missing readback.
+  signClaims(f,{gate:green});
+  const resigned=runClaims(f);expect(resigned.status).toBe(1);
+  const resignedBody=claimBody(resigned);
+  expect(resignedBody.claims.implemented).toMatchObject({status:"pass",evidence:green});
+  expect(resignedBody.claims.verified).toMatchObject({status:"pass",evidence:green});
+  expect(resignedBody.claims.accepted.reasons.join(" ")).toMatch(/readback/);
+  expect(resignedBody.claims.accepted.reasons.join(" ")).not.toMatch(/gate-results original/);
+});
+
+it("bound delivery claims: a green capture of another declared Phase gate cannot replace the current Phase's red gate",async()=>{
+  const f=await fixture();
+  const green=join(f.root,"owned-gate-p1.mjs"),red=join(f.root,"owned-gate-p2.mjs");
+  writeFileSync(green,"console.log('P1 declared gate ok');\n");
+  writeFileSync(red,"console.error('P2 declared gate failure');\nprocess.exit(1);\n");
+  claimPhases(f,[{phase:"P1",file:"phases/P1-owned.md",command:`${process.execPath} ${green}`},{phase:"P2",file:"phases/P2-owned.md",command:`${process.execPath} ${red}`}]);
+  phaseCursor(f,"P2");
+  const capturedRed=await captureVerify(f,{argv:[process.execPath,red],slug:"owned-gate-p2-red"});
+  expect(capturedRed.exit_code).toBe(1);
+  const capturedGreen=await captureVerify(f,{argv:[process.execPath,green],slug:"owned-gate-p1-green"});
+  expect(capturedGreen.exit_code).toBe(0);
+  const markers=gateMarkersOf(f);
+  expect(markers).toHaveLength(2);
+  const redArtifact=JSON.parse(readFileSync(join(f.taskDir,markers[0].ref),"utf8"));
+  signClaims({...f,materialSha:redArtifact.material_sha256,gate:markers[0]},{gate:markers.at(-1)});
+  const run=runClaims(f);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  // The delivery gate is the P2 cursor's declared gate, still the red capture.
+  expect(body.claims.verified.status).toBe("fail");
+  expect(body.claims.verified.reasons.join(" ")).toMatch(/exit is 1, not 0/);
+  expect(body.claims.verified.evidence).toMatchObject(markers[0]);
+  expect(body.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
+});
+
+it("bound delivery claims: a declared shell gate is matched by the captured shell text through the sh -c wrapper",async()=>{
+  const f=await fixture();
+  const script=join(f.root,"owned-shell-gate.mjs");
+  writeFileSync(script,"console.log('owned shell gate ok');\n");
+  const command=`${process.execPath} ${script}`;
+  claimPhases(f,[{phase:"P1",file:"phases/P1-owned.md",command:`sh -c '${command}'`}]);
+  const captured=await captureVerify(f,{shell:command,slug:"owned-shell-gate"});
+  expect(captured.exit_code).toBe(0);
+  expect(captured.argv).toEqual(["/bin/sh","-c",command]);
+  const markers=gateMarkersOf(f);
+  const artifact=JSON.parse(readFileSync(join(f.taskDir,markers.at(-1).ref),"utf8"));
+  expect(artifact.gate_identity).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
+  const run=runClaims(f);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.implemented).toMatchObject({status:"pass",evidence:markers.at(-1)});
+  expect(body.claims.verified).toMatchObject({status:"pass",evidence:markers.at(-1)});
+  expect(body.claims.accepted.reasons.join(" ")).toMatch(/no independent signature original/);
 });
 
 it("matched target replay: a lost T6/T16 original is reported unavailable with reason and owner and never passes",()=>{

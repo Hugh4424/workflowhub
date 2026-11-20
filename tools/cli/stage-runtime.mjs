@@ -23,7 +23,7 @@ import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { withLock } from "../../runtime/interface/record-lock.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
 import { confirmClosePlan } from "../../core/task-close.mjs";
-import { environmentFingerprint, graphifyIdentity, workspaceIdentity, pendingSummary } from "../../runtime/task/delivery-claims.mjs";
+import { environmentFingerprint, gateIdentityFromCapture, graphifyIdentity, workspaceIdentity, pendingSummary } from "../../runtime/task/delivery-claims.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails, workflowHubConfigPath } from "../../runtime/evidence/storage-root.mjs";
 import { precheckForActions } from "../../runtime/distribution/precheck.mjs";
@@ -1068,7 +1068,7 @@ function gateMaterials(context) {
 // One ordinary gate-results original per real capture. It binds the actual
 // argv/exit, the output bytes and receipt, the implementation diff, the
 // current material fingerprint and the environment, without a second ledger.
-export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receipt, materials, now = new Date().toISOString() }) {
+export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receipt, materials, phaseId = null, now = new Date().toISOString() }) {
   if (typeof taskId !== "string" || !taskId) throw new TypeError("gate result requires the current task id");
   if (!receipt || typeof receipt !== "object") throw new TypeError("gate result requires the actual capture receipt");
   if (typeof receipt.output_ref !== "string") throw new Error("gate result requires the captured output original");
@@ -1093,8 +1093,13 @@ export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receip
   if (pending === null) throw new Error("gate result requires the current task worktree for its pending implementation summary");
   const workspace = workspaceIdentity({ worktreeRoot });
   const spec = materials?.spec ?? null, index = materials?.index ?? null, phases = materials?.phases ?? {};
+  // Which declared Phase gate this capture actually is. A capture of any other
+  // command records no identity, so it can never be read back as the delivery
+  // gate or replace a red declared gate.
+  const gateIdentity = gateIdentityFromCapture({ phases, command: { argv: receipt.argv }, phaseId });
   return {
     schema_version: "gate-results.v1",
+    gate_identity: gateIdentity,
     capture_route: "verify:execute",
     capture_surface: "stage-runtime verify --action=execute (capture-tests)",
     task_id: taskId,
@@ -1151,7 +1156,8 @@ async function recordBuildCodeCommandEvidence(context, receipt) {
     let gateMarker;
     try {
       const artifact = buildGateResultArtifact({ taskId: context.identity.taskId, taskPath: context.task.taskPath,
-        worktreeRoot: context.workspace.worktreeRoot, receipt, materials: gateMaterials(context) });
+        worktreeRoot: context.workspace.worktreeRoot, receipt, materials: gateMaterials(context),
+        phaseId: current?.phase_progress?.phase_id ?? null });
       const bytes = Buffer.from(`${JSON.stringify(artifact, null, 2)}\n`, "utf8");
       const phase = current?.phase_progress?.phase_id?.toLowerCase();
       const ref = await context.task.appendRecord({ dir: "quality/evidence/gate-results", slug: `build-code-${phase ?? "unphased"}`, ext: "json", bytes });

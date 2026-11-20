@@ -202,7 +202,7 @@ function materialSnapshot(taskPath) {
   const files = [...(spec === null ? [] : ["spec.md"]), ...(index === null ? [] : ["phases/index.md"]), ...Object.keys(phases)];
   return {
     sha256: materialFingerprint({ spec: spec ?? "", index: index ?? "", phases }),
-    root, archived, missing, files,
+    root, archived, missing, files, phases,
   };
 }
 
@@ -222,15 +222,142 @@ function taskWorktreeRoot(manifest, repo) {
   return null;
 }
 
-function latestGatePointer(facts, taskId) {
+// --- Declared Phase gate identity -----------------------------------------
+// A capture only proves the delivery gate when its actual command is the gate
+// the Phase material declares. Without that identity, any later green capture
+// (a stray verify, a shortcut command) silently replaced a red gate because the
+// reader only looked at the last pointer. The identity is recomputed here from
+// the captured argv and the current Phase text; the artifact's recorded
+// `gate_identity` must agree with it.
+const DECLARED_GATE = /^[ \t]*[-*][ \t]+\*\*gate_cmd\*\*[ \t]*[:：][ \t]*`([^`]+)`/gm;
+const PHASE_REF = /^phases\/(P[1-9][0-9]*)(?:-|\.)/;
+
+// Minimal POSIX word split for a declared shell command. Only quoting and
+// backslash escapes matter here: operators stay literal tokens so a compound
+// command is compared as written, never interpreted.
+export function shellWords(command) {
+  const words = [];
+  let word = "", quote = null, started = false;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (quote === "'") { if (char === "'") quote = null; else word += char; started = true; continue; }
+    if (quote === '"') {
+      if (char === '"') quote = null;
+      else if (char === "\\" && /["\\$`]/.test(command[index + 1] ?? "")) word += command[++index];
+      else word += char;
+      started = true; continue;
+    }
+    if (char === "'" || char === '"') { quote = char; started = true; continue; }
+    if (char === "\\" && index + 1 < command.length) { word += command[++index]; started = true; continue; }
+    if (/\s/.test(char)) { if (started) { words.push(word); word = ""; started = false; } continue; }
+    word += char; started = true;
+  }
+  if (quote !== null) return null;
+  if (started) words.push(word);
+  return words;
+}
+
+function sameTokens(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+// argv[0] is compared by program name (the real capture records the resolved
+// absolute interpreter); a `sh -c`/`bash -c` capture is unwrapped to the script
+// text on both sides so the declared `sh -c '…'` gate and its capture agree.
+function canonicalCommand(command) {
+  const unwrap = (words) => {
+    if (words.length === 3 && ["sh", "bash"].includes(basename(words[0])) && words[1] === "-c" && typeof words[2] === "string") {
+      const inner = shellWords(words[2]);
+      return inner === null ? null : inner;
+    }
+    return words;
+  };
+  let words;
+  if (Array.isArray(command.argv)) { if (!command.argv.length || command.argv.some((value) => typeof value !== "string")) return null; words = [...command.argv]; }
+  else if (typeof command.shell === "string") { words = shellWords(command.shell); if (words === null) return null; }
+  else return null;
+  const unwrapped = unwrap(words.map((value) => value));
+  if (unwrapped === null || !unwrapped.length) return null;
+  const normalized = [...unwrapped];
+  normalized[0] = basename(normalized[0]);
+  return normalized;
+}
+
+export function declaredPhaseGates(phases) {
+  const gates = [];
+  for (const [ref, body] of Object.entries(phases ?? {})) {
+    if (typeof body !== "string") continue;
+    const phaseId = PHASE_REF.exec(ref)?.[1] ?? null;
+    for (const match of body.matchAll(DECLARED_GATE)) {
+      const gate = match[1].trim();
+      if (gate) gates.push(Object.freeze({ phase_id: phaseId, phase_ref: ref, gate_cmd: gate, gate_cmd_sha256: sha256(gate) }));
+    }
+  }
+  return gates;
+}
+
+// Gate identity recorded by the real capture. The command itself selects the
+// declared gate (the current-phase gate is preferred when a cursor names it);
+// a capture that is not a declared gate is recorded as unbound, never as a gate.
+export function gateIdentityFromCapture({ phases, command, phaseId = null } = {}) {
+  const captured = canonicalCommand(command ?? {});
+  if (captured === null) return null;
+  const matching = declaredPhaseGates(phases).filter((gate) => {
+    const declared = canonicalCommand({ shell: gate.gate_cmd });
+    return declared !== null && sameTokens(declared, captured);
+  });
+  if (!matching.length) return null;
+  const scoped = phaseId ? matching.filter((gate) => gate.phase_id === phaseId) : matching;
+  if (!scoped.length || (!phaseId && scoped.length > 1)) return null;
+  return Object.freeze({ ...scoped[0] });
+}
+
+function gateMarkers(facts) {
   const row = facts.find((value) => value?.record_kind === "stage" && value.stage === "build-code");
-  if (!row) return null;
+  if (!row) return [];
   const source = typeof row.source === "string" ? row.source : "";
-  const matches = [...source.matchAll(GATE_MARKER)];
-  if (!matches.length) return null;
-  const raw = matches.at(-1)[1].trim();
-  const bound = /^([A-Za-z0-9._/-]+)#sha256=([a-f0-9]{64})$/.exec(raw);
-  return bound ? Object.freeze({ ref: bound[1], sha256: bound[2] }) : Object.freeze({ invalid: raw });
+  return [...source.matchAll(GATE_MARKER)].map((match) => {
+    const raw = match[1].trim();
+    const bound = /^([A-Za-z0-9._/-]+)#sha256=([a-f0-9]{64})$/.exec(raw);
+    return bound ? Object.freeze({ ref: bound[1], sha256: bound[2] }) : Object.freeze({ invalid: raw });
+  });
+}
+
+// The delivery gate is the latest capture whose actual command is the declared
+// Phase gate for the current phase cursor. Later captures of other commands are
+// not gates; an earlier capture of the very same declared command still counts,
+// so a lawful repair re-run replaces a red capture and nothing else does.
+function selectDeclaredGate({ taskPath, markers, phases, phaseId }) {
+  if (!markers.length) return { reason: "no gate-results original is recorded in the build-code facts source" };
+  const last = markers.at(-1);
+  if (last.invalid) return { invalid: last.invalid };
+  const declared = declaredPhaseGates(phases);
+  if (!declared.length) return { reason: "the current Phase material declares no gate_cmd; the delivery gate identity cannot be bound" };
+  const scoped = phaseId ? declared.filter((gate) => gate.phase_id === phaseId) : declared;
+  if (!scoped.length) return { reason: `the current Phase material declares no gate_cmd for ${phaseId}; the delivery gate identity cannot be bound` };
+  let unmatched = 0, identityless = 0;
+  for (let index = markers.length - 1; index >= 0; index -= 1) {
+    const marker = markers[index];
+    if (marker.invalid) continue;
+    let artifact;
+    try { artifact = JSON.parse(readTaskRelative(taskPath, marker.ref).toString("utf8")); } catch { continue; }
+    if (!plain(artifact)) continue;
+    const captured = canonicalCommand({ argv: artifact.argv });
+    const gate = captured === null ? null : scoped.find((candidate) => {
+      const words = canonicalCommand({ shell: candidate.gate_cmd });
+      return words !== null && sameTokens(words, captured);
+    });
+    if (!gate) { unmatched += 1; continue; }
+    const identity = artifact.gate_identity;
+    if (!plain(identity)
+        || identity.phase_ref !== gate.phase_ref
+        || identity.gate_cmd_sha256 !== gate.gate_cmd_sha256) { identityless += 1; continue; }
+    return { pointer: marker, artifact, declared: gate };
+  }
+  if (unmatched === 0 && identityless === 0) return { reason: "no recorded gate original is readable as JSON with an argv" };
+  return { reason: identityless > 0
+    ? `the latest capture of the declared ${phaseId ?? "Phase"} gate records no matching gate_identity (${identityless}); re-run the declared gate through the real verify capture`
+    : `no captured gate matches the declared ${phaseId ?? "Phase"} gate_cmd (${unmatched} recorded capture(s) are not the declared gate)` };
 }
 
 function authorsFor(repo, baseline, head) {
@@ -278,26 +405,28 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
   const facts = readTaskFacts(root);
   const material = materialSnapshot(root);
   const buildCodeRow = facts.find((value) => value?.record_kind === "stage" && value.stage === "build-code") ?? null;
-  const pointer = latestGatePointer(facts, taskId);
+  const markers = gateMarkers(facts);
+  const selection = selectDeclaredGate({ taskPath: root, markers, phases: material.phases, phaseId: buildCodeRow?.phase_progress?.phase_id ?? null });
+  const pointer = selection.pointer ?? null;
   let verdictBytes = null;
   try { verdictBytes = readTaskRelative(root, VERDICT_REF); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   // A build-code facts row is itself a delivery declaration; without a bound
   // gate original it cannot pass, even when no verdict exists yet.
-  const required = Boolean(pointer || verdictBytes || buildCodeRow);
+  const required = Boolean(markers.length || verdictBytes || buildCodeRow);
   const repo = realpathSync(manifest.target_repo_root);
   const worktree = taskWorktreeRoot(manifest, repo);
   const currentEnvironment = environmentFingerprint();
 
   const claims = {};
   let gate = null, verdict = null, verdictRef = null;
-  if (pointer?.invalid) {
-    const reason = `the recorded capture has no bound gate-results original (${pointer.invalid}); the declaration is rejected, not treated as "no contract required"`;
+  if (selection.invalid) {
+    const reason = `the recorded capture has no bound gate-results original (${selection.invalid}); the declaration is rejected, not treated as "no contract required"`;
     claims.implemented = claim("fail", [`implemented: ${reason}`]);
     claims.verified = claim("fail", [`verified: ${reason}`]);
   } else if (!pointer) {
-    claims.implemented = claim("fail", ["implemented: no gate-results original is recorded in the build-code facts source; run the real verify capture first"]);
-    claims.verified = claim("fail", ["verified: no gate-results original is recorded in the build-code facts source"]);
+    claims.implemented = claim("fail", [`implemented: ${selection.reason}`]);
+    claims.verified = claim("fail", [`verified: ${selection.reason}`]);
   } else {
     const read = jsonReference(root, pointer, "gate-results");
     if (read.status === "pass") gate = { ...pointer, artifact: read.value, bytes: read.bytes };
