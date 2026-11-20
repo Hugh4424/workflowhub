@@ -4,10 +4,12 @@
  * RUN_CHECKS_FORCE_FAIL_CHECKER provides the existing failure-injection seam.
  *
  * Material mode:
- *   node tools/cli/run-checks.mjs --material-root <绝对路径> [--stage=make-decision]
- * --stage only relaxes the make-decision post-phase input requirement: that
- * stage has not produced spec.md/phases yet. Once either exists it is checked
- * as before. Other stages and calls without --stage keep the old contract.
+ *   node tools/cli/run-checks.mjs --material-root <绝对路径> [--stage=<阶段>]
+ * --stage relaxes the make-decision post-phase input requirement: that stage
+ * has not produced spec.md/phases yet. When --stage is omitted, a non-archive
+ * material that already has phases/P*.md is read as build-code, so deleting the
+ * readiness table cannot bypass the dispatch gate; archive and phase-less
+ * materials keep the old diagnostic behavior. No implicit build-plan pass.
  *
  * Task report mode:
  *   node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]
@@ -24,7 +26,7 @@ import { validateContract } from "../../runtime/evidence/validate-contract.mjs";
 import { CORE_FIELDS, validateRecord } from "../../metrics/record-schema.mjs";
 import { GAP, SIX_KEYS, validateExecutionRecord } from "../../metrics/execution-record.mjs";
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
-import { resolve, dirname, isAbsolute, basename, sep } from "node:path";
+import { resolve, dirname, isAbsolute, basename, sep, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -38,6 +40,7 @@ const USAGE = [
   "  node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]",
   "  --material-root 与 --task-path 是两种模式，不能混用。",
   "  --stage 只与 --material-root 同用：make-decision 阶段允许尚无 spec.md/phases。",
+  "  省略 --stage 时：非 archive 且已有 phases/P*.md 的材料按 build-code 检查；缺就绪表即非零。",
   "  --workflow-root 显式指定步骤定义根，必须是绝对路径；缺省读取安装根。",
 ].join("\n");
 
@@ -269,6 +272,102 @@ function materialConvergenceErrors(root, files) {
   return errors;
 }
 
+
+// Pre-dispatch readiness on the material side: the same five columns and the
+// same parsed facts as the build-code entry, with real argv-only probes and a
+// stale read-back against the stored dispatch original. This reader never
+// writes the aggregate original; the entry owns that record.
+// Only a canonical task material root (`.../specs/<task>`) is read as the
+// build-code material when --stage is omitted. Arbitrary helper directories and
+// archive copies keep the old diagnostic behavior; the dispatch gate itself is
+// still the build-code entry, and this reader only replays its evidence.
+function inferMaterialStage(root, hasPhase, hasDecisionLog) {
+  const archived = /(?:^|[\\/])archive(?:[\\/]|$)/.test(root);
+  const canonicalMaterial = /(?:^|[\\/])specs[\\/][^\\/]+[\\/]?$/.test(root);
+  return !archived && canonicalMaterial && hasPhase && hasDecisionLog ? "build-code" : null;
+}
+
+async function runReadinessChecks(root, facts, recordRoot, stage) {
+  const phases = facts?.readiness?.phases ?? [];
+  if (phases.length === 0) return [];
+  const errors = [];
+  const declared = phases.filter((phase) => phase.declared);
+  for (const phase of phases.filter((entry) => !entry.declared)) {
+    if (stage === "build-code") {
+      // The material-side build-code check is a dispatch gate too: deleting the
+      // five columns must not turn into a green result here.
+      errors.push(`${root} ${phase.path} missing readiness table `
+        + `(stage=build-code requires the five columns 命令/期望/证据/机器或人判/负责人; owner=计划负责人)`);
+      continue;
+    }
+    console.log(`[run-checks][material] readiness phase=${phase.phase_id} declared=false status=unverified`
+      + ` (stage=${stage ?? "unspecified"} allows no readiness table; the build-code entry requires one)`);
+  }
+  if (declared.length === 0) return errors;
+  const recordDir = recordRoot ? join(recordRoot, "quality", "tests") : null;
+  for (const phase of declared) {
+    const human = phase.rows.filter((row) => row.kind === "human");
+    if (!recordRoot || !recordDir) {
+      errors.push(`${root} readiness phase=${phase.phase_id} has no authenticated task root to read its original`);
+      continue;
+    }
+    let names;
+    try { names = readdirSync(recordDir); } catch { names = []; }
+    const pattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-\\d{3}-readiness-${String(phase.phase_id).toLowerCase()}(-stale)?\\.json$`);
+    const matches = names.filter((name) => pattern.test(name)).sort();
+    if (matches.length === 0) {
+      errors.push(`${root} readiness result missing: phase=${phase.phase_id} has no stored original; `
+        + `run the build-code entry (run --action=execute first step) to record it (owner=${phase.rows[0]?.owner ?? "计划负责人"})`);
+      continue;
+    }
+    const ref = join(recordDir, matches.at(-1));
+    let stored;
+    try { stored = JSON.parse(readFileSync(ref, "utf8")); }
+    catch (error) { errors.push(`${root} readiness original is not readable: ${ref} (${error.code ?? error.message})`); continue; }
+    if (stored.status === "stale" || stored.material_sha256 !== facts.material_sha256) {
+      errors.push(`${root} readiness stale: stored result ${ref} is bound to material_sha256 `
+        + `${stored.material_sha256 ?? "unknown"}, current ${facts.material_sha256}`);
+      continue;
+    }
+    if (stored.status !== "pass") {
+      errors.push(`${root} readiness status is ${JSON.stringify(stored.status)} for ${ref}, not pass`);
+      continue;
+    }
+    let failed = false;
+    let machineIndex = 0;
+    for (const row of phase.rows) {
+      if (row.kind === "human") continue;
+      // The original stores machine probes only, in table order; align by that
+      // counter rather than by the raw table row index.
+      const probe = Array.isArray(stored.probes) ? stored.probes[machineIndex] : null;
+      machineIndex += 1;
+      const receiptReadable = probe?.receipt_ref ? existsSync(probe.receipt_ref) : false;
+      const outputReadable = probe?.output_ref ? existsSync(probe.output_ref) : false;
+      let receipt = null;
+      if (receiptReadable) { try { receipt = JSON.parse(readFileSync(probe.receipt_ref, "utf8")); } catch { receipt = null; } }
+      const drift = !probe || probe.probe !== row.command || probe.expected !== row.expected
+        || probe.status !== "pass" || !receiptReadable || !outputReadable || !receipt
+        || receipt.exit_code !== probe.exit_code
+        || JSON.stringify(receipt.argv) !== JSON.stringify(probe.argv);
+      const status = drift ? "drift" : "pass";
+      console.log(`[run-checks][material] readiness phase=${phase.phase_id} probe=${JSON.stringify(row.command)} `
+        + `expected=${row.expected} exit=${probe?.exit_code ?? "unknown"} status=${status} owner=${row.owner} `
+        + `evidence=${row.evidence} receipt=${probe?.receipt_ref ?? "missing"}`);
+      if (drift) {
+        errors.push(`${root} readiness original drift: phase=${phase.phase_id} machine_row=${machineIndex} `
+          + `does not match command/expected/exit/argv/receipt in ${ref} (owner=${row.owner}); rerun the build-code entry`);
+        failed = true;
+      }
+    }
+    if (!failed) {
+      console.log(`[run-checks][material] readiness phase=${phase.phase_id} status=pass `
+        + `machine=${phase.rows.filter((row) => row.kind === "machine").length} human=${human.length} `
+        + `material_sha256=${facts.material_sha256} original=${ref}`);
+    }
+  }
+  return errors;
+}
+
 async function runMaterialChecks(root, { stage } = {}) {
   try {
     const rootStat = statSync(root);
@@ -324,7 +423,9 @@ async function runMaterialChecks(root, { stage } = {}) {
     for (const item of result.facts?.evidence_paths?.verified ?? []) {
       if (item.resolution_source === "task_root") console.log(`[run-checks][material] resolution_source=task_root phase=${item.phase_id} path=${item.path} resolved=${item.resolved}`);
     }
-    const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases)];
+    const effectiveStage = stage ?? inferMaterialStage(root, hasPhase, typeof inspection.files["decision-log.md"] === "string" && inspection.files["decision-log.md"].trim() !== "");
+const readinessErrors = result.ok ? await runReadinessChecks(root, result.facts, await materialTaskRecordRoot(root), effectiveStage) : [];
+    const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases), ...readinessErrors];
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
     if (errors.length) {
       logEvidencePathSummary(result.facts);

@@ -153,6 +153,7 @@ version: 4.2.0
 
 一、第 0 阶段：所有阶段共用同一套测试环境与数据时，建议统一准备，不单列 Phase、不称交付；
 不需要就写理由跳过，不把第 0 阶段写进 Phase 文件。
+Phase 卡定稿时写「开工就绪表」五列（命令、期望、证据、机器或人判、负责人）：全局开工项写进 `spec.md`，本 Phase 只写增量；机器项给 argv 形式的只读命令与期望退出码，人判项给负责人。派发前由 build-code 第一步实际执行，材料侧用 `node tools/cli/run-checks.mjs --material-root <材料绝对路径>` 复跑同一检查；失败具名并停相关派发，回原输入负责人修复后重走同一入口。该表是计划产出，不是新 Phase、新门或第二数据 owner。
 共用测试数据按 `skills/testing-system-blueprint/SKILL.md` 的「测试数据准备」写四件事：数据来源与每 Task 上限依据、一条可重复跑的命令、版本/账本落后即失败、清理四问（谁拥有、何时清、清什么、完成信号）；可重复命令用 `node tests/fixtures/execution-quality/prepare-test-data.mjs --data-root <显式隔离根> --sample-version 1.0.0`，缺隔离根或缺版本时命令点名缺项并非零退出，不回退产品库。四件事是规划产出，不是新 Phase、新配额或第二数据 owner。
 二、测试人数：只有一个验收面或一条命令时，建议给 1 个测试。
 三、两个以上独立面时，建议 2–3 人各管一面；有真实外部或小窗时另加 1 个见证。

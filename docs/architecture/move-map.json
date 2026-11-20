@@ -10578,6 +10578,25 @@
       "named_data_readers": [],
       "delete_condition": "当同一受控夹具职责由经独立验证的替代命令承接、ORACLE-P4-ISOLATED-TEST-DATA 与 P5 消费者完整改接后，由测试数据约定 owner 删除；原 RED/GREEN 原件保留。",
       "retention_basis": "P4/T004 写集与 AC-P8-001/AC-P8-002；只证 fixture 级隔离，真实测试入口解析者仍是具名缺口。"
+    },
+    {
+      "source": "tests/contract/build-code-readiness.test.mjs",
+      "destination": "tests/contract/build-code-readiness.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5/T005 开工就绪目标门禁：合法 spec/index/phases 与五列表通过共享契约并给出可派发事实；缺 Phase/Task/AC、写集不一致具名拒绝；合法表配失败或缺失探针时真实 build-code 入口非零拒绝、facts 无新派发行且声明写集字节不变；恢复后同一入口回到可派发并新增一行真实派发记录。",
+      "owner": "P5/T005 独立测试作者；断言冻结后变更遵既有 TCR，开发只读消费",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/build-code-readiness.test.mjs 的 P5 定向门禁；阶段 5 实施与独立测试/末验收读回，观察原件归任务 quality/tests 与 quality/evidence。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tools/cli/stage-runtime.mjs",
+        "runtime/stage/stage-content-contracts.mjs"
+      ],
+      "tests": [
+        "tests/contract/stage-runtime-reflect-entry.test.mjs"
+      ],
+      "delete_condition": "当开工就绪职责由经独立验证的替代门禁完整承接、且 P5 的 RED/GREEN 与就绪观察原件保留后，由原测试 owner 删除；不因实现变化删弱断言。",
+      "retention_basis": "P5/T005 写集与 AC-P4-001/AC-P4-002；只证受控入口的具名拒绝与恢复，真实外部服务、真实权限与数据代表性未覆盖。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

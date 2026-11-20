@@ -78,7 +78,7 @@ task_id、run_id（本次真实执行身份）、step_slug、artifact_sha、crea
 
 UI 实施先消费当前真实答复所批准原型与设计基准：沿build-plan交回的源码、展示范围、组件/token/布局映射、源缺陷与批准偏差定位本次改动；未答不代批准，不无据重画或把另一稿答复搬来。基准缺项只限制依赖范围，其余安全工作继续；需要变更方向/AC交原owner。实现后的UI终验沿下文第7步、`skills/frontend-prototype-render/SKILL.md`及`skills/plan-design-review/SKILL.md`，不以原型批准冒最终业务验收。
 
-1. <a id="step-read-current-task-documents"></a>核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用已认证task.appendRecord({dir,slug,ext,bytes})存一原件（复用现appendRecord原子底座），列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。
+1. <a id="step-read-current-task-documents"></a>核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用已认证task.appendRecord({dir,slug,ext,bytes})存一原件（复用现appendRecord原子底座），列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。开工就绪按 Phase 卡「开工就绪表」五列在派发前由同一入口跑一次，实际退出与原件决定相关派发是否继续；人判项只记未核实。
    Phase Card 里再写两行版本锚（给人看的绑定，不是 machine gate）：
    - 规则锚：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。锚只绑定所依段落；其它段落变化不构成本 Phase 事实作废的理由。
    - 材料变更影响：本次实施预计会改动 spec 与本 Phase 材料的哪些段落；不会改动的段落不在本 Phase 的审查与实现范围内。
@@ -181,7 +181,7 @@ Standards 与 Spec 是每 Phase 必派的两个独立补充执行者，不是三
 
 仅复杂任务的 build-code Phase 固定 1 开发、1 审查、1 测试；开发是唯一 writer，审查与测试不改代码、测试或材料。测试只读执行并用既有 capture 保存 argv、退出码与输出回执，这不属于修改。主会话不写代码、不跑测试、不查细节 bug。审查执行者与独立同源补充仍按方法第8步及标准工作方法选择，三角色不改变 P1 的审查分级和失败来源口径。
 
-1. 主会话备 Phase packet，含 spec、Phase 卡、AC、写集、测试命令、上下文指针与基线，交开发子代理。
+1. 主会话备 Phase packet，含 spec、Phase 卡、AC、写集、测试命令、上下文指针与基线，交开发子代理。派发前先跑一次现有开工入口——`node tools/cli/stage-runtime.mjs run --action=execute --stage=build-code --project=<项目> --task=<任务> --task-path=<任务库>` 的首步——实际执行 Phase 卡「开工就绪表」的机器项并读回原件：正常输入真跑只读探针，结果落任务 `quality/tests/` 的原始回执，阶段行只留一条事实引用。机器项只接受只读 allowlist（`git rev-parse/status/diff/log/show`、`node --version`、`shasum`、`uname`、`sw_vers`、`pwd`、`whoami`、`id`、`date`、`test`），解释器 `-c/-e` 与 `rm` 等写删命令一律拒绝。入口非零即停相关派发，按报出的具名失败（缺就绪表、缺探针、期望不符、权限探不到、旧材料指纹 stale）回原输入负责人修，修完重走同一入口；stale 需先看同名 stale 原件再显式重跑，材料侧只读回入口原件、不另跑探针。人判项只记未核实与提供者，不阻断。就绪调用只是派发前的一次检查，不改游标职责、不设第二进度权威、不新增门。
 2. 开发实施、写测试、跑目标测试到通过，确认无待修项后通知主会话。
 3. 主会话再派审查与测试；两者可并行，不得早于实现就绪并明确通知。实现就绪只表示开发子代理完成实施、目标测试与自查，可进入独立审测；它不等于开发完成。
 4. 普通 finding 回同一开发子代理；开发修完只复验受影响 file/case，审查与测试只复验受影响面。

@@ -6,19 +6,21 @@
 // 隔离：全部数据建在 createTrackedTempDir 的临时目录，不写产品库、不连真实任务。
 import { afterEach, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTrackedTempDir } from "../../runtime/interface/temp-dir.mjs";
-import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { phaseReadinessRows, readinessProbeArgv, validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
 
 const ORACLE = "ORACLE-PHASE-READINESS";
 const PHASE_REF = "phases/P1-readiness.md";
 const CLI = fileURLToPath(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url));
+const RUN_CHECKS = fileURLToPath(new URL("../../tools/cli/run-checks.mjs", import.meta.url));
 const GATE_COMMAND = "node --test tests/owned.test.mjs";
 // 五列＝命令、期望、证据、机器或人判、负责人（P5 开工就绪表）。
-const PASSING_PROBE = 'node -e "process.exit(0)"';
-const FAILING_PROBE = 'node -e "process.exit(3)"';
+// 机器项只接受只读 allowlist 命令；解释器 -c/-e 与写删命令一律拒绝。
+const PASSING_PROBE = "git rev-parse --show-toplevel";
+const FAILING_PROBE = "git rev-parse --verify refs/heads/p5-readiness-absent";
 
 const owned = [];
 const cleanEnv = () => {
@@ -36,13 +38,16 @@ function trackedRoot(prefix) {
   return owned_.path;
 }
 
-function readinessTable(probe) {
+function readinessTable(probe, humanFirst = false) {
   const rows = probe === null ? [] : [`| \`${probe}\` | 0 | quality/tests/p5-readiness.output | 机器 | 计划负责人 |`];
-  return ["### 开工就绪表", "| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |", "| --- | --- | --- | --- | --- |", ...rows, ""].join("\n");
+  const human = ["| 人工核对样本 | 样本与当前版本一致 | quality/tests/human-sample.md | 人 | 数据负责人 |"];
+  const ordered = probe === null ? [] : (humanFirst ? [...human, ...rows] : [...rows, ...human]);
+  return ["### 开工就绪表", "| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |", "| --- | --- | --- | --- | --- |", ...ordered, ""].join("\n");
 }
 
-// 合法 spec/index/phases；probe=null 表示缺探针，其他字符串为真实命令。
-function materials({ probe = PASSING_PROBE, ref = PHASE_REF } = {}) {
+// 合法 spec/index/phases；probe=null 表示空表缺探针，其他字符串为真实命令；
+// readiness=false 表示 Phase 没有开工就绪表。
+function materials({ probe = PASSING_PROBE, ref = PHASE_REF, readiness = true, humanFirst = false } = {}) {
   const spec = [
     "# Spec",
     "- **FR-001**：Visible owned result.",
@@ -81,11 +86,11 @@ function materials({ probe = PASSING_PROBE, ref = PHASE_REF } = {}) {
     "- **Dependency**：none",
     "- **Consumer**：build-code",
     "## L0 — Outcome",
-    readinessTable(probe),
+    ...(readiness ? [readinessTable(probe, humanFirst)] : []),
     `- **gate_cmd**：\`${GATE_COMMAND}\``,
     "- **expected_exit**：RED nonzero; GREEN 0",
     `- **oracle**：${ORACLE}`,
-    "- **evidence_path**：quality/tests/p5-readiness.output",
+    "- **evidence_path**：planned: quality/tests/p5-readiness.output",
     "- **STOP**：preserve actual failure",
     "- **Done**：real target result",
     "## L1 — Contract",
@@ -116,7 +121,7 @@ function materials({ probe = PASSING_PROBE, ref = PHASE_REF } = {}) {
 }
 
 // 入口级夹具：临时 git 仓库 + worktree + 假任务（task.json/facts.jsonl），不连真实库。
-function entryFixture({ probe, taskId = "p5-readiness-owned" } = {}) {
+function entryFixture({ probe, taskId = "p5-readiness-owned", readiness = true, humanFirst = false } = {}) {
   const root = trackedRoot("p5-readiness-");
   const repo = join(root, "repo"), worktree = join(root, "worktree"), storage = join(root, "storage"), home = join(root, "home");
   const taskDir = join(storage, "Projects", "workflowhub", "tasks", taskId), hooks = join(root, "hooks");
@@ -130,7 +135,7 @@ function entryFixture({ probe, taskId = "p5-readiness-owned" } = {}) {
   const materialRoot = join(worktree, "specs", taskId), phaseDir = join(materialRoot, "phases");
   mkdirSync(phaseDir, { recursive: true });
   writeFileSync(join(materialRoot, "decision-log.md"), "# Decision\n");
-  const docs = materials({ probe });
+  const docs = materials({ probe, readiness, humanFirst });
   writeFileSync(join(materialRoot, "spec.md"), docs.spec);
   writeFileSync(join(materialRoot, "phases/index.md"), docs.index);
   writeFileSync(join(materialRoot, PHASE_REF), docs.phases[PHASE_REF]);
@@ -142,12 +147,12 @@ function entryFixture({ probe, taskId = "p5-readiness-owned" } = {}) {
   }));
   writeFileSync(join(taskDir, "facts.jsonl"), "");
   const env = { ...cleanEnv(), WORKFLOWHUB_TASK_DIR: storage, HOME: home, XDG_CONFIG_HOME: join(home, ".config") };
-  const runEntry = (input) => {
+  const runEntry = (input, extraEnv = {}) => {
     const inputPath = join(root, `entry-input-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
     writeFileSync(inputPath, JSON.stringify(input));
     const argv = [CLI, "run", "--action=execute", "--stage=build-code", "--project=workflowhub",
       `--task=${taskId}`, `--task-path=${taskDir}`, `--input=${inputPath}`];
-    const result = spawnSync(process.execPath, argv, { cwd: worktree, env, encoding: "utf8", timeout: 30_000 });
+    const result = spawnSync(process.execPath, argv, { cwd: worktree, env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 30_000 });
     const record = {
       oracle: ORACLE,
       command: [process.execPath, ...argv].join(" "),
@@ -270,4 +275,180 @@ it("ORACLE-PHASE-READINESS: 名字可见且证据/退出码按真实运行记录
     expect(run.stdout, "原始 stdout 必须保留，供证据回读").toBeTypeOf("string");
   }
   console.log(`[${ORACLE}] 真实入口运行记录：${JSON.stringify(entryRuns.map(({ command, exit, signal }) => ({ command, exit, signal })), null, 1)}`);
+});
+
+// P5 hardening additions (F1/F2/F3/F4/F5/F6/F8/F9). They append cases; the
+// earlier assertions and their oracle identity stay untouched.
+const runChecks = (fixture, stage = "build-plan") => {
+  const argv = [RUN_CHECKS, "--material-root", fixture.materialRoot];
+  if (stage !== "infer") argv.push(`--stage=${stage ?? "build-plan"}`);
+  return spawnSync(process.execPath, argv,
+    { cwd: fixture.worktree, env: { ...cleanEnv(), HOME: fixture.home, XDG_CONFIG_HOME: join(fixture.home, ".config"), WORKFLOWHUB_TASK_DIR: fixture.storage }, encoding: "utf8", timeout: 120_000 });
+};
+const readinessFiles = (fixture) => {
+  const dir = join(fixture.taskDir, "quality", "tests");
+  try { return readdirSync(dir).filter((name) => /-readiness-.*\.json$/.test(name)).sort(); } catch { return []; }
+};
+
+it("ORACLE-PHASE-READINESS: 只读 allowlist 拒绝解释器与写删命令", () => {
+  for (const allowed of ["git rev-parse --show-toplevel", "node --version", "shasum -a 256 README.md", "uname -s"]) {
+    expect(() => readinessProbeArgv(allowed), `${allowed} 应被接受`).not.toThrow();
+  }
+  expect(() => readinessProbeArgv("git status --porcelain && echo unsafe"), "shell 元字符必须被拒").toThrow(/metacharacter/i);
+  expect(() => readinessProbeArgv("git status --porcelain"), "git status 会刷新 index，必须被拒").toThrow(/read-only subcommands/i);
+  for (const denied of ["customtool --version", "busybox ls"]) {
+    expect(() => readinessProbeArgv(denied), `${denied} 未知可执行必须被拒`).toThrow(/read-only allowlist/i);
+  }
+  for (const denied of ['sh -c "rm -rf /tmp/x"', "rm -rf /tmp/x", 'node -e "process.exit(0)"']) {
+    expect(() => readinessProbeArgv(denied), `${denied} 必须被拒绝`).toThrow(/allowlist|read-only|interpreter|only accepts/i);
+  }
+});
+
+it("ORACLE-PHASE-READINESS: 无开工就绪表时具名拒绝且不派发", () => {
+  const broken = materials({ readiness: false });
+  const parsed = validatePostPhaseContract({ ...broken, require_readiness: true });
+  expect(parsed.ok, "无表不能可派发").toBe(false);
+  expect(parsed.errors.some((error) => /missing readiness table/i.test(error)), "必须具名缺表").toBe(true);
+  const fixture = entryFixture({ probe: PASSING_PROBE, readiness: false });
+  const run = fixture.runEntry(cursorInput());
+  expect(run.exit, `${ORACLE}: 无表必须非零拒绝；实际 ${summarise(run)}`).not.toBe(0);
+  expect(run.stderr).toMatch(/missing readiness table/i);
+  expect(fixture.factsBytes().length, "无表拒绝不得写派发行").toBe(0);
+});
+
+it("ORACLE-PHASE-READINESS: 恶意 argv 在真实入口被拒且无派发", () => {
+  for (const probe of ['sh -c "rm -rf /tmp/x"', "rm -rf /tmp/x", 'node -e "process.exit(0)"', "git status --porcelain && echo unsafe"]) {
+    const fixture = entryFixture({ probe });
+    const run = fixture.runEntry(cursorInput());
+    expect.soft(run.exit, `${probe} 必须非零拒绝；实际 ${summarise(run)}`).not.toBe(0);
+    expect.soft(run.stderr).toMatch(/allowlist|read-only|interpreter|only accepts/i);
+    expect.soft(fixture.factsBytes().length, `${probe} 拒绝后不得写派发行`).toBe(0);
+  }
+});
+
+it("ORACLE-PHASE-READINESS: 材料变更后旧指纹按 stale 非零拒绝，重跑后才恢复", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  const first = fixture.runEntry(cursorInput());
+  expect(first.exit, `${ORACLE}: 首次必须通过；实际 ${summarise(first)}`).toBe(0);
+  const rowsBefore = fixture.factsRows().length;
+  const phase = readFileSync(join(fixture.materialRoot, PHASE_REF), "utf8");
+  writeFileSync(join(fixture.materialRoot, PHASE_REF), `${phase}\n<!-- one material byte changed -->\n`);
+  const stale = fixture.runEntry(cursorInput());
+  expect.soft(stale.exit, `${ORACLE}: stale 必须非零拒绝；实际 ${summarise(stale)}`).not.toBe(0);
+  expect.soft(stale.stderr).toMatch(/stale readiness result/i);
+  expect.soft(fixture.factsRows().length, "stale 拒绝后 facts 行数必须不变").toBe(rowsBefore);
+  const staleName = readinessFiles(fixture).filter((name) => name.endsWith("-stale.json")).at(-1);
+  expect(staleName, "stale 拒绝必须留下具名原件").toBeTruthy();
+  const stalePath = join(fixture.taskDir, "quality", "tests", staleName);
+  const staleRecord = JSON.parse(readFileSync(stalePath, "utf8"));
+  expect(staleRecord.status).toBe("stale");
+  expect(staleRecord.recover?.action, "stale 原件必须写明恢复动作").toBe("rerun-same-entry");
+  const recovered = fixture.runEntry(cursorInput());
+  expect(recovered.exit, `${ORACLE}: 显式重跑后必须恢复；实际 ${summarise(recovered)}`).toBe(0);
+  const row = fixture.factsRows().find((entry) => entry?.stage === "build-code");
+  expect(fixture.factsRows().filter((entry) => entry?.stage === "build-code").length, "恢复后仍只有一行").toBe(1);
+  expect(row.source.split("; readiness: ").length - 1, "source 只追加一次就绪引用").toBe(1);
+  const recoveredRecord = JSON.parse(readFileSync(row.source.split("; readiness: ")[1], "utf8"));
+  expect(recoveredRecord.recovered?.from, "恢复原件必须记录 recovered_from").toBe(stalePath);
+  expect(recoveredRecord.recovered?.action).toBe("rerun-same-entry");
+  expect(Date.parse(recoveredRecord.recovered?.at), "恢复时间可读").not.toBeNaN();
+});
+
+const nonRoot = typeof process.getuid !== "function" || process.getuid() !== 0;
+
+it.skipIf(!nonRoot)("ORACLE-PHASE-READINESS: 只有 error.code=EACCES 才归权限不可观测", () => {
+  // A real spawn-time EACCES: an allowlisted binary shadowed by a mode-000 copy.
+  const binDir = join(trackedRoot("p5-readiness-path-"), "bin");
+  mkdirSync(binDir, { recursive: true });
+  const shasum = join(binDir, "shasum");
+  execFileSync("cp", ["/usr/bin/shasum", shasum]);
+  chmodSync(shasum, 0o000);
+  // The entry still needs git; PATH has only this controlled directory so the
+  // chmod-000 shasum yields a spawn-time EACCES instead of a later hit.
+  symlinkSync("/usr/bin/git", join(binDir, "git"));
+  const denied = entryFixture({ probe: "shasum -a 256 README.md" });
+  const deniedRun = denied.runEntry(cursorInput(), { PATH: binDir });
+  expect.soft(deniedRun.exit, `${ORACLE}: EACCES 必须非零；实际 ${summarise(deniedRun)}`).not.toBe(0);
+  expect.soft(deniedRun.stderr).toMatch(/permission-unobservable/i);
+  expect.soft(denied.factsBytes().length, "EACCES 拒绝后不得写派发行").toBe(0);
+
+  // Text-only "permission denied" without an errno code stays a failed probe.
+  const unreadable = join(trackedRoot("p5-readiness-text-"), "no-read.txt");
+  writeFileSync(unreadable, "controlled unreadable input\n");
+  chmodSync(unreadable, 0o000);
+  const textOnly = entryFixture({ probe: `shasum -a 256 ${unreadable}` });
+  const textRun = textOnly.runEntry(cursorInput());
+  expect.soft(textRun.exit, `${ORACLE}: 文本权限失败仍必须非零；实际 ${summarise(textRun)}`).not.toBe(0);
+  expect.soft(textRun.stderr, "无 errno code 时不得冒权限结论").not.toMatch(/permission-unobservable/i);
+  expect.soft(textRun.stderr).toMatch(/probe failed/i);
+
+  const normal = entryFixture({ probe: 'git rev-parse --verify refs/heads/p5-readiness-absent' });
+  const normalRun = normal.runEntry(cursorInput());
+  expect.soft(normalRun.exit, `${ORACLE}: 普通失败必须非零；实际 ${summarise(normalRun)}`).not.toBe(0);
+  expect.soft(normalRun.stderr).toMatch(/probe failed/i);
+  expect.soft(normalRun.stderr).not.toMatch(/permission-unobservable/i);
+});
+
+it("ORACLE-PHASE-READINESS: 重复入口不重跑探针、不新增原件、source 不重复", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  const first = fixture.runEntry(cursorInput());
+  expect(first.exit, `${ORACLE}: 首次必须通过；实际 ${summarise(first)}`).toBe(0);
+  const filesAfterFirst = readinessFiles(fixture);
+  const second = fixture.runEntry(cursorInput());
+  expect(second.exit, `${ORACLE}: 第二次必须复用通过原件；实际 ${summarise(second)}`).toBe(0);
+  expect(readinessFiles(fixture), "重复调用不得新增就绪原件").toEqual(filesAfterFirst);
+  const row = fixture.factsRows().find((entry) => entry?.stage === "build-code");
+  expect(row.source.split("; readiness: ").length - 1, "source 只保留一条就绪引用").toBe(1);
+});
+
+it("ORACLE-PHASE-READINESS: 材料侧只读回入口原件，双调用不新增回执或漂移", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  expect(fixture.runEntry(cursorInput()).exit, "先由入口记录通过原件").toBe(0);
+  const first = runChecks(fixture);
+  const filesAfterFirst = readinessFiles(fixture);
+  const second = runChecks(fixture);
+  expect.soft(first.status, `第一次材料侧读回：${first.stdout.slice(-500)} ${first.stderr.slice(-300)}`).toBe(0);
+  expect.soft(second.status, `第二次材料侧读回：${second.stdout.slice(-500)} ${second.stderr.slice(-300)}`).toBe(0);
+  expect.soft((second.stdout.match(/readiness phase=P1 status=pass/g) ?? []).length, "两次都读到同一通过原件").toBe(1);
+  expect.soft(readinessFiles(fixture), "材料侧读回不得新增就绪原件").toEqual(filesAfterFirst);
+});
+
+it("ORACLE-PHASE-READINESS: 就绪表只由标题声明，代码围栏与正文提及不误触", () => {
+  const fenced = ["# Phase P1", "```md", "### 开工就绪表", "| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |", "```", ""].join("\n");
+  const prose = "# Phase P1\n\n正文里提到 开工就绪表 但这里没有表。\n";
+  expect(phaseReadinessRows(fenced).declared, "围栏里的示例不是就绪表").toBe(false);
+  expect(phaseReadinessRows(prose).declared, "正文提及不是就绪表").toBe(false);
+});
+
+it("ORACLE-PHASE-READINESS: 材料侧按 stage 判无表，build-code 非零而 build-plan 允许", () => {
+  const noTable = entryFixture({ probe: PASSING_PROBE, readiness: false });
+  const buildPlan = runChecks(noTable, "build-plan");
+  expect.soft(buildPlan.status, `build-plan 允许无表：${buildPlan.stdout.slice(-400)} ${buildPlan.stderr.slice(-200)}`).toBe(0);
+  const buildCode = runChecks(noTable, "build-code");
+  expect.soft(buildCode.status, `build-code 缺表必须非零：${buildCode.stdout.slice(-500)} ${buildCode.stderr.slice(-200)}`).not.toBe(0);
+  expect.soft(buildCode.stdout).toMatch(/missing readiness table/i);
+});
+
+it("ORACLE-PHASE-READINESS: 人判行在前时材料侧仍按机器探针对齐", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE, humanFirst: true });
+  const run = fixture.runEntry(cursorInput());
+  expect(run.exit, `人判在前的入口必须通过：${summarise(run)}`).toBe(0);
+  const record = JSON.parse(readFileSync(fixture.factsRows().find((row) => row?.stage === "build-code")
+    .source.split("; readiness: ")[1], "utf8"));
+  expect(record.probes.length, "原件只存机器探针").toBe(1);
+  expect(record.human_rows.length, "人判行单独记录").toBe(1);
+  expect(record.human_rows[0].status).toBe("unverified");
+  const check = runChecks(fixture, "build-code");
+  expect.soft(check.status, `人判在前时材料侧对齐：${check.stdout.slice(-600)} ${check.stderr.slice(-300)}`).toBe(0);
+  expect.soft(check.stdout).toMatch(/readiness phase=P1 status=pass/);
+  expect.soft(check.stdout).not.toMatch(/drift/i);
+});
+
+it("ORACLE-PHASE-READINESS: 省略 --stage 时非 archive 的有 Phase 材料按 build-code 判无表", () => {
+  const noTable = entryFixture({ probe: PASSING_PROBE, readiness: false });
+  const inferred = runChecks(noTable, "infer");
+  expect.soft(inferred.status, `省略 --stage 不得静默放行：${inferred.stdout.slice(-600)} ${inferred.stderr.slice(-200)}`).not.toBe(0);
+  expect.soft(inferred.stdout).toMatch(/missing readiness table/i);
+  // Archive materials keep the diagnostic behavior (covered by n10 material tests);
+  // a phased non-archive fixture is the new inferred build-code case above.
 });

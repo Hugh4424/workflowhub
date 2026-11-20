@@ -47,7 +47,7 @@ const phase = [
   "### 开工就绪表",
   "| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |",
   "| --- | --- | --- | --- | --- |",
-  "| `node -e \"process.exit(0)\"` | 0 | quality/tests/p5-readiness.output | 机器 | 计划负责人 |",
+  "| `git rev-parse --show-toplevel` | 0 | quality/tests/p5-readiness.output | 机器 | 计划负责人 |",
   "- **gate_cmd**：`node --test tests/owned.test.mjs`",
   "- **expected_exit**：RED nonzero; GREEN 0",
   "- **oracle**：ORACLE-PHASE-READINESS",
