@@ -1173,7 +1173,26 @@ async function recordBuildCodeCommandEvidence(context, receipt) {
 }
 
 const READINESS_SOURCE_MARKER = "; readiness: ";
+const READINESS_SEGMENT_PREFIX = READINESS_SOURCE_MARKER.slice(2);
 const READINESS_RUNNER = "build-code run --action=execute first step";
+
+// A cursor write owns the readiness fact and nothing else. Every other semicolon
+// segment on the same source (`receipt:`, `output:`, `gate:` and any later fact)
+// belongs to another writer and survives the rebuild byte for byte. Readiness is
+// replaced once, where it already sits, and never invented or duplicated.
+function sourceWithReadiness(source, readinessRef) {
+  const segment = `${READINESS_SEGMENT_PREFIX}${readinessRef}`;
+  const rebuilt = [];
+  let placed = false;
+  for (const part of String(source).split("; ")) {
+    if (!part.startsWith(READINESS_SEGMENT_PREFIX)) { rebuilt.push(part); continue; }
+    if (!placed) { rebuilt.push(segment); placed = true; }
+  }
+  // No prior readiness: it follows the source identity, the position the cursor
+  // contract already publishes, and every existing fact keeps its order.
+  if (!placed) rebuilt.splice(1, 0, segment);
+  return rebuilt.join("; ");
+}
 
 // Latest readiness original for one Phase, read from the task evidence area.
 // The entry is the only executor; every other reader reuses this original.
@@ -1443,8 +1462,10 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
     // A readiness original is linked as an ordinary fact reference on the same
     // stage row; the cursor-only identity stays stable because the marker is a
     // declared extension of PHASE_PROGRESS_ONLY_SOURCE, never a second ledger.
-    const baseSource = String(rowInput.source).split(READINESS_SOURCE_MARKER)[0];
-    const source = `${baseSource}${READINESS_SOURCE_MARKER}${readiness.ref}`;
+    // The rebuild replaces the readiness segment only: receipt/output/gate facts
+    // written by later captures stay on the row, so the declared gate remains
+    // readable after a resume cursor write.
+    const source = sourceWithReadiness(rowInput.source, readiness.ref);
     const written = await writeStageRow(context.task.taskPath, { ...rowInput, source, material_bytes: materialBaseline });
     return Object.freeze({
       status: "recorded",

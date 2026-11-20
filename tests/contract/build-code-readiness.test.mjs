@@ -165,8 +165,19 @@ function entryFixture({ probe, taskId = "p5-readiness-owned", readiness = true, 
     entryRuns.push(record);
     return record;
   };
+  // 真实门捕获入口：verify --action=execute 走 capture-tests，和产品读回同一路线。
+  // 单独返回、不进 entryRuns（entryRuns 只收 run --action=execute 的真实记录）。
+  const runVerify = (input, extraEnv = {}) => {
+    const inputPath = join(root, `verify-input-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+    writeFileSync(inputPath, JSON.stringify(input));
+    const argv = [CLI, "verify", "--action=execute", "--stage=build-code", "--project=workflowhub",
+      `--task=${taskId}`, `--task-path=${taskDir}`, `--input=${inputPath}`];
+    const result = spawnSync(process.execPath, argv, { cwd: worktree, env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 30_000 });
+    return { command: [process.execPath, ...argv].join(" "), exit: result.status, signal: result.signal ?? null,
+      stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+  };
   return {
-    root, repo, worktree, storage, home, taskId, taskDir, materialRoot, runEntry,
+    root, repo, worktree, storage, home, taskId, taskDir, materialRoot, runEntry, runVerify,
     factsBytes: () => readFileSync(join(taskDir, "facts.jsonl")),
     writeSetBytes: () => readFileSync(join(worktree, "README.md")),
     factsRows: () => readFileSync(join(taskDir, "facts.jsonl"), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)),
@@ -414,6 +425,58 @@ it("ORACLE-PHASE-READINESS: 重复入口不重跑探针、不新增原件、sour
   expect(readinessFiles(fixture), "重复调用不得新增就绪原件").toEqual(filesAfterFirst);
   const row = fixture.factsRows().find((entry) => entry?.stage === "build-code");
   expect(row.source.split("; readiness: ").length - 1, "source 只保留一条就绪引用").toBe(1);
+});
+
+// 真实门捕获把 receipt/output/gate 段写在同一条 build-code source 上；此后的
+// 游标写入只能替换 readiness 段。切分整段重建会抹掉门指针，使 close 的声明读取
+// 读不到 gate（quality/tests/2026-11-21-047-delivery-claims-recheck.json: gate=null）。
+const buildCodeRow = (fixture) => fixture.factsRows().find((entry) => entry?.record_kind === "stage" && entry?.stage === "build-code");
+const sourceSegments = (source) => String(source).split("; ");
+const segmentsStartingWith = (source, prefix) => sourceSegments(source).filter((part) => part.startsWith(prefix));
+
+it("ORACLE-PHASE-READINESS: 游标重建只替换 readiness 段，保留真实门捕获的 receipt/output/gate", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  expect(fixture.runEntry(cursorInput()).exit, "先由真实入口记录游标与就绪原件").toBe(0);
+  // 门捕获走公开的 verify --action=execute（capture-tests），同一真实写入者。
+  const captured = fixture.runVerify({ shell: GATE_COMMAND, slug: "p5-readiness-gate" });
+  const capturedRow = buildCodeRow(fixture);
+  const receiptSegment = segmentsStartingWith(capturedRow.source, "receipt: ");
+  const outputSegment = segmentsStartingWith(capturedRow.source, "output: ");
+  const gateSegment = segmentsStartingWith(capturedRow.source, "gate: ");
+  // SETUP：真实捕获必须先在 source 上留下这三段，否则后面的保留断言无对象。
+  expect.soft(gateSegment.length, `SETUP: 真实门捕获必须写入 gate 段；实际 source=${capturedRow?.source} stdout=${captured.stdout.slice(-400)} stderr=${captured.stderr.slice(-400)}`).toBe(1);
+  expect.soft(receiptSegment.length, `SETUP: 真实门捕获必须写入 receipt 段；实际 source=${capturedRow?.source}`).toBe(1);
+  expect.soft(outputSegment.length, `SETUP: 真实门捕获必须写入 output 段；实际 source=${capturedRow?.source}`).toBe(1);
+  // 第二次游标写入（同一 Phase 复用就绪原件）不得擦掉捕获段。
+  const resumed = fixture.runEntry(cursorInput());
+  expect.soft(resumed.exit, `恢复写入必须通过；实际 ${summarise(resumed)}`).toBe(0);
+  const row = buildCodeRow(fixture);
+  expect.soft(segmentsStartingWith(row.source, "readiness: ").length, `readiness 段只保留一条；实际 ${row.source}`).toBe(1);
+  expect.soft(segmentsStartingWith(row.source, "receipt: "), "receipt 段必须原样保留").toEqual(receiptSegment);
+  expect.soft(segmentsStartingWith(row.source, "output: "), "output 段必须原样保留").toEqual(outputSegment);
+  expect.soft(segmentsStartingWith(row.source, "gate: "), "gate 段必须原样保留").toEqual(gateSegment);
+  expect.soft(row.source.startsWith("phase-progress-cursor; readiness: "), "游标身份仍按既有前缀可读").toBe(true);
+  // 同一入口再写一次：任何事实段都不得重复。
+  expect.soft(fixture.runEntry(cursorInput()).exit, "第三次写入必须通过").toBe(0);
+  const again = buildCodeRow(fixture);
+  for (const prefix of ["readiness: ", "receipt: ", "output: ", "gate: "]) {
+    expect.soft(segmentsStartingWith(again.source, prefix).length, `${prefix}段多次写入后仍只有一条；实际 ${again.source}`).toBe(1);
+  }
+  expect.soft(again.source, "多次写入后 source 稳定").toBe(row.source);
+});
+
+it("ORACLE-PHASE-READINESS: 无门捕获的旧行不被凭空造出 gate/receipt/output 段", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  expect(fixture.runEntry(cursorInput()).exit, "首次写入游标").toBe(0);
+  const legacySource = buildCodeRow(fixture).source;
+  expect(fixture.runEntry(cursorInput()).exit, "再次写入游标").toBe(0);
+  const source = buildCodeRow(fixture).source;
+  expect.soft(segmentsStartingWith(source, "gate: "), "没有捕获就不得造出 gate 段").toEqual([]);
+  expect.soft(segmentsStartingWith(source, "receipt: "), "没有捕获就不得造出 receipt 段").toEqual([]);
+  expect.soft(segmentsStartingWith(source, "output: "), "没有捕获就不得造出 output 段").toEqual([]);
+  expect.soft(segmentsStartingWith(source, "readiness: ").length, "只保留一条 readiness").toBe(1);
+  // 既有形状（主身份 + 一条 readiness）保持不变。
+  expect.soft(source, "无捕获时 source 形状不漂移").toBe(legacySource);
 });
 
 it("ORACLE-PHASE-READINESS: 材料侧只读回入口原件，双调用不新增回执或漂移", () => {
