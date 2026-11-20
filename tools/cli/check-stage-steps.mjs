@@ -470,6 +470,36 @@ function discoverColdReadOriginal(taskPath, id) {
   if (matches.length !== 1) return null;
   return `quality/evidence/${String(matches[0])}`;
 }
+// A v2 ledger is a derived index and carries no version field. Its own
+// derivation sentence is the only version marker the format can hold: it names
+// the decision log and the sha256 it was derived from. That declaration is
+// aligned with the decision-log bytes this check just read, so an old pointer
+// becomes a named「引用旧清单」gap instead of a report limit. A ledger without
+// that sentence cannot be versioned here; that boundary is published and the AC
+// has to be narrowed (see limits), it is never silently kept.
+function checklistDerivationGaps({ body, decisionBytes }) {
+  const declaration = String(body ?? '').split(/\r?\n/).find(line => /派生来源/.test(line));
+  if (!declaration) return { gaps: [], declared: false, commit: null, date: null };
+  const commit = /工作树\s*`?([0-9a-f]{7,64})`?/.exec(declaration)?.[1] ?? null;
+  // The derivation date is usually a separate header line ("本清单于 <date> …");
+  // it is recorded in the gap text, never used as the verdict (the format has
+  // no machine-readable version timeline, so the byte digest is the judgement).
+  const dated = String(body ?? '').split(/\r?\n/).find(line => /本清单于/.test(line) && /\d{4}-\d{2}-\d{2}/.test(line));
+  const date = /(\d{4}-\d{2}-\d{2})/.exec(declaration)?.[1]
+    ?? (dated ? /(\d{4}-\d{2}-\d{2})/.exec(dated)[1] : null);
+  const pairs = [...declaration.matchAll(/`([^`\n]+)`\s*[（(]\s*sha256\s*`?([0-9a-f]{64})`?\s*[）)]/g)]
+    .map(match => ({ path: match[1], digest: match[2] }));
+  if (!pairs.length) return { gaps: [], declared: false, commit, date };
+  // Without readable decision-log bytes no current digest exists; the pointer
+  // gap already names that, so this check does not claim a stale digest.
+  if (!decisionBytes) return { gaps: [], declared: true, commit, date };
+  const currentDigest = createHash('sha256').update(decisionBytes).digest('hex');
+  const gaps = pairs
+    .filter(pair => /(?:^|\/)decision-log\.md$/.test(pair.path) && pair.digest !== currentDigest)
+    .map(pair => `引用旧清单：清单自述派生来源 ${pair.path} 的 sha256 ${pair.digest} 与当前 decision-log 字节 ${currentDigest} 不符`
+      + `${commit ? `（清单派生自工作树 ${commit}${date ? `，${date}` : ''}；日期与批次只记录、不当判据）` : ''}`);
+  return { gaps, declared: true, commit, date };
+}
 function packageBlock(body, id) {
   const lines = String(body ?? '').split(/\r?\n/);
   const start = lines.findIndex(line => {
@@ -853,7 +883,7 @@ function readStepSkill({ skillPath, stage: name, step: stepId, taskPath, materia
     ...(encoding === 'utf8' ? { body: text } : { body_base64: bytes.toString('base64') }),
   };
 }
-function validateSkillReadReceipt({ taskPath, receiptRef, stage: name, step: stepId, declared, materialRoot, commit, workspace }) {
+function validateSkillReadReceipt({ taskPath, receiptRef, stage: name, step: stepId, declared, materialRoot, workspace }) {
   let record, recordRef;
   try { const read = taskRelativeBytes(taskPath, receiptRef); recordRef = read.ref; record = JSON.parse(read.bytes.toString('utf8')); }
   catch (error) { return skillLoadFailure(`当前读取回执不可读：${error.message}`); }
@@ -884,7 +914,10 @@ function validateSkillReadReceipt({ taskPath, receiptRef, stage: name, step: ste
   const same = (left, right) => { try { return realpathSync(resolve(left)) === realpathSync(resolve(right)); } catch { return false; } };
   if (!same(flags.get('task-path'), taskPath)) return skillLoadFailure('捕获任务根不是当前任务');
   if (!same(flags.get('material-root'), materialRoot)) return skillLoadFailure('捕获材料根不是当前材料根');
-  if (flags.get('commit') !== commit) return skillLoadFailure(`捕获提交 ${flags.get('commit')} 不是当前真实 HEAD ${commit}`);
+  // The receipt binds the skill bytes plus the task/stage/step identity. The
+  // captured --commit is provenance only and is deliberately NOT compared with
+  // the live HEAD: a later code snapshot does not make this read stale.
+  if (!/^[a-f0-9]{40,64}$/.test(flags.get('commit'))) return skillLoadFailure(`捕获提交 ${flags.get('commit')} 不是提交标识`);
   if (!same(record.cwd, workspace.root)) return skillLoadFailure(`捕获工作目录 ${record.cwd ?? '未取得'} 必须是当前工作树根 ${workspace.root}；在子目录执行会得到这条明确错误`);
   if (typeof record.output_ref !== 'string') return skillLoadFailure('捕获没有 output_ref；只认现有命令捕获结构，不接受内联输出');
   const outputRead = (() => { try { return taskRelativeBytes(taskPath, record.output_ref); } catch (error) { throw Error(`捕获原输出不可读：${error.message}`); } })();
@@ -1034,10 +1067,10 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     let result;
     try {
       const workspace = worktreeIdentity(materialRoot);
-      result = commit && commit !== workspace.head
-        ? skillLoadFailure(`--commit ${commit} 不是当前真实 HEAD ${workspace.head}`)
-        : validateSkillReadReceipt({ taskPath, receiptRef: binding, stage: name, step: step.step_id,
-          declared: declaredSkillRef(name, step), materialRoot, commit: workspace.head, workspace });
+      // The live HEAD is only read to locate the worktree the capture ran in;
+      // it is no longer compared with the captured commit (see the limits).
+      result = validateSkillReadReceipt({ taskPath, receiptRef: binding, stage: name, step: step.step_id,
+        declared: declaredSkillRef(name, step), materialRoot, workspace });
       if (result.ok) {
         const later = laterSkillReadReceipt(taskPath, result.ref, name, step.step_id,
           declaredSkillRef(name, step).file, declaredSkillRef(name, step).anchor, result.ended);
@@ -1404,24 +1437,30 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   // that resolves outside the only place a current checklist may live.
   let rangeGap = null;
   let checklistDigest = null;
+  let checklistVersionGaps = [];
+  let checklistDerivation = null;
   const originalEvidenceGaps = [];
   // A package row may name its own original as a task-relative path, optionally
   // with a `#anchor`. Only the path part is opened; the anchor is kept in the
-  // report but never resolved as a file name. A label-shaped cell (ev-1) is not
-  // a readable original: it is reported as label=true / present=null instead of
-  // silently counting as read. Upgrading that to a named gap would contradict
-  // the frozen five-column oracle that accepts `ev-1`, so it stays a recorded
-  // limit until a TCR changes that oracle.
+  // report but never resolved as a file name. A label-shaped cell (`ev-1`) or an
+  // empty cell exposes no bytes, so it is a named gap and `complete=false`: it
+  // must not be read as an accepted original. TCR-P2-01 (2026-11-21) supersedes
+  // the frozen five-column oracle that used to accept `ev-1` silently.
   const packageEvidence = (cell, id) => {
     const text = String(cell ?? '').trim();
     const raw = /`([^`]+)`/.exec(text)?.[1]
       ?? (/^quality\/\S+\.(?:md|json|txt|output)(?:#\S*)?$/.test(text) ? text : null);
     if (!raw) {
-      if (!text || /^[\s—\-]*$/.test(text)) return null;
+      if (!text || /^[\s—\-]*$/.test(text)) {
+        originalEvidenceGaps.push(`证据缺当前原件：${id ? `包 ${id} ` : ''}证据格为空，未读到字节`);
+        return null;
+      }
+      originalEvidenceGaps.push(`证据标签非原件：${id ? `包 ${id} ` : ''}${text} 没有可读字节，不按原件计`);
       return { ref: text, present: null, label: true };
     }
     const [ref, anchor] = raw.split('#');
     if (!ref || !/^quality\//.test(ref) || ref.split(/[\\/]/).includes('..')) {
+      originalEvidenceGaps.push(`证据标签非原件：${id ? `包 ${id} ` : ''}${text} 不是本任务 quality/ 下的可读原件`);
       return { ref: text, present: null, label: true };
     }
     try {
@@ -1448,6 +1487,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     const bodyBytes = readFileSync(path);
     checklistDigest = createHash('sha256').update(bodyBytes).digest('hex');
     const body = bodyBytes.toString('utf8');
+    // The ledger's own derivation sentence is the only version marker the v2
+    // format carries. Align it with the decision-log bytes this check read; a
+    // stale pointer is a named gap, not a limit that keeps the row complete.
+    checklistDerivation = checklistDerivationGaps({ body, decisionBytes: decision ? Buffer.from(decision, 'utf8') : null });
+    checklistVersionGaps = checklistDerivation.gaps;
     const tableLines = body.split(/\r?\n/);
     const header = tableLines.find(line => /^\|\s*包\s*\|/.test(line));
     const headerCells = header ? header.split('|').slice(1, -1).map(cell => cell.trim()) : [];
@@ -1584,7 +1628,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   // absent or out-of-range ledger is already named by the pointer gap and must
   // not also claim, per package, a fact about bytes nobody opened.
   gaps.push(...(convergenceReadable ? missing.map(id => `缺模块 WP${id}`) : []), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps,
-    ...packageSetGaps, ...originalEvidenceGaps);
+    ...packageSetGaps, ...originalEvidenceGaps, ...checklistVersionGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
   if (!convergenceRef) gaps.push('收敛清单指针未取得');
   else if (rangeGap) gaps.push(`收敛清单越界：${convergenceRef}（${rangeGap}）`);
@@ -1684,7 +1728,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     closeout: { state: skipGaps.length || errors.some(error => error.startsWith('跳过缺口不可读')) ? 'incomplete' : 'unavailable', gaps: skipGaps,
       reason: '收口必须逐项消费未清缺口；无跳过缺口也不证明步骤或阶段完成。' },
     modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList }, errors,
-    limits: [`收敛清单版本：${convergenceRef ? `当前声明的唯一指针是 ${convergenceRef}` : '当前没有取得唯一清单指针'}；v2 清单格式没有版本元数据，旧清单与当前清单物理不可区分，本检查只按日志声明的指针读，不声称会拒绝旧版。`, '只报告映射、声明原件的可读性、既有 producer 判定与模块结构；不证明步骤完成或模块语义。未留痕只表示机检未读到声明原件，不证明步骤未执行；无持久原件的方法交既有 decision/GLOSSARY/ADR 原件由独立读者判断。失效步骤只按当前 decision-log 行读取，删行不重建历史。每步完成都要求本次 --current-read-receipt 绑定的命令捕获原件：缺当次回执、无任何加载记录、旧回执或内联输出均记未判定；校验重算原输出并与当前声明技能字节三方比对，改自洽的正文也不能通过。同 task/step/HEAD/字节的多份回执，本检查在存在更晚同步骤捕获时拒绝传入的更早件，不按时间挑最新；没有更晚件也没有会话标识时，单份旧回执与本次读取物理不可区分，记该能力边界。每步必需子技能清单未在本卡声明，本检查只覆盖该步声明的技能文件。读取动作按当前卡投影定位声明技能，依赖同一次只读检查报告；该依赖不写状态，影响是读取成本与同一路由，不建新抽象。', ...(invalidationLimit ? [invalidationLimit] : []), ...producerLimits] };
+    limits: [`收敛清单版本：${convergenceRef ? `当前声明的唯一指针是 ${convergenceRef}` : '当前没有取得唯一清单指针'}；${!convergenceRef ? '未取得唯一清单指针，未判版本' : checklistDerivation === null ? '清单不可读，未判版本' : checklistDerivation.declared ? `清单自述派生来源，已把其声明的 decision-log sha256 与本次读到的字节比对，不一致即「引用旧清单」具名 gap；自述里的日期与批次只记录、不当判据（清单没有机器可读的版本时间线）` : '清单未自述派生来源，本检查判不出旧版：AC 需收窄为「清单自述派生来源 sha256 与当前 decision-log 字节一致」。可选方案：A 清单头部写派生来源（工作树提交＋decision-log sha256），检查器机检（已实现）；B 清单头登记版本号并由日志指针命名该版本；C 接受不判旧版并把 AC 文字收窄。裁决前该边界保持公开，不静默保留。'}。`, '只报告映射、声明原件的可读性、既有 producer 判定与模块结构；不证明步骤完成或模块语义。未留痕只表示机检未读到声明原件，不证明步骤未执行；无持久原件的方法交既有 decision/GLOSSARY/ADR 原件由独立读者判断。失效步骤只按当前 decision-log 行读取，删行不重建历史。每步完成都要求本次 --current-read-receipt 绑定的命令捕获原件：缺当次回执、无任何加载记录、旧回执或内联输出均记未判定；校验重算原输出并与当前声明技能字节三方比对，改自洽的正文也不能通过。回执只绑技能字节 sha256 与任务/阶段/步骤身份；捕获里的 --commit 只记录，不与实时 HEAD 比较，代码快照变化本身不使回执 stale。同 task/stage/step/技能字节的多份回执，本检查在存在更晚同步骤捕获时拒绝传入的更早件，不按时间挑最新；没有更晚件也没有会话标识时，单份旧回执与本次读取物理不可区分，记该能力边界。每步必需子技能清单未在本卡声明，本检查只覆盖该步声明的技能文件。读取动作按当前卡投影定位声明技能，依赖同一次只读检查报告；该依赖不写状态，影响是读取成本与同一路由，不建新抽象。', ...(invalidationLimit ? [invalidationLimit] : []), ...producerLimits] };
 }
 
 function validateSkipIdentity(options, task) {
@@ -1785,6 +1829,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     /冷读原件摘要不符/, /修订未复读/,
     /先设计后提问缺证/, /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
     /UI设计源首问/,
+    // TCR-P2-01: a label-shaped or empty evidence cell has no readable bytes and
+    // must fail the exit, not only the completeness list.
+    /证据标签非原件/, /证据缺当前原件/,
+    // A ledger whose own declared derivation digest no longer matches the
+    // current decision log is an old checklist, not a complete one.
+    /引用旧清单/,
   ];
   if (report.convergence.gaps.some(gap => EVIDENCE_GAP.some(pattern => pattern.test(String(gap))))) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));

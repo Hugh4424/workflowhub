@@ -828,6 +828,77 @@ describe("ORACLE-P2-BOUND-HANDOFF bound original and named failures", () => {
     expect(readFileSync(path).equals(frozen)).toBe(false);
   });
 });
+// P2/T002 ORACLE-P2-BLOB-BINDING: a confirmation may bind its original to a
+// frozen Git object (`commit:path#blob`). The checker has to prove the blob
+// exists, that the declared commit really carries it, and that the quoted line
+// lives in the blob bytes. Reading the current working tree is not the same
+// fact: it can move after the commit, so the frozen object is authoritative.
+describe("ORACLE-P2-BLOB-BINDING frozen Git object binding", () => {
+  const QUOTE = "允许升一次数据库结构";
+  function blobFixture(options = {}) {
+    const f = fixture(options);
+    const git = args => spawnSync("git", args, { cwd: f.base, encoding: "utf8" });
+    expect(git(["init", "-q"]).status).toBe(0);
+    expect(git(["add", "."]).status).toBe(0);
+    expect(git(["-c", "user.name=p2", "-c", "user.email=p2@example.invalid", "commit", "-qm", "controlled original"]).status).toBe(0);
+    const commit = git(["rev-parse", "HEAD"]).stdout.trim();
+    const relative = f.source.slice(f.base.length + 1);
+    const blob = git(["rev-parse", `HEAD:${relative}`]).stdout.trim();
+    const indexRow = ref => ["# Controlled index", INDEX_HEADER, INDEX_RULE,
+      `| U-901 | 保存转录 | ${QUOTE} | permit | ${ref} | 2026-11-12（原件） | 1 |`, ""].join("\n");
+    writeFileSync(f.index, indexRow(`${commit}:${relative}#${blob}#L7-L7`));
+    return { ...f, git, commit, relative, blob, indexRow };
+  }
+  it("verifies the declared commit:path#blob and reports the binding", () => {
+    const f = blobFixture();
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).toContain("blob binding U-901");
+    expect(result.output).toContain(`${f.commit}:${f.relative}#${f.blob}`);
+    expect(result.output).not.toMatch(new RegExp(FLAGS.join("|")));
+  });
+  it("reads the quoted line from the frozen blob, not from changed working-tree bytes", () => {
+    const f = blobFixture();
+    // The working tree no longer holds the quote; only the frozen blob does.
+    writeFileSync(f.source, `${Array.from({ length: 9 }, (_, number) => `${number + 1}. filler line`).join("\n")}\n`);
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).toContain("blob binding U-901");
+    expect(result.output).not.toMatch(new RegExp(FLAGS.join("|")));
+  });
+  it("rejects a blob that the declared commit path does not carry", () => {
+    const f = blobFixture();
+    const otherBlob = f.git(["rev-parse", `HEAD:quality/evidence/decision-log-refs/requirement-index.md`]).stdout.trim();
+    expect(otherBlob).toMatch(/^[0-9a-f]{40}$/);
+    writeFileSync(f.index, f.indexRow(`${f.commit}:${f.relative}#${otherBlob}#L7-L7`));
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    expect(result.output).toContain("BLOB_MISMATCH");
+  });
+  it("rejects a frozen blob of the decision log itself", () => {
+    const f = blobFixture({ extraLines: ["- 受控标记：`允许升一次数据库结构`（本日志行）"] });
+    const logText = readFileSync(f.log, "utf8");
+    const line = logText.split("\n").findIndex(value => value.includes("受控标记")) + 1;
+    expect(line).toBeGreaterThan(0);
+    const relative = f.log.slice(f.base.length + 1);
+    const logBlob = f.git(["rev-parse", `HEAD:${relative}`]).stdout.trim();
+    expect(logBlob).toMatch(/^[0-9a-f]{40}$/);
+    writeFileSync(f.index, f.indexRow(`${f.commit}:${relative}#${logBlob}#L${line}-L${line}`));
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_SELF_REFERENCE");
+  });
+  it("rejects a blob that does not exist in the repository", () => {
+    const f = blobFixture();
+    writeFileSync(f.index, f.indexRow(`${f.commit}:${f.relative}#${"0".repeat(40)}#L7-L7`));
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    expect(result.output).toContain("BLOB_MISSING");
+  });
+});
+
 // P3 ORACLE-P3-ROLE-SOURCES: a package card must be bound to the role originals
 // that really produced it and to a real package-level user reply. The machine
 // only judges shape and binding; whether the review was good enough is a human
@@ -1130,6 +1201,48 @@ describe("ORACLE-LOG-V2-TERMINAL ten-item design report", () => {
     expect(gap?.message).toContain("风险/回退");
     expect(gap?.message).toContain("owner=包");
     expect(result.exit_code).toBe(0);
+  });
+});
+
+// P10 ORACLE-AC-NUMBER-NORMALIZATION: one AC identity has two legal spellings in
+// the materials (AC-P3-001 and AC-P3-1). The reader normalizes to three digits
+// and de-duplicates before printing, then reconciles the whole log against the
+// spec's AC list so a missing or invented AC is named instead of hiding behind
+// a per-package count. Report-only facts; the old-shape advisory exit is kept.
+describe("ORACLE-AC-NUMBER-NORMALIZATION normalized ids and spec reconciliation", () => {
+  const markdown = ["# Controlled", "", "## 4. 每包设计", "",
+    "### 4.3 decision-maker", "", "- **验收**：AC-P3-001、AC-P3-1、AC-P3-2。", "",
+    "### 4.5 修复循环", "", "- **验收**：AC-P5-002、AC-P5-1、AC-P5-2。", "", ""].join("\n");
+  const spec = ["# Controlled specification", "",
+    "- **AC-P3-001** 甲。", "- **AC-P3-002** 乙。", "- **AC-P3-003** 丙。",
+    "- **AC-P5-001** 丁。", "- **AC-P5-002** 戊。", ""].join("\n");
+  it("normalizes AC-P3-1 and AC-P3-001 to one padded identity", () => {
+    const result = checkDecisionLogChain({ markdown, spec_markdown: spec });
+    expect(result.design_packages.map(pkg => pkg.acs)).toEqual([
+      ["AC-P3-001", "AC-P3-002"],
+      ["AC-P5-002", "AC-P5-001"],
+    ]);
+    expect(result.exit_code).toBe(0);
+  });
+  it("reconciles the log against the spec and names uncovered and unresolved ACs", () => {
+    const result = checkDecisionLogChain({ markdown, spec_markdown: spec });
+    expect(result.ac_reconciliation).toMatchObject({ spec_count: 5, uncovered: ["AC-P3-003"], unresolved: [] });
+    expect(result.ac_reconciliation.log_acs).toEqual(["AC-P3-001", "AC-P3-002", "AC-P5-002", "AC-P5-001"]);
+    expect(result.warnings.find(item => item.code === "spec_ac_uncovered")?.message).toContain("AC-P3-003");
+    const invented = checkDecisionLogChain({ markdown: markdown.replace("AC-P3-2", "AC-P3-9"), spec_markdown: spec });
+    expect(invented.ac_reconciliation.unresolved).toEqual(["AC-P3-009"]);
+    expect(invented.warnings.find(item => item.code === "design_ac_unresolved")?.message).toContain("AC-P3-009");
+  });
+  it("prints the reconciliation through the real CLI next to spec.md", () => {
+    const dir = temp("ac-reconcile-");
+    const log = join(dir, "specs/p2-fixture/decision-log.md");
+    mkdirSync(dirname(log), { recursive: true });
+    writeFileSync(join(dirname(log), "spec.md"), spec);
+    writeFileSync(log, markdown);
+    const result = run(log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).toContain("AC reconciliation: spec 5 distinct, log 4 distinct");
+    expect(result.output).toContain("uncovered AC-P3-003");
   });
 });
 

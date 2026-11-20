@@ -888,7 +888,7 @@ workflowhub 的开发任务质量差、build-code 浪费大、上一轮方案没
 - `raw/research-enforcement.md`、`research-provenance.md`、`research-build-cost.md`、`research-traceability.md`：执行/证据/成本/追溯审计。
 - `raw/disk-facts.md`、`cleanup-batch1.md`、`cleanup-batch2.md`、`resource-inventory.md`、`phase0-history.md`：磁盘、清理、资源、Phase 0 历史。
 - `quality/evidence/decision-log-refs/four-checks-2026-11-19.md`、`chain-checks-2026-11-19.md`：四查、链检查。
-- 需求索引：`quality/evidence/decision-log-refs/requirement-index.md`（需求 1–14、U 答复、旧 R 映射、AC 与证据 sha 的落点）。
+- 需求索引（任务库绝对路径，按任务库根解析、不按工作树相对路径解析）：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/execution-quality-build-code-hardening-20261119/quality/evidence/decision-log-refs/requirement-index.md`（需求 1–14、U 答复、旧 R 映射、AC 与证据 sha 的落点）。
 
 ### 6.2 设计产物
 

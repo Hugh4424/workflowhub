@@ -308,7 +308,7 @@ describe('five-column status table names unconverged packages', () => {
       coldFixtureFiles(put, task);
       put(task, ref, rows + (tail === undefined ? validTail() : tail));
       const invoke = json => spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, ...(json ? ['--json'] : [])], { encoding:'utf8' });
-      check({ invoke });
+      check({ invoke, put, task });
     } finally { rmSync(root, { recursive:true }); }
   }
   const header = '| 包 | 状态 | 五段表位置 | 证据 | 未决 |\n| --- | --- | --- | --- | --- |\n';
@@ -333,12 +333,33 @@ describe('five-column status table names unconverged packages', () => {
     expect(text.status).not.toBe(0);
     expect(text.stdout).toContain('未收敛：1 controlled');
   }));
-  it('exits 0 when every five-column package is 已收敛 with its own cold read', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+  // TCR-P2-01: the positive case now reads a real original in the evidence cell;
+  // a label has no bytes and is exercised by the next case instead of passing.
+  it('exits 0 when every five-column package is 已收敛 with a readable original and its own cold read', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | `quality/evidence/decision-log-refs/package-1-evidence.md` | 无 |\n| 2 second | 已收敛 | details§2 | `quality/evidence/decision-log-refs/package-2-evidence.md` | 无 |\n', ({ invoke, put, task }) => {
+    put(task, 'quality/evidence/decision-log-refs/package-1-evidence.md', '包 1 的真实原件字节。\n');
+    put(task, 'quality/evidence/decision-log-refs/package-2-evidence.md', '包 2 的真实原件字节。\n');
     const result = invoke(true);
     expect(result.status).toBe(0);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.gaps).toEqual([]);
     expect(report.convergence.complete).toBe(true);
+    expect(report.modules.map(row => row.evidence.present)).toEqual([true, true]);
+  }));
+  // TCR-P2-01 old → new assertion: the frozen five-column oracle used to accept
+  // `ev-1` with gaps=[] and complete=true. It now names the label and fails.
+  it('names label-shaped and empty evidence cells as gaps and exits non-zero', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 |  | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(1);
+    const report = JSON.parse(result.stdout);
+    expect(report.modules[0].evidence).toMatchObject({ ref: 'ev-1', present: null, label: true });
+    expect(report.convergence.gaps).toEqual(expect.arrayContaining([
+      '证据标签非原件：包 1 ev-1 没有可读字节，不按原件计',
+      '证据缺当前原件：包 2 证据格为空，未读到字节',
+    ]));
+    expect(report.convergence.complete).toBe(false);
+    const text = invoke(false);
+    expect(text.status).toBe(1);
+    expect(text.stdout).toContain('证据标签非原件：包 1 ev-1');
   }));
   it('reports a five-column 已收敛 package without a cold read in gaps and exits 1', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
     const result = invoke(true);
@@ -1701,14 +1722,47 @@ describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', 
     expect(report.errors).toEqual([]);
   });
 
-  it('reports a label-shaped evidence cell as a label rather than as a read original', () => {
-    const { report } = runCheck({ decision: current, ledger: ledgerFor('ev-1') });
-    // The frozen five-column oracle accepts `ev-1` with an empty gap list, so a
-    // label cannot be upgraded to a named gap without a TCR; it is reported as
-    // label=true / present=null instead of silently passing as a read original.
+  // A v2 ledger carries no version field; its own derivation sentence is the
+  // only marker. When that sentence names the decision log and a sha256, the
+  // check aligns it with the bytes it just read and an old pointer is a named
+  // gap. This replaces the old "old and current are physically
+  // indistinguishable" limit with an actual refusal.
+  it('names a checklist whose declared derivation digest is an older decision log', () => {
+    const oldDigest = sha('# an older decision log');
+    const derivation = `- 派生来源：工作树 \`${'a'.repeat(40)}\` 的 \`specs/p2-controlled/decision-log.md\`（sha256 \`${oldDigest}\`）。\n`;
+    const { status, report } = runCheck({ decision: current, ledger: derivation + ledgerFor(`\`${evidenceRef}\``) });
+    const gap = report.convergence.gaps.find(value => String(value).startsWith('引用旧清单：'));
+    expect(gap, '旧清单必须具名').toBeDefined();
+    expect(gap).toContain(oldDigest);
+    expect(gap).toContain('与当前 decision-log 字节');
+    expect(report.convergence.complete).toBe(false);
+    expect(status).toBe(1);
+  });
+
+  it('keeps a checklist whose declared derivation digest matches the current decision log', () => {
+    const derivation = `- 派生来源：工作树 \`${'b'.repeat(40)}\` 的 \`specs/p2-controlled/decision-log.md\`（sha256 \`${sha(current)}\`）。\n`;
+    const { status, report } = runCheck({ decision: current, ledger: derivation + ledgerFor(`\`${evidenceRef}\``) });
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+    expect(status).toBe(0);
+  });
+
+  it('publishes the AC-narrowing boundary when the checklist declares no derivation', () => {
+    const { report } = runCheck({ decision: current });
+    expect(report.limits.join('\n')).toContain('清单未自述派生来源');
+    expect(report.limits.join('\n')).toContain('AC 需收窄');
+  });
+
+  it('names a label-shaped evidence cell as a gap instead of a read original', () => {
+    const { status, report } = runCheck({ decision: current, ledger: ledgerFor('ev-1') });
+    // TCR-P2-01: a label carries no bytes. It is reported as label=true /
+    // present=null, becomes a named gap, and the exit fails; it is never a
+    // complete row that only happens to look bound.
     expect(report.modules[0].evidence).toMatchObject({ ref: 'ev-1', present: null, label: true });
     expect(report.modules[0].evidence.digest).toBeUndefined();
-    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.gaps).toContain('证据标签非原件：包 1 ev-1 没有可读字节，不按原件计');
+    expect(report.convergence.complete).toBe(false);
+    expect(status).toBe(1);
   });
 
   it('keeps the legacy WPn package control on its previous result', () => {
@@ -1736,7 +1790,11 @@ describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', 
     // boundary is published in the report's limits.
     const duplicatePointer = runCheck({ decision: `${legacy}\n清单：\`quality/evidence/another-convergence-checklist.md\`\n` }).report;
     expect(duplicatePointer.convergence.gaps).toContain('收敛清单指针未取得');
-    expect(duplicatePointer.limits.join('\n')).toContain('旧清单与当前清单物理不可区分');
+    // Two declared pointers mean no unique ledger pointer, so no version can be
+    // read here. The old "old and current are physically indistinguishable" limit
+    // is gone; the AC-narrowing boundary is published on the readable-ledger case
+    // by the dedicated test below.
+    expect(duplicatePointer.limits.join('\n')).toContain('未取得唯一清单指针，未判版本');
   });
 
   it('names the wrong package instead of reporting the same bytes as converged', () => {
@@ -1782,5 +1840,142 @@ describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', 
     const second = runCheck({ decision: current });
     expect(first.report.modules[0].source_digest).toBe(frozenChecklist);
     expect(second.report.modules[0].source_digest).toBe(first.report.modules[0].source_digest);
+  });
+});
+
+// ORACLE-P1-RECEIPT-BYTES / ORACLE-P1-RECEIPT-SWAP: the current read receipt
+// binds the skill bytes plus the task/stage/step identity. The captured
+// --commit is provenance only, so a later code snapshot must not make the read
+// stale while changed skill bytes must. Every counterexample below uses two
+// real `captureCommand` runs, never a hand-written receipt; deleting
+// `laterSkillReadReceipt` turns the later-receipt case red.
+describe('ORACLE-P1-RECEIPT-BYTES receipt binds bytes and identity, not HEAD', () => {
+  const skill = 'workflows/make-decision/SKILL.md';
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const seedCompletedStep = f => {
+    const ref = 'quality/evidence/2026-11-21-001-receipt-observation.json';
+    f.put(f.task, ref, { task_id: 'card-case', source: 'workflows/make-decision/steps.json', step_slug: 'current-step', phase: 'P1',
+      reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+      criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [], created_at: '2026-02-01T00:00:00.000Z' });
+    f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+      source: 'controlled', evidence: { value: [{ ref, source: 'workflows/make-decision/steps.json', step_slug: 'current-step' }] } }]
+      .map(row => JSON.stringify(row)).join('\n') + '\n');
+  };
+  const capture = async (f, slug, argv1 = entry) => {
+    const { openTask } = await import('../../runtime/task/task-handle.mjs');
+    const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+    const read = await task.captureCommand({ cwd: f.repo, slug, argv: [process.execPath, argv1,
+      `--read-step-skill=${skill}`, '--stage=make-decision', '--step=1',
+      `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+    expect(read.exit_code, '受控前置：真实捕获必须成功').toBe(0);
+    return read;
+  };
+  // A declared skill read resolves workflows/<stage>/SKILL.md from the package
+  // root the checker itself lives in. To change those bytes without touching the
+  // real checkout, run a byte copy of the checker from the controlled package
+  // root with the runtime linked in.
+  const fixtureChecker = f => {
+    const tool = join(f.repo, 'tools/cli/check-stage-steps.mjs');
+    mkdirSync(dirnameOf(tool), { recursive: true });
+    writeFileSync(tool, readFileSync(entry));
+    if (!existsSync(join(f.repo, 'runtime'))) symlinkSync(resolve('runtime'), join(f.repo, 'runtime'), 'dir');
+    writeFileSync(join(f.repo, 'runtime-link.txt'), 'runtime is linked from the real checkout\n');
+    return tool;
+  };
+  const invokeWith = (tool, f, args) => {
+    const result = spawnSync(process.execPath, [
+      tool, `--task-path=${f.task}`, `--material-root=${f.materials}`, `--repo-root=${f.repo}`, ...args, '--json',
+    ], { cwd: f.repo, encoding: 'utf8' });
+    return { ...result, report: JSON.parse(result.stdout) };
+  };
+  const flags = receiptRef => ['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${receiptRef}`];
+  const stepOf = result => result.report.stages[0].steps[0];
+
+  it('keeps the receipt valid after the code snapshot advances', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const read = await capture(f, 'receipt-old-head');
+      const before = f.invoke(flags(read.receipt_ref));
+      expect(stepOf(before).state, '受控前置：同一 HEAD 下回执应完成本步').toBe('completed');
+      // A new code snapshot that does not touch the materials: HEAD moves, the
+      // skill bytes do not. The captured commit is not compared, so the receipt
+      // must stay valid.
+      f.put(f.repo, 'later-code-snapshot.txt', 'later code snapshot\n');
+      for (const args of [['add', '.'], ['-c', 'user.name=Controlled fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'later code snapshot']]) {
+        const git = spawnSync('git', args, { cwd: f.repo, encoding: 'utf8' });
+        expect(git.status, git.stderr).toBe(0);
+      }
+      const newHead = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: f.repo, encoding: 'utf8' }).stdout.trim();
+      expect(newHead).not.toBe(f.head);
+      const after = f.invoke(flags(read.receipt_ref));
+      expect(stepOf(after).state, '提交后回执仍有效：代码快照变化本身不使回执 stale').toBe('completed');
+      expect(JSON.stringify(stepOf(after))).not.toContain('不是当前真实 HEAD');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects the receipt when the declared skill bytes change', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const tool = fixtureChecker(f);
+      const read = await capture(f, 'receipt-bytes-change', tool);
+      expect(stepOf(invokeWith(tool, f, flags(read.receipt_ref))).state, '受控前置：同字节下回执应完成本步').toBe('completed');
+      // The declared skill file changes after the read: the receipt is stale.
+      f.put(f.repo, skill, '# Controlled\n## 方法\nChanged skill bytes after the read.\n');
+      const stale = invokeWith(tool, f, flags(read.receipt_ref));
+      expect(stepOf(stale).state, '技能字节变化后回执必须 stale').not.toBe('completed');
+      expect(JSON.stringify(stepOf(stale))).toContain('当前实际技能哈希');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects two real captures whose output originals are swapped', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const first = await capture(f, 'receipt-swap-first');
+      await sleep(50);
+      const second = await capture(f, 'receipt-swap-second');
+      const firstPath = first.receipt_ref, secondPath = second.receipt_ref;
+      const firstRecord = JSON.parse(readFileSync(firstPath, 'utf8'));
+      const secondRecord = JSON.parse(readFileSync(secondPath, 'utf8'));
+      writeFileSync(firstPath, JSON.stringify({ ...firstRecord, output_ref: secondRecord.output_ref }, null, 2) + '\n');
+      const swapped = f.invoke(flags(first.receipt_ref));
+      expect(stepOf(swapped).state, '互换原输出后回执必须被拒').not.toBe('completed');
+      expect(JSON.stringify(stepOf(swapped))).toContain('读取时点不在该捕获区间');
+      // Control: the untouched second receipt still completes the step.
+      expect(stepOf(f.invoke(flags(second.receipt_ref))).state).toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects a real capture made for another task', async () => {
+    const a = p1CurrentCardFixture({ singleStep: true });
+    const b = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(a); seedCompletedStep(b);
+      const read = await capture(a, 'receipt-cross-task');
+      const relativeRef = read.receipt_ref.slice(a.task.length + 1);
+      b.put(b.task, relativeRef, JSON.parse(readFileSync(read.receipt_ref, 'utf8')));
+      const result = b.invoke(flags(relativeRef));
+      expect(stepOf(result).state, '跨任务回执必须被拒').not.toBe('completed');
+      expect(JSON.stringify(stepOf(result))).toContain('捕获任务根不是当前任务');
+    } finally {
+      rmSync(a.root, { recursive: true, force: true });
+      rmSync(b.root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an earlier real capture when a later same-step capture exists', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const earlier = await capture(f, 'receipt-earlier');
+      await sleep(50);
+      const later = await capture(f, 'receipt-later');
+      const blocked = f.invoke(flags(earlier.receipt_ref));
+      expect(stepOf(blocked).state, '存在更晚同步骤回执时,更早件不得完成本步').not.toBe('completed');
+      expect(JSON.stringify(stepOf(blocked))).toContain('存在更晚的同步骤读取回执');
+      expect(stepOf(f.invoke(flags(later.receipt_ref))).state, '最新回执仍是当前读取').toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });
