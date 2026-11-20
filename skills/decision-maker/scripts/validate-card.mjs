@@ -205,7 +205,7 @@ function containsToken(text, token) {
 /**
  * @param {{cardPath: string, bind?: boolean, packageDir?: string}} options
  * @returns {{file:string, ok:boolean, missing:string[], fourMissing:string[],
- *   acceptMissing:string[], acceptEmpty:string[], reasons:string[], gaps:string[],
+ *   acceptMissing:string[], acceptEmpty:string[], reasons:string[], gaps:string[], warnings:string[],
  *   cardVersion:string, answer:{source_id:string|null, pack:string|null, path:string|null}}}
  */
 export function validateCard({ cardPath, bind = false, packageDir = null } = {}) {
@@ -215,6 +215,9 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   const values = rowValues(body);
   const reasons = [];
   const gaps = [];
+  // 文件 mtime 不是 provenance：恢复备份、拷进任务库、git checkout 都会刷新它。
+  // 只把 mtime 当 advisory 提示，判定只用可解析、不是未来时间与卡末调用一致三项。
+  const warnings = [];
 
   const missing = CARD_ROWS.filter((name) => !values.has(name));
   const fourMissing = SUPPORT_ITEMS.filter((item) => !(values.get('配套与影响') ?? '').includes(item));
@@ -295,7 +298,9 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
           if (Number.isNaN(stamp)) reasons.push(`派发时间不可解析：${key}（${dispatched}）`);
           else if (stamp > Date.now()) reasons.push(`派发时间在未来：${key}（${dispatched}）`);
           else if (stamp > written + 1000) {
-            reasons.push(`派发时间晚于原件写盘：${key}（声明 ${dispatched}，文件 mtime ${new Date(written).toISOString()}）`);
+            // advisory only: mtime 可被恢复备份、拷贝、git checkout 刷新，
+            // 也可能被自填的较早时间绕过；它不构成失败依据。
+            warnings.push(`派发时间晚于原件 mtime（advisory，不判失败）：${key}（声明 ${dispatched}，文件 mtime ${new Date(written).toISOString()}；mtime 不是证据）`);
           }
         }
       }
@@ -355,7 +360,7 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   }
 
   const ok = reasons.length === 0 && gaps.length === 0;
-  return { file, ok, missing, fourMissing, acceptMissing, acceptEmpty, reasons, gaps, cardVersion: cardVersion(text), answer };
+  return { file, ok, missing, fourMissing, acceptMissing, acceptEmpty, reasons, gaps, warnings, cardVersion: cardVersion(text), answer };
 }
 
 function main() {
@@ -400,6 +405,8 @@ function main() {
     console.error(`fail: ${result.file}`);
     for (const line of [...result.reasons, ...result.gaps]) console.error(`- ${line}`);
   }
+  // Advisory 不是失败：mtime 比较只提示，不改变退出码。
+  for (const line of result.warnings ?? []) console.error(`warning: ${line}`);
   process.exit(result.ok ? 0 : 1);
 }
 

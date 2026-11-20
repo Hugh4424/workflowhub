@@ -38,7 +38,7 @@
 
 - 卡版本：`node skills/decision-maker/scripts/validate-card.mjs <card.md> --version`
 - 四份角色原件必须是四个不同文件，各自写 `agent:` 与 `dispatched_at:`，合起来等于卡末的 `调用=` 值；
-  `dispatched_at` 用真实派发时刻，不得晚于该原件的写盘时间，也不得是未来时间。
+  `dispatched_at` 用真实派发时刻，须可解析且不是未来时间；文件 mtime 不是证据，校验只作 advisory 提示，不判失败。
 - 审查原件另写 `reviewer:`、`designer:`、`reviewed_card_sha256:` 三行，值与卡末一致。
 - 机器只判形状（四件齐不齐、卡版本对不对、身份是否不同人、答复原话在不在原件里）；审查质量与方案是否成立归人读。
 - 只有引用用户答复时才写 source_id／modality／来源身份三行；缺一即来源不可验证。

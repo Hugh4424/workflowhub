@@ -1174,7 +1174,14 @@ const READINESS_RUNNER = "build-code run --action=execute first step";
 function latestReadiness(context, phaseId) {
   const dir = join(context.task.taskPath, "quality", "tests");
   let names;
-  try { names = readdirSync(dir); } catch { return null; }
+  // ENOENT is the only "no prior original" case. Any other read error
+  // (EACCES/EPERM/EMFILE...) is a named failure, never a first-run pass.
+  try { names = readdirSync(dir); }
+  catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new Error(`ORACLE-PHASE-READINESS: cannot read readiness originals in ${dir} `
+      + `(${error.code ?? error.message}); refusing to treat it as a first run`);
+  }
   const pattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-\\d{3}-readiness-${phaseId.toLowerCase()}(-stale)?\\.json$`);
   const matches = names.filter((name) => pattern.test(name)).sort();
   if (matches.length === 0) return null;

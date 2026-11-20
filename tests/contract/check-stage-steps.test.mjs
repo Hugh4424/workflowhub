@@ -1493,6 +1493,28 @@ describe('P7 terminal current-proof regression', () => {
       expect(result.report.stages[0].steps[0].state).toBe('completed');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
+  it('keeps a >512KB capture unresolved instead of treating it as no later read', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { markdown: false });
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const read = await task.captureCommand({ cwd: f.repo, slug: 'p7-skill-read-large', argv: [process.execPath, entry,
+        '--read-step-skill=workflows/make-decision/SKILL.md', '--stage=make-decision', '--step=1',
+        `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+      expect(read.exit_code).toBe(0);
+      const flags = ['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${read.receipt_ref}`];
+      expect(f.invoke(flags).report.stages[0].steps[0].state, '受控前置：正常回执应可完成').toBe('completed');
+      // The marker sits beyond the old 16KB head read, so only a whole-file
+      // (chunked) scan can see that this might be a later read.
+      const padded = '{"padding":"' + 'a'.repeat(700 * 1024) + '","argv":["node","check-stage-steps.mjs",'
+        + '"--read-step-skill=workflows/make-decision/SKILL.md","--stage=make-decision","--step=1"]}\n';
+      writeFileSync(join(f.task, 'quality/tests/2026-11-20-large-possible-later-capture.json'), padded);
+      const blocked = f.invoke(flags);
+      expect(blocked.report.stages[0].steps[0].state, '超大捕获可能更晚时不得完成').not.toBe('completed');
+      expect(JSON.stringify(blocked.report)).toContain('无法核对');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
   it.each([['small', '小改动'], ['normal', '普通任务'], ['planning', '规划任务']])('clears an actual completed gap using the active %s flow source', async (flow, label) => {
     const f = p1CurrentCardFixture({ singleStep: true });
     try {

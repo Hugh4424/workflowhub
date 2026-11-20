@@ -1046,7 +1046,7 @@ describe("ORACLE-P3-ROLE-SOURCES bound card, wrong source and wrong bytes", () =
     expect(finding.acceptEmpty).toContain("失败");
   });
 
-  it("rejects a dispatch time written after the original was saved", () => {
+  it("reports a dispatch time after the original mtime as advisory, not a failure", () => {
     const pkg = p3Package();
     const saved = new Date(Date.now() - 3600_000);
     const dispatched = new Date(Date.now() - 1800_000).toISOString();
@@ -1057,8 +1057,12 @@ describe("ORACLE-P3-ROLE-SOURCES bound card, wrong source and wrong bytes", () =
       .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
     const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
     const finding = JSON.parse(run.stdout);
-    expect(run.status).toBe(1);
-    expect(finding.reasons.join("\n")).toContain("派发时间晚于原件写盘");
+    // mtime 不是证据：恢复备份/拷贝/git checkout 都会刷新它，因此只作 warning。
+    expect(run.status).toBe(0);
+    expect(finding.ok).toBe(true);
+    expect(finding.warnings.join("\n")).toContain("派发时间晚于原件 mtime");
+    expect(finding.warnings.join("\n")).toContain("mtime 不是证据");
+    expect(finding.reasons.join("\n")).not.toContain("派发时间晚于");
   });
 
   it("keeps a named gap in status when a role original is missing", () => {

@@ -389,6 +389,21 @@ it.skipIf(!nonRoot)("ORACLE-PHASE-READINESS: 只有 error.code=EACCES 才归权�
   expect.soft(normalRun.stderr).not.toMatch(/permission-unobservable/i);
 });
 
+it.skipIf(!nonRoot)("ORACLE-PHASE-READINESS: 读不到就绪原件目录按具名失败，不当作首次就绪", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  const testsDir = join(fixture.taskDir, "quality", "tests");
+  mkdirSync(testsDir, { recursive: true });
+  chmodSync(testsDir, 0o000);
+  try {
+    const run = fixture.runEntry(cursorInput());
+    expect.soft(run.exit, `${ORACLE}: 读目录失败必须非零；实际 ${summarise(run)}`).not.toBe(0);
+    // EACCES must be named with the directory; it is not "this is the first run".
+    expect.soft(run.stderr).toMatch(/cannot read readiness originals/i);
+    expect.soft(run.stderr).toMatch(/EACCES/);
+    expect.soft(fixture.factsBytes().length, "读目录失败后不得写派发行").toBe(0);
+  } finally { chmodSync(testsDir, 0o700); }
+});
+
 it("ORACLE-PHASE-READINESS: 重复入口不重跑探针、不新增原件、source 不重复", () => {
   const fixture = entryFixture({ probe: PASSING_PROBE });
   const first = fixture.runEntry(cursorInput());
@@ -444,11 +459,16 @@ it("ORACLE-PHASE-READINESS: 人判行在前时材料侧仍按机器探针对齐"
   expect.soft(check.stdout).not.toMatch(/drift/i);
 });
 
-it("ORACLE-PHASE-READINESS: 省略 --stage 时非 archive 的有 Phase 材料按 build-code 判无表", () => {
+it("ORACLE-PHASE-READINESS: 省略 --stage 时按 build-code 只诊断，缺表不改变退出码", () => {
   const noTable = entryFixture({ probe: PASSING_PROBE, readiness: false });
   const inferred = runChecks(noTable, "infer");
-  expect.soft(inferred.status, `省略 --stage 不得静默放行：${inferred.stdout.slice(-600)} ${inferred.stderr.slice(-200)}`).not.toBe(0);
-  expect.soft(inferred.stdout).toMatch(/missing readiness table/i);
-  // Archive materials keep the diagnostic behavior (covered by n10 material tests);
-  // a phased non-archive fixture is the new inferred build-code case above.
+  expect.soft(inferred.status, `省略 --stage 只诊断、不改退出码：${inferred.stdout.slice(-600)} ${inferred.stderr.slice(-200)}`).toBe(0);
+  expect.soft(inferred.stdout).toMatch(/declared=false/);
+  expect.soft(inferred.stdout).toMatch(/diagnostic only|allows no readiness table/i);
+  // Only an explicit --stage=build-code enforces the missing table (case above).
+  const explicit = runChecks(noTable, "build-code");
+  expect.soft(explicit.status, "显式 --stage=build-code 缺表必须非零").not.toBe(0);
+  expect.soft(explicit.stdout).toMatch(/missing readiness table/i);
+  // Archive materials and arbitrary helper directories keep the old diagnostic
+  // behavior; nothing is inferred into a dispatch gate.
 });

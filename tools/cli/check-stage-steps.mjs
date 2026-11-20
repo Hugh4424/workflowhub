@@ -744,8 +744,28 @@ function cardSkillRef({ taskPath, materialRoot, repoRoot, name, stepId, commit }
 }
 // A passed receipt is stale when a later capture for the same stage/step exists.
 // The later record is never selected as the current identity; it only proves the
-// passed one is older. An unreadable capture with the read marker is unresolved
-// rather than silently skipped, because it could be the later read.
+// passed one is older. Any capture that carries the read marker but cannot be
+// structurally checked stays unresolved rather than silently skipped, because
+// it could be the later read.
+// Large captures are scanned in chunks (with a marker-length overlap) so a
+// marker beyond the head is still found; only a marker absent from the whole
+// file means this file cannot be a later read and is safe to skip.
+function captureMentionsSkillRead(path) {
+  const marker = Buffer.from('--read-step-skill=', 'utf8');
+  const chunkBytes = 64 * 1024;
+  const fd = openSync(path, 'r');
+  try {
+    const buffer = Buffer.alloc(chunkBytes);
+    let carry = Buffer.alloc(0);
+    for (;;) {
+      const read = readSync(fd, buffer, 0, buffer.length, null);
+      if (read <= 0) return false;
+      const window = carry.length ? Buffer.concat([carry, buffer.subarray(0, read)]) : buffer.subarray(0, read);
+      if (window.includes(marker)) return true;
+      carry = Buffer.from(window.subarray(Math.max(0, window.length - (marker.length - 1))));
+    }
+  } finally { closeSync(fd); }
+}
 function laterSkillReadReceipt(taskPath, passedRef, name, stepId, declaredFile, declaredAnchor, passedEnded) {
   if (!Number.isFinite(passedEnded) || typeof taskPath !== 'string' || !isAbsolute(taskPath)) return null;
   let names;
@@ -758,13 +778,10 @@ function laterSkillReadReceipt(taskPath, passedRef, name, stepId, declaredFile, 
     let text;
     try {
       if (statSync(resolve(taskPath, ref)).size > 512 * 1024) {
-        const fd = openSync(resolve(taskPath, ref), 'r');
-        try {
-          const buffer = Buffer.alloc(16384);
-          const read = readSync(fd, buffer, 0, buffer.length, 0);
-          text = buffer.subarray(0, read).toString('utf8');
-        } finally { closeSync(fd); }
-        if (!text.includes('--read-step-skill=')) continue;
+        // Too large to parse as a receipt, but never silently skipped: a marker
+        // anywhere in the bytes keeps this capture unresolved (unknown), since
+        // it could be the later same-step read.
+        if (!captureMentionsSkillRead(resolve(taskPath, ref))) continue;
         return `存在无法核对的读取捕获 ${ref}（超过 512KB 且未完整解析）；不能证明本次回执是最新`;
       }
       text = readFileSync(resolve(taskPath, ref), 'utf8');
