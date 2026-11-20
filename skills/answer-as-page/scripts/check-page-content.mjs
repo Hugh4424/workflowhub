@@ -10,10 +10,25 @@ import { createHash } from 'node:crypto';
 import { join, resolve, isAbsolute } from 'node:path';
 import { buildPageData } from './build-page-data.mjs';
 
-const USAGE = 'usage: --task-path <root> --report <report> [--material-root <dir>] [--html-path <file> --nodes-path <file>]';
+const USAGE = 'usage: --task-path <root> --report <report> [--material-root <dir>] [--html-path <file> --nodes-path <file>] [--expect-html-sha256 <hex>] [--expect-nodes-sha256 <hex>]';
 const TITLE_BAD = /^缺[：:]|未取得/;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/;
 const TONES = new Set(['ok', 'accent', 'fail', 'unk']);
+// Each reported check is the reduction of the error codes actually observed on
+// that axis; a check can only be true when its axis produced no error. An error
+// code that is not listed here is a classification defect: it stays visible in
+// `errors` and forces `structure` false (fail closed) instead of leaving every
+// axis true on a page the checker rejected.
+const CHECK_FAILURES = Object.freeze({
+  structure: ['STRUCTURE_MISSING', 'TITLE_UNSTABLE', 'MISSING_HTML', 'MISSING_SIDECAR'],
+  sources: ['MISSING_SOURCE'],
+  pointers: ['POINTER_MISMATCH'],
+  pair_fingerprint: ['FINGERPRINT_MISMATCH', 'SIDECAR_MISMATCH', 'STALE_PAGE', 'DELIVERY_BYTES_MISMATCH', 'DELIVERY_BYTES_UNREADABLE'],
+  contract: ['CONTRACT'],
+  level: ['LEVEL_MISMATCH'],
+  derived_model: ['MODEL_MISMATCH', 'STALE_STAGE', 'COMMAND_CONFLICT', 'PACKAGE_RECONCILE', 'AC_UNBOUND', 'WRITESET_FAKE'],
+});
+const CLASSIFIED_CODES = new Set(Object.values(CHECK_FAILURES).flat());
 const digest = value => createHash('sha256').update(value).digest('hex');
 const parseData = html => JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(html ?? '')?.[1]);
 const sidecarNodes = objects => [...new Set(objects.map(o => o.kind))].map(kind => ({
@@ -49,7 +64,7 @@ function modelProjection(data) {
   };
 }
 
-export async function checkPageContent({ taskPath, reportPath, materialRoot, htmlPath, nodesPath, candidate, callerFingerprint }) {
+export async function checkPageContent({ taskPath, reportPath, materialRoot, htmlPath, nodesPath, candidate, callerFingerprint, expectHtmlSha256, expectNodesSha256 }) {
   // Caller-supplied models cannot be compared with current materials; they still
   // pass structure/source/pointer checks and their own report/decision fingerprint.
   const derived = callerFingerprint ? null : await buildPageData({ taskPath, reportPath });
@@ -250,18 +265,45 @@ export async function checkPageContent({ taskPath, reportPath, materialRoot, htm
   for (const scope of ring6?.write_set ?? []) {
     if (typeof scope !== 'string' || !index.includes(scope.replace(/[*].*$/, ''))) add('WRITESET_FAKE', `环6写集不在当前索引：${scope}`);
   }
-  return { ok: errors.length === 0, errors, warnings, stage: pageData?.stageLabel ?? null, task: pageData?.task ?? null, mode: callerFingerprint ? 'caller' : 'derived', checks: { structure: true, sources: true, pointers: true, pair_fingerprint: true, derived_model: Boolean(derived), contract: Boolean(derived), level: Boolean(derived) }, fingerprint_checked: Boolean(derived), pair_fingerprint_checked: true };
+  // Browser acceptance must observe the delivered bytes, not a copy of them.
+  // The observation registers the delivered pair's sha256 before opening the
+  // page and passes the same values here afterwards; the served copy is read
+  // back and compared, so an observation of another render cannot pass as an
+  // observation of this delivery.
+  const fileBytes = path => {
+    if (!path || !existsSync(path)) return null;
+    try { return readFileSync(path); } catch { return null; }
+  };
+  const htmlBytes = fileBytes(htmlPath), nodesBytes = fileBytes(nodesPath);
+  const delivery = { html_sha256: htmlBytes ? digest(htmlBytes) : null, nodes_sha256: nodesBytes ? digest(nodesBytes) : null };
+  for (const [label, expected, actual] of [['HTML', expectHtmlSha256, delivery.html_sha256], ['侧车', expectNodesSha256, delivery.nodes_sha256]]) {
+    if (expected === undefined) continue;
+    if (!/^[a-f0-9]{64}$/.test(String(expected))) { add('DELIVERY_BYTES_MISMATCH', `${label} 登记 sha256 不是 64 位小写十六进制：${expected}`); continue; }
+    if (actual === null) { add('DELIVERY_BYTES_UNREADABLE', `${label} 交付字节不可读，无法与登记 sha256 比对：${expected}`); continue; }
+    if (actual !== expected) add('DELIVERY_BYTES_MISMATCH', `${label} 交付字节与登记 sha256 不一致：登记 ${expected}，实读 ${actual}`);
+  }
+  const failedCodes = new Set(errors.map(error => error.code));
+  const unclassified = [...failedCodes].filter(code => !CLASSIFIED_CODES.has(code)).sort();
+  const checks = Object.fromEntries(Object.entries(CHECK_FAILURES).map(([axis, codes]) => [axis, !codes.some(code => failedCodes.has(code))]));
+  // Derivation-only axes cannot pass when no derivation ran (caller models).
+  if (!derived) for (const axis of ['derived_model', 'contract', 'level']) checks[axis] = false;
+  if (unclassified.length) {
+    checks.structure = false;
+    warn('UNCLASSIFIED_ERROR', `错误码未归入任何检查面（按结构失败处理）：${unclassified.join('、')}`);
+  }
+  return { ok: errors.length === 0, errors, warnings, stage: pageData?.stageLabel ?? null, task: pageData?.task ?? null, mode: callerFingerprint ? 'caller' : 'derived', checks, delivery, fingerprint_checked: Boolean(derived), pair_fingerprint_checked: Boolean(htmlPath && nodesPath) };
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const values = {};
+  const options = ['--task-path', '--report', '--material-root', '--html-path', '--nodes-path', '--expect-html-sha256', '--expect-nodes-sha256'];
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
-    if (!['--task-path', '--report', '--material-root', '--html-path', '--nodes-path'].includes(key) || argv[index + 1] === undefined) throw new Error(USAGE);
+    if (!options.includes(key) || argv[index + 1] === undefined) throw new Error(USAGE);
     values[key.slice(2)] = argv[index + 1];
   }
   if (!values['task-path'] || !values.report) throw new Error(USAGE);
-  const result = await checkPageContent({ taskPath: resolve(values['task-path']), reportPath: resolve(values.report), materialRoot: values['material-root'], htmlPath: values['html-path'] ? resolve(values['html-path']) : undefined, nodesPath: values['nodes-path'] ? resolve(values['nodes-path']) : undefined });
+  const result = await checkPageContent({ taskPath: resolve(values['task-path']), reportPath: resolve(values.report), materialRoot: values['material-root'], htmlPath: values['html-path'] ? resolve(values['html-path']) : undefined, nodesPath: values['nodes-path'] ? resolve(values['nodes-path']) : undefined, expectHtmlSha256: values['expect-html-sha256'], expectNodesSha256: values['expect-nodes-sha256'] });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exitCode = 1;
   return result;

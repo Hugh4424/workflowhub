@@ -22,35 +22,54 @@ function sections(text, level) {
  rows.forEach((line,index)=>{if(/^\s*```/.test(line)){fenced=!fenced;if(active)active.lines.push(line);return;}if(fenced){if(active)active.lines.push(line);return;}const h=/^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);if(h&&h[1].length<=level)active=null;if(h&&h[1].length===level){active={heading:h[2],line:index+1,lines:[]};result.push(active);}else if(active)active.lines.push(line);});
  return result.map(({lines,...section})=>({...section,body:lines.join('\n')}));
 }
-// New-shape materials keep legacy ids in a reader-visible mapping section.
-// Only that named section can establish a mapping; a missing row stays a gap.
-const MAPPING_HEADING = /旧编号对照|编号对照/;
-function legacyIdMappings(markdown) {
- const mappings=new Map();let inSection=false,level=0,fence=false;
- const labelSource=/^(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*\d+$/;
- const legacySource=/^(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)$/;
+// One numbering map for every legacy id the current materials still write.
+// Sources: a reader-visible 编号对照 section (label -> legacy id) and, in the
+// same rows, the confirmed "原日志 <id>" crosswalk that resolves a retired id.
+// Both shapes are read once here; a missing row stays a gap at the call site and
+// no reader guesses an id from a numeric prefix.
+const NUMBERING_HEADING = /旧编号对照|编号对照/;
+const NUMBERING_LABEL_SOURCE = /^(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*\d+$/;
+const NUMBERING_ID_SOURCE = /^(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)$/;
+const NUMBERING_LABEL = /(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*(\d+)/;
+const NUMBERING_ID = /(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)/;
+const CURRENT_AC_ID = /^AC-[A-Z]+\d*-\d{3}$/;
+function numberingMappings(markdown, currentAcIds = new Set()) {
+ // A retired short acceptance id is the same number written without zero
+ // padding; it resolves only when the spec declares that exact current id.
+ const canonicalId = value => {
+  const match = /^(AC-[A-Z]+\d*-)(\d+)$/.exec(value ?? '');
+  if (!match) return value ?? null;
+  if (match[2].length >= 3) return value;
+  const padded = `${match[1]}${match[2].padStart(3, '0')}`;
+  return currentAcIds.has(padded) ? padded : null;
+ };
+ const labels=new Map(),confirmed=new Map();let inSection=false,level=0,fence=false;
  for(const line of (markdown??'').split('\n')){
   const marker=/^\s*(`{3,}|~{3,})/.exec(line);
   if(marker){if(!fence)fence=marker[1];else if(marker[1][0]===fence[0]&&marker[1].length>=fence.length)fence=null;continue;}
   if(fence)continue;
   const heading=/^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
-  if(heading){if(inSection&&heading[1].length<=level)inSection=false;if(!inSection&&MAPPING_HEADING.test(heading[2])){inSection=true;level=heading[1].length;}continue;}
+  if(heading){if(inSection&&heading[1].length<=level)inSection=false;if(!inSection&&NUMBERING_HEADING.test(heading[2])){inSection=true;level=heading[1].length;}continue;}
   if(!inSection)continue;
-  let label=null,legacy=null;
-  if(/^\s*\|/.test(line)){
-   const row=line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.replace(/\*\*|`/g,'').trim());
-   label=row.find(value=>labelSource.test(value))??null;legacy=row.find(value=>legacySource.test(value))??null;
+  let row=[];
+  if(/^\s*\|/.test(line))row=line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.replace(/\*\*|`/g,'').trim());
+  let label=row.find(value=>NUMBERING_LABEL_SOURCE.test(value))??null,id=row.find(value=>NUMBERING_ID_SOURCE.test(value))??null;
+  if(!label||!id){
+   const l=NUMBERING_LABEL.exec(line),g=NUMBERING_ID.exec(line);
+   if(l&&g){label=l[0].replace(/\s+/g,' ');id=g[0];}
   }
-  if(!label||!legacy){
-   const l=/(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*(\d+)/.exec(line);
-   const g=/(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)/.exec(line);
-   if(l&&g){label=l[0].replace(/\s+/g,' ');legacy=g[0];}
-  }
-  if(label&&legacy)mappings.set(label.replace(/\s+/g,' '),legacy);
+  if(label&&id)labels.set(label.replace(/\s+/g,' '),canonicalId(id)??id);
+  // The confirmed crosswalk is the same table: 验收 N | current id | 原日志 old id | …
+  const legacy=/原日志\s*(AC-[A-Z0-9-]+)/.exec(row.slice(2).join(' '))?.[1],current=row.find(value=>CURRENT_AC_ID.test(value));
+  if(legacy&&current&&legacy!==current)confirmed.set(legacy,current);
  }
- return mappings;
+ return {labels,confirmed,canonicalId};
 }
-function fields(body){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*-\s*\*\*([^*]+)\*\*[:：]\s*(.*)$/.exec(line);if(m){key=m[1];result[key]=m[2];}else if(/^#/.test(line)){key=undefined;}else if(key){if(key==='动作'||key==='Action')result[key]+='\n'+line;else if(line.trim())result[key]+=' '+line.trim();}}return result;}
+// One bold-field reader for every card body; continuation lines belong to the
+// field above them and keep their own line breaks for display. Task-card
+// actions may keep blank lines between numbered steps, so a blank line only
+// ends a field where the declared shape separates fields by blank lines.
+function boldFields(body,{blankEndsField=false}={}){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*(?:[-*]\s*)?\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/.exec(line);if(m){key=m[1].trim();result[key]=m[2];}else if(/^#/.test(line)||(blankEndsField&&/^\s*$/.test(line))){key=undefined;}else if(key&&(line.trim()||key==='动作'||key==='Action'))result[key]+='\n'+line;}return result;}
 const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.trim().replace(/`/g,''));
 const ids=(text,pattern)=>[...new Set((text??'').match(pattern)??[])];
 const explicitPackageIds=value=>/^\s*WP\d+(?:\s*[,、，/]\s*WP\d+)*\s*$/.test(value??'')?ids(value,/WP\d+/g):[];
@@ -71,23 +90,9 @@ function bullets(text){
  return steps;
 }
 
-// The current package tables declare acceptance ids in the short AC-Pn-x form.
-// The spec's confirmed mapping table is the only source that resolves them; an
-// unmapped id stays an explicit reconciliation gap, never a guessed id.
+// The current package tables declare acceptance ids in the short AC-Pn-x form;
+// they resolve only through the single numbering map above.
 const AC_ID=/AC-[A-Z]+\d*-\d+/g;
-function confirmedAcCrosswalk(spec){
- const map=new Map();
- for(const line of (spec??'').split('\n')){
-  if(!/^\s*\|\s*验收\s*\d+\s*\|/.test(line))continue;
-  const row=cells(line);
-  if(row.length<3||!/^AC-[A-Z0-9-]+$/.test(row[1]))continue;
-  const legacy=/原日志\s*(AC-[A-Z0-9-]+)/.exec(row[2])?.[1];
-  if(legacy&&legacy!==row[1])map.set(legacy,row[1]);
- }
- return map;
-}
-// A package card writes one bold field per item; continuation lines belong to it.
-function boldFields(body){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*(?:[-*]\s*)?\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/.exec(line);if(m){key=m[1].trim();result[key]=m[2];}else if(/^\s*$/.test(line))key=undefined;else if(key)result[key]+='\n'+line;}return result;}
 // The package table is structured input: 包 | 名称 | 依赖 | 覆盖需求 | 主 AC | 来源.
 function packageTable(text){
  const rows=[];let header=null;
@@ -173,19 +178,17 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  read(join(task.taskPath,'task.json'));
  const decisionPath=join(material,'decision-log.md'),specPath=join(material,'spec.md'),indexPath=join(material,'phases/index.md');
  const decision=read(decisionPath,true),spec=read(specPath,true),index=read(indexPath,true),facts=read(join(task.taskPath,'facts.jsonl'),true);
- // Short decision-log ids resolve only through the spec's confirmed crosswalk.
- const acCrosswalk=confirmedAcCrosswalk(spec),specAcIds=[...new Set((spec??'').match(/AC-[A-Z]+\d*-\d{3}/g)??[])];
- // Short 5.0 ids resolve by the confirmed crosswalk or a unique same-number spec id;
- // package ownership always comes from the 5.0 row, never from the AC id prefix.
+ // Every legacy id resolves through the one numbering map: the confirmed
+ // crosswalk first, then its single zero-padding normalization. An id it cannot
+ // resolve stays an explicit gap, never a numeric same-family guess.
+ const specAcIds=new Set((spec??'').match(/AC-[A-Z]+\d*-\d{3}/g)??[]);
+ const decisionNumbering=numberingMappings(decision,specAcIds),specNumbering=numberingMappings(spec,specAcIds);
  const resolveAcId=id=>{
   if(/-\d{3}$/.test(id))return id;
-  const mapped=acCrosswalk.get(id);if(mapped)return mapped;
-  const family=/^(AC-[A-Z]+\d*-)(\d+)$/.exec(id??'');if(!family)return null;
-  const candidates=specAcIds.filter(candidate=>candidate.startsWith(family[1])&&Number(candidate.slice(family[1].length))===Number(family[2]));
-  return candidates.length===1?candidates[0]:null;
+  return specNumbering.confirmed.get(id)??specNumbering.canonicalId(id);
  };
  // JSONL corruption is a real input error; the cursor is displayed, never changed here.
- const decisionMappings=legacyIdMappings(decision),specMappings=legacyIdMappings(spec);
+ const decisionMappings=decisionNumbering.labels,specMappings=specNumbering.labels;
  const rows=facts===null?[]:readTaskFacts(task.taskPath);
  const factsPath=join(task.taskPath,'facts.jsonl'),factsHash=fingerprints[factsPath]??'missing';
  delete fingerprints[factsPath];
@@ -279,7 +282,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  }
  for(const {block,sourceId,title,shape} of packageBlocks){
   if(packages.some(o=>o.source_id===sourceId))throw Error('duplicate work package: '+sourceId);
-  const f=fields(block.body);
+  const f=boldFields(block.body);
   const goalText=shape==='new'?f['目标']??f['要交付什么']??'':f['目标'];
   const boundaryText=shape==='new'?f['边界']??f['不做什么']??'':f['边界'];
   const planText=shape==='new'?f['已定做法']??'':f['已定做法'];
@@ -295,7 +298,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    missing.source_id=`决定 ${n}`;continue;
   }
   if(objects.some(o=>o.kind==='dec'&&o.id==='dec-'+mapped))continue;
-  const f=fields(block.body),dec=node('dec',block.heading.replace(/^决定\s*\d+\s*[:：]\s*/,''),decisionPath,`line:${block.line}；${mapped}`,{id:'dec-'+mapped,summary:f['做什么']??''});
+  const f=boldFields(block.body),dec=node('dec',block.heading.replace(/^决定\s*\d+\s*[:：]\s*/,''),decisionPath,`line:${block.line}；${mapped}`,{id:'dec-'+mapped,summary:f['做什么']??''});
   Object.assign(dec,{source_id:mapped,detail:f['做什么']??'',why:f['为什么']??'',items:[f['不做什么']].filter(Boolean),owners:[]});
  }
  // Only explicit selected-decision originals supply named decisions and their affected packages.
@@ -360,7 +363,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
     const row=declared.find(entry=>entry.number===card.number);
     if(declared.length&&!row){issues.push(`包 ${card.number} 未在包目录声明`);continue;}
     if(row&&row.name!==card.title)issues.push(`包 ${card.number} 标题不一致：${row.name} ≠ ${card.title}`);
-    const fieldsBody=boldFields(card.block.body);
+    const fieldsBody=boldFields(card.block.body,{blankEndsField:true});
     const acIds=[...new Set([...resolveAll(row?.ac_ids??[],`包 ${card.number} 的声明验收`),...resolveAll(ids(fieldsBody['验收']??'',AC_ID),`包 ${card.number} 的验收正文`)])];
     if(!acIds.length)issues.push(`包 ${card.number} 缺验收编号`);
     for(const ac of acIds){
@@ -427,7 +430,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   const m=/^-\s*\*\*((?:RISK|OPEN)-\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);
   if(m){
    let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN)-/.test(riskLines[end]))end++;
-   const f=fields(riskLines.slice(i+1,end).join('\n')),o=node('risk',m[2],specPath,`line:${riskSection.line+i+1}；${m[1]}`,{id:'risk-'+m[1],summary:f['触发条件']??f['影响']??'触发条件未取得'});Object.assign(o,{source_id:m[1],ac_ids:ids(f['受影响 ID'],/AC-[A-Z0-9-]+/g),details:f});continue;
+   const f=boldFields(riskLines.slice(i+1,end).join('\n')),o=node('risk',m[2],specPath,`line:${riskSection.line+i+1}；${m[1]}`,{id:'risk-'+m[1],summary:f['触发条件']??f['影响']??'触发条件未取得'});Object.assign(o,{source_id:m[1],ac_ids:ids(f['受影响 ID'],/AC-[A-Z0-9-]+/g),details:f});continue;
   }
   const n=/^-\s*\*\*(风险|未决)\s*(\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);if(!n)continue;
   let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN|风险|未决)(?=\s|\d|[:：])/.test(riskLines[end]))end++;
@@ -436,7 +439,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    const missing=node('risk',`缺：${n[1]} ${n[2]} 的 RISK/OPEN 编号映射`,specPath,`line:${riskSection.line+i+1}；${n[1]} ${n[2]}`,{missing:true,id:'risk-missing-spec-'+hash(`${n[1]} ${n[2]}`).slice(0,16),summary:`${n[1]} ${n[2]} 未取得 RISK/OPEN 旧编号映射`});missing.source_id=`${n[1]} ${n[2]}`;i=end-1;continue;
   }
   const o=node('risk',n[3],specPath,`line:${riskSection.line+i+1}；${mapped}`,{id:'risk-'+mapped,summary:n[3]});
-  Object.assign(o,{source_id:mapped,ac_ids:[],details:fields(riskLines.slice(i+1,end).join('\n'))});i=end-1;
+  Object.assign(o,{source_id:mapped,ac_ids:[],details:boldFields(riskLines.slice(i+1,end).join('\n'))});i=end-1;
  }
  const issues=sections(decision,2).find(block=>/^(?:未决项|还有什么没定)/.test(block.heading));
  for(const line of (issues?.body??'').split('\n')){
@@ -477,7 +480,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   const evidenceRef=/^\s*-\s*\*\*evidence_path\*\*[:：]\s*`([^`]+)`/m.exec(text)?.[1];
   if(evidenceRef?.startsWith('quality/')&&evidenceRef.endsWith('.json')){const evidencePath=task.recordPath(evidenceRef),raw=read(evidencePath,true);delete fingerprints[evidencePath];if(raw!==null){const record=JSON.parse(raw);if((record.phase_id??record.phase)===row.id){phaseRecords.set(row.id,{record,path:evidencePath});for(const claim of Array.isArray(record.acceptance)?record.acceptance:Array.isArray(record.ac_results)?record.ac_results:[]){const ac=claim.ac??claim.id,tier=claim.tier??claim.result;if(ac&&typeof tier==='string'){const list=acceptanceClaims.get(ac)??[];list.push({tier,path:evidencePath});acceptanceClaims.set(ac,list);}}}}}
   const header=text.split('\n').find(line=>/^# /.test(line))??row.id,p=node('phase',header,path,'Phase '+row.id,{id:'phase-'+row.id,summary:'契约原件'});p.source_id=row.id;p.label=row.id;phaseTasks[p.id]=[];
-  const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading)),phaseMappings=legacyIdMappings(text),taskBlocks=[];
+  const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading)),phaseMappings=numberingMappings(text).labels,taskBlocks=[];
   for(const block of sections(l1?.body??text,3)){
    const old=/^T(\d{3,})\s+[—–-]\s+\S/.exec(block.heading);
    if(old){taskBlocks.push({block,taskId:`T${old[1]}`,title:block.heading.replace(/^T\d{3,}\s+[—–-]\s+/,''),shape:'old'});continue;}
@@ -487,7 +490,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const entry of taskBlocks){
    const {block,title,shape}=entry;let taskId=entry.taskId;
    if(shape==='new'){
-    const idField=fields(block.body)['任务编号'];
+    const idField=boldFields(block.body)['任务编号'];
     taskId=/^T\d{3,}$/.test(idField??'')?idField:phaseMappings.get(`任务 ${entry.n}`);
    }
    if(!taskId||!/^T\d{3,}$/.test(taskId)){
@@ -496,7 +499,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    }
    if(row.task_ids&&!row.task_ids.includes(taskId))continue;
    if(objects.some(o=>o.kind==='task'&&o.source_id===taskId))throw Error('duplicate strict Task identity: '+taskId);
-   const f=fields(block.body),action=f['动作']??f.Action??'',t=node('task',title,path,'### '+block.heading,{id:'task-'+taskId,phase:p.id,summary:action||'任务正文未取得'});
+   const f=boldFields(block.body),action=f['动作']??f.Action??'',t=node('task',title,path,'### '+block.heading,{id:'task-'+taskId,phase:p.id,summary:action||'任务正文未取得'});
    Object.assign(t,{source_id:taskId,label:taskId,goal:f['目标']??f.Goal??'',items:bullets(action),plan:ids(f['文件 / 符号']??f['Files / symbols'],/[\p{L}\p{N}_.-]+(?:\/[\p{L}\p{N}_.-]+)*\.[A-Za-z0-9]+/gu),fr_ids:ids(f['来源 / FR / AC']??f['Source / FR / AC'],/FR-[A-Z0-9-]+/g),ac_ids:ids(f['来源 / FR / AC']??f['Source / FR / AC'],/AC-[A-Z0-9-]+/g),gate_commands:[...block.body.matchAll(/\*\*(?:RED\/GREEN 门禁命令|RED\/GREEN gate_cmd)\*\*[:：]\s*`([^`]+)`/g)].map(m=>m[1])});
    t.status.text=cursor?.task_id===taskId&&cursor?.phase_id===row.id?'当前游标':'结果未取得';phaseTasks[p.id].push(t.id);if(facts!==null)t.src.push(source(join(task.taskPath,'facts.jsonl'),'当前游标；不证明完成'));
   }

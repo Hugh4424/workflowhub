@@ -506,6 +506,15 @@ function validatePlan(plan, c) {
   const expected = plan.mode === "planning" ? ["commit", "merge", "push", "cleanup"] : plan.mode === "post-cleanup-archive" ? ["archive", "push"]
     : plan.mode === "ordinary" && plan.pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"];
   if (!same(plan.steps, expected)) throw failure("CLOSE_PLAN_ACTIONS", "close action set was changed");
+  // A declared task-branch publication is part of the confirmed plan bytes; a
+  // plan that still carries a declaration must keep it consistent with the
+  // action set it belongs to. Old plans without the declaration stay readable.
+  if (plan.task_branch_push !== undefined) {
+    const push = plan.task_branch_push;
+    if (!push || typeof push !== "object" || Array.isArray(push) || push.step !== "push-task" || push.operation !== "push"
+      || push.branch !== plan.task_branch || push.remote !== plan.remote || push.ordering !== "before merge"
+      || expected.includes("push-task")) throw failure("CLOSE_PLAN_ACTIONS", "the declared task-branch publication differs from the plan's action set");
+  }
   if (plan.archive_before_commit !== (plan.mode === "ordinary")) throw failure("CLOSE_PLAN_ORDER", "archive_before_commit must be declared exactly for the ordinary delivery order");
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.task_branch) || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.target_branch) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(plan.remote)) throw failure("CLOSE_PLAN_REFS", "unsafe branch or remote");
   if (plan.worktree_root !== (plan.mode === "post-cleanup-archive" ? c.root : c.worktree)) throw failure("CLOSE_PLAN_WORKTREE", "close plan worktree differs from the registered task");
@@ -596,13 +605,18 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   if (remoteTarget.oid !== baseline) throw failure("TARGET_REMOTE_HEAD_MISMATCH", "target branch differs from its remote before planning");
   await assertCleanTarget({ root: c.root, target: c.root, baseline, expectBranch: targetBranch });
   const pr = mode === "ordinary" ? preparePr(c, delivery.pr, { baseline, source, head: taskBranch, base: targetBranch, remote }) : null;
+  // The ordinary non-PR route publishes the task branch as a named sub-step of
+  // the single push authorization. The displayed plan declares it, so the
+  // confirmation binds an action the user can actually read.
+  const taskBranchPush = mode === "ordinary" && pr?.status !== "available"
+    ? { step: "push-task", operation: "push", branch: taskBranch, remote, ordering: "before merge", scope: "this plan's push authorization" } : undefined;
   const plan = { task_id: c.manifest.task_id, project_name: c.manifest.project_name, mode, archive_before_commit: mode === "ordinary", target_repo_root: c.root,
     worktree_root: c.worktree, task_branch: taskBranch, target_branch: targetBranch, target_head: baseline,
     remote, remote_target_head: remoteTarget.oid, remote_task_head: remoteOid(c.root, remote, taskBranch).oid,
     spec_source_path: delivery.spec_source_path ?? `specs/${c.manifest.task_id}`, spec_archive_path: delivery.spec_archive_path ?? `specs/archive/${c.manifest.task_id}`,
     preserve_existing_workspace: c.explicit, source, steps: mode === "planning" ? ["commit", "merge", "push", "cleanup"]
       : pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"],
-    ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
+    ...(taskBranchPush ? { task_branch_push: taskBranchPush } : {}), ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
   validatePlan(plan, c);
   realDirectory(join(c.worktree, plan.spec_source_path));
   const planRef = await writeEvidence(c, "close-plan", plan);
@@ -668,7 +682,11 @@ export async function authorizeClosePlan({ taskDir, planRef, confirmationRef, op
   acceptedConfirmation(c, planRef, confirmationRef, plan);
   const chosen = operations ?? plan.steps;
   if (!Array.isArray(chosen) || chosen.some((op) => !plan.steps.includes(op))) throw failure("AUTH_SCOPE", "authorization exceeds the displayed close plan");
-  return [...new Set(chosen)].map((action) => {
+  // The declared task-branch publication is recorded with the actions that can
+  // perform it (merge publishes it before merging; push is its own scope). Its
+  // own step id keeps a separate receipt from the target push.
+  const declared = plan.task_branch_push && (chosen.includes("merge") || chosen.includes("push")) ? ["push-task"] : [];
+  return [...new Set([...chosen, ...declared])].map((action) => {
     const { operation, cwd } = closeActionScope(c, action);
     acceptedConfirmation(c, planRef, confirmationRef, plan);
     return authorize(c, operation, "record", { confirmationRef, targetArchive: true, cwd });
@@ -900,6 +918,12 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
   if (until !== undefined && !plan.steps.includes(until)) throw failure("AUTH_SCOPE", "close cutoff must be an action in the confirmed plan");
+  // The ordinary non-PR route publishes the task branch during merge. A plan
+  // that does not declare that publication cannot push under a scope its user
+  // never saw; the current plan is re-prepared instead.
+  if (plan.mode === "ordinary" && plan.archive_before_commit === true && !plan.steps.includes("push-task") && !plan.task_branch_push) {
+    throw failure("PUSH_STEP_UNDECLARED", "the confirmed plan does not declare the task-branch publication; display a current plan before publishing");
+  }
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
   else if (existsSync(c.worktree)) realDirectory(c.worktree);
   else if (plan.preserve_existing_workspace || !cleanupWasSent(c, plan, planRef, branchOid(c.root, plan.target_branch))) throw failure("CLEANUP_UNSAFE", "missing task worktree is not covered by a prior authorized cleanup");
@@ -963,7 +987,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
       }
     }
     await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
-    const consume = (action, targetArchive = false, { allowFresh = false } = {}) => {
+    const consume = (action, targetArchive = false) => {
       acceptedConfirmation(c, planRef, confirmationRef, plan);
       const { operation, cwd } = closeActionScope(c, action), taskAction = cwd === c.worktree && ["commit", "push-task", "pr"].includes(action);
       const branch = git(cwd, ["branch", "--show-current"]), expectedBranch = taskAction ? plan.task_branch : plan.target_branch;
@@ -982,14 +1006,11 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         acceptedConfirmation(c, planRef, confirmationRef, plan);
         return consumed;
       }
-      if (!allowFresh) {
-        const grant = authorizationForPlan(c, operation, confirmationRef, branch);
-        if (!knownHeads.includes(grant.value.head)) throw failure("AUTHORIZATION_HEAD_MISMATCH", "recorded authorization does not cover a verified transaction HEAD");
-      }
-      // A scope grant must already exist, or the confirmed plan itself is the
-      // scope for a named step that the displayed plan does not list (the
-      // task-branch publication under the target push scope). Record its fresh
-      // actual action HEAD immediately before native consume.
+      const grant = authorizationForPlan(c, operation, confirmationRef, branch);
+      if (!knownHeads.includes(grant.value.head)) throw failure("AUTHORIZATION_HEAD_MISMATCH", "recorded authorization does not cover a verified transaction HEAD");
+      // The recorded grant for this confirmed action must cover a verified
+      // transaction HEAD; a fresh native record is written immediately before
+      // the consume at the actual action HEAD.
       const fresh = authorize(c, operation, "record", { confirmationRef, targetArchive, cwd });
       const actual = JSON.parse(readFile(authorizationDirectory(c.taskDir), basename(fresh.path)));
       if (actual.operation !== operation || actual.confirmation_ref !== confirmationRef || actual.head !== current || actual.branch !== branch) throw failure("AUTH_SCOPE", "fresh native grant differs from the verified action identity");
@@ -1099,7 +1120,9 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
             if (plan.remote_task_head !== null && remoteTask.status === "absent") throw failure("REMOTE_TASK_DRIFT", "the planned remote task branch disappeared before task publication");
             if (remoteTask.oid !== plan.remote_task_head && !alreadyPublished) throw failure("REMOTE_TASK_DRIFT", "remote task branch changed before task publication");
             if (!alreadyPublished) {
-              consume("push-task", false, { allowFresh: true });
+              // The declared sub-step consumes its own recorded grant; no fresh
+              // grant is manufactured outside the confirmed plan.
+              consume("push-task");
               git(c.worktree, ["push", plan.remote, `${plan.task_branch}:${plan.task_branch}`]);
               if (remoteOid(c.root, plan.remote, plan.task_branch).oid !== sourceHead) throw failure("PUSH_READBACK", "remote task differs after task push");
             }
@@ -1202,6 +1225,19 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           const receipt = graphReceipts(c, planRef).at(-1)?.row;
           if (receipt?.changed_objects?.length) {
             try { git(c.worktree, ["reset", "-q", "HEAD", "--", ...receipt.changed_objects.map(row => row.path)]); } catch { /* the failure original stays authoritative */ }
+          }
+          // A failed delivery commit must not leave the archive move staged: the
+          // whole directory goes back to its source path and both index entries
+          // are reset, so the same confirmed plan stays retryable instead of
+          // failing on SOURCE_BYTES_DRIFT or ARCHIVE_TARGET_CONFLICT. A commit
+          // that already landed keeps its archived tree untouched.
+          const archivedInHead = git(c.worktree, ["cat-file", "-e", `HEAD:${plan.spec_archive_path}`], { optional: true }).status === 0;
+          if (plan.archive_before_commit === true && !archivedInHead
+            && existsSync(join(c.worktree, plan.spec_archive_path)) && !existsSync(join(c.worktree, plan.spec_source_path))) {
+            try {
+              git(c.worktree, ["mv", "--", plan.spec_archive_path, plan.spec_source_path]);
+              git(c.worktree, ["reset", "-q", "HEAD", "--", plan.spec_source_path, plan.spec_archive_path]);
+            } catch { /* the failure original stays authoritative */ }
           }
         }
         const ref = await writeEvidence(c, "close-action", { operation: currentAction, plan_action: operation, ...(currentAction !== operation ? { sub_action: currentAction } : {}), status: "failed", plan_ref: planRef, ...(currentAction === "cleanup" ? { source_head: sourceHead } : {}), error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });

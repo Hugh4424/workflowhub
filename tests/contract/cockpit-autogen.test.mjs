@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { runInNewContext } from 'node:vm';
 import { readdirSync } from 'node:fs';
@@ -1199,4 +1200,77 @@ test('ORACLE-PROGRESS-PAGE: a caller-supplied page reports the checks it actuall
  expect(r.content_check.checks.derived_model).toBe(false);
  expect(r.content_check.fingerprint_checked).toBe(false);
  expect(r.content_check.pair_fingerprint_checked).toBe(true);
+});
+
+test('ORACLE-PROGRESS-PAGE: a rejected page reports the checks that actually failed',async()=>{
+ const f=await currentPackageMaterials(await fixture()),first=await renderAnswerPage(f);
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');
+ const {checkPageContent}=await import('../../skills/answer-as-page/scripts/check-page-content.mjs');
+ const built=await buildPageData(f),base={pageData:built.pageData,html:readFileSync(first.htmlPath,'utf8'),nodes:readFileSync(first.nodesPath,'utf8')};
+ const good=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:base});
+ expect(good.ok,JSON.stringify(good.errors)).toBe(true);
+ expect(good.checks).toMatchObject({structure:true,sources:true,pointers:true,pair_fingerprint:true,derived_model:true,contract:true,level:true});
+ // A broken structure cannot leave every check true.
+ const broken=structuredClone(built.pageData);delete broken.objects;
+ const bad=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:{...base,pageData:broken}});
+ expect(bad.ok).toBe(false);
+ expect(bad.errors.map(error=>error.code)).toContain('STRUCTURE_MISSING');
+ expect(bad.checks.structure).toBe(false);
+ expect(Object.values(bad.checks).every(Boolean)).toBe(false);
+ // A model that differs from the current materials fails its own axis by name.
+ const drifted=structuredClone(built.pageData);drifted.stageLabel='写代码 · P9 / T009';
+ const stale=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:{...base,pageData:drifted}});
+ expect(stale.ok).toBe(false);
+ expect(stale.errors.map(error=>error.code)).toContain('MODEL_MISMATCH');
+ expect(stale.checks.derived_model).toBe(false);
+ expect(stale.checks.structure).toBe(true);
+ // A vanished declared source is the source axis, not a silent pass.
+ const missing=structuredClone(built.pageData);missing.objects[0].src[0].path='/nonexistent/missing原件.md';
+ const gone=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,candidate:{...base,pageData:missing}});
+ expect(gone.errors.map(error=>error.code)).toContain('MISSING_SOURCE');
+ expect(gone.checks.sources).toBe(false);
+});
+test('ORACLE-PROGRESS-PAGE: browser acceptance can only observe the registered delivery bytes',async()=>{
+ const f=await currentPackageMaterials(await fixture()),first=await renderAnswerPage(f);
+ const {checkPageContent}=await import('../../skills/answer-as-page/scripts/check-page-content.mjs');
+ const sha=path=>createHash('sha256').update(readFileSync(path)).digest('hex'),htmlSha=sha(first.htmlPath),nodesSha=sha(first.nodesPath);
+ // Registration happens before the observation; the same digests are compared
+ // against the served bytes afterwards.
+ const registered=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,htmlPath:first.htmlPath,nodesPath:first.nodesPath,expectHtmlSha256:htmlSha,expectNodesSha256:nodesSha});
+ expect(registered.ok,JSON.stringify(registered.errors)).toBe(true);
+ expect(registered.delivery).toEqual({html_sha256:htmlSha,nodes_sha256:nodesSha});
+ const served=join(f.outDir,'observed-copy.html');writeFileSync(served,readFileSync(first.htmlPath));
+ const observed=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,htmlPath:served,nodesPath:first.nodesPath,expectHtmlSha256:htmlSha,expectNodesSha256:nodesSha});
+ expect(observed.ok,JSON.stringify(observed.errors)).toBe(true);
+ // An observation of another render cannot pass as this delivery.
+ writeFileSync(served,readFileSync(first.htmlPath,'utf8').replace('</html>','<!-- another render --></html>'));
+ const drifted=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,htmlPath:served,nodesPath:first.nodesPath,expectHtmlSha256:htmlSha,expectNodesSha256:nodesSha});
+ expect(drifted.ok).toBe(false);
+ expect(drifted.errors.map(error=>error.code)).toContain('DELIVERY_BYTES_MISMATCH');
+ expect(drifted.checks.pair_fingerprint).toBe(false);
+ expect(drifted.delivery.html_sha256).not.toBe(htmlSha);
+ // A copied page that is not the registered sidecar fails the same way.
+ const nodesMissing=await checkPageContent({taskPath:f.taskPath,reportPath:f.reportPath,htmlPath:first.htmlPath,nodesPath:join(f.outDir,'absent.nodes.json'),expectNodesSha256:nodesSha});
+ expect(nodesMissing.errors.map(error=>error.code)).toContain('DELIVERY_BYTES_UNREADABLE');
+ expect(nodesMissing.checks.pair_fingerprint).toBe(false);
+});
+test('ORACLE-PROGRESS-PAGE: a legacy acceptance id resolves only through the one numbering map',async()=>{
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');
+ const base=await currentPackageMaterials(await fixture()),decision=readFileSync(join(base.material,'decision-log.md'),'utf8');
+ // Zero padding is the one normalization: the padded id is declared, so a
+ // short id still resolves even without its own crosswalk row.
+ const noCrosswalk=await currentPackageMaterials(await fixture(),{decision});
+ const spec=join(noCrosswalk.material,'spec.md');
+ writeFileSync(spec,readFileSync(spec,'utf8').replace(/\| 验收 1 \| AC-P1-001 \| 原日志 AC-P1-1[^\n]*\n/,''));
+ const padded=await buildPageData(noCrosswalk);
+ expect(padded.pageData.objects.filter(o=>o.kind==='wp').map(o=>o.ac_ids)).toEqual([['AC-P1-001'],['AC-P2-001']]);
+ expect(padded.pageData.packageReconciliation.issues).toEqual([]);
+ // An id whose padded form is not declared is a named gap, never a same-family
+ // guess at another acceptance.
+ const unmapped=await currentPackageMaterials(await fixture(),{decision:decision.replace('AC-P1-1 可核','AC-P1-1 与 AC-P2-2 可核')});
+ const gap=await buildPageData(unmapped);
+ expect(gap.pageData.packageReconciliation.issues.join('\n')).toMatch(/AC-P2-2.*未在已确认编号对照中/);
+ const bound=gap.pageData.objects.filter(o=>o.kind==='wp').flatMap(o=>o.ac_ids??[]);
+ expect(bound).not.toContain('AC-P2-002');
+ expect(bound).toContain('AC-P1-001');
 });

@@ -734,3 +734,60 @@ it("matched environment replay confirms the named target failure and separates i
   expect(blockedPath.run.status).toBe(1);expect(blockedPath.body.cases[0].verdict).toBe("invalid_case");
 
 });
+
+it("declares the ordinary task-branch publication in the confirmed plan and its own receipt",async()=>{
+  const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),taskBranch=`task/workflowhub/${f.taskId}`;
+  const bytes=JSON.parse(readFileSync(p.plan_ref,"utf8"));
+  expect(bytes.steps).toEqual(["commit","merge","archive","push","cleanup"]);
+  expect(bytes.task_branch_push).toEqual({step:"push-task",operation:"push",branch:taskBranch,remote:"origin",ordering:"before merge",scope:"this plan's push authorization"});
+  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  // The confirmed material is the plan bytes, so the declaration is inside what
+  // the user confirmed rather than an action discovered during execution.
+  const refs=JSON.parse(readFileSync(c.confirmation_ref,"utf8")).material_refs;
+  expect(refs).toContain(`${p.plan_ref}#sha256=${createHash("sha256").update(readFileSync(p.plan_ref)).digest("hex")}`);
+  const grants=await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  expect(grants).toHaveLength(6);
+  const records=grants.map(grant=>JSON.parse(readFileSync(grant.path,"utf8")));
+  expect(records.filter(row=>row.operation==="push"&&row.branch===taskBranch)).toHaveLength(1);
+  expect(records.filter(row=>row.operation==="push"&&row.branch==="main")).toHaveLength(1);
+});
+it("refuses an undeclared task-branch publication and a tampered declaration before any Git action",async()=>{
+  const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),taskBranch=`task/workflowhub/${f.taskId}`;
+  const original=JSON.parse(readFileSync(p.plan_ref,"utf8")),base=f.git(f.repo,["rev-parse","HEAD"]);
+  const undeclared={...original};delete undeclared.task_branch_push;
+  writeFileSync(p.plan_ref,JSON.stringify(undeclared,null,2)+"\n");
+  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await expect(executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref})).rejects.toMatchObject({code:"PUSH_STEP_UNDECLARED"});
+  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
+  expect(f.git(f.repo,["ls-remote","--heads","origin",`refs/heads/${taskBranch}`]).trim()).toBe("");
+  // A declaration that disagrees with the action set it belongs to is a change.
+  const tampered={...original,task_branch_push:{...original.task_branch_push,branch:"task/other"}};
+  writeFileSync(p.plan_ref,JSON.stringify(tampered,null,2)+"\n");
+  await expect(executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref})).rejects.toMatchObject({code:"CLOSE_PLAN_ACTIONS"});
+  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
+});
+it("restores the archived materials when the delivery commit is rejected so the same plan retries",async()=>{
+  const f=await fixture(),materials=join(f.wt,"specs",f.taskId),base=f.git(f.repo,["rev-parse","HEAD"]),hooks=join(f.repo,".git","hooks");
+  writeFileSync(join(materials,"extra.md"),"# extra material\n");
+  const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
+  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  // A real pre-commit rejection happens after the whole directory was moved and
+  // staged, which is exactly the state a retry must be able to recover from.
+  writeFileSync(join(hooks,"pre-commit"),"#!/bin/sh\necho 'reject owned delivery' >&2\nexit 1\n",{mode:0o755});
+  const blocked=await withGraph(GRAPH_UNCHANGED,()=>executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:2000}));
+  expect(blocked.status,JSON.stringify(blocked.error)).toBe("failed");
+  expect(blocked.operation).toBe("commit");
+  expect(blocked.error.code).toBe("GIT_COMMAND_FAILED");
+  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
+  expect(existsSync(join(materials,"extra.md"))).toBe(true);
+  expect(existsSync(join(materials,"decision-log.md"))).toBe(true);
+  expect(existsSync(join(f.wt,"specs","archive",f.taskId))).toBe(false);
+  expect(f.git(f.wt,["diff","--cached","--name-only"])).toBe("");
+  expect(f.git(f.wt,["status","--porcelain","--",`specs/${f.taskId}`])).toMatch(/^\?\? specs\//);
+  expect(f.git(f.wt,["status","--porcelain","--","specs/archive"])).toBe("");
+  rmSync(join(hooks,"pre-commit"));
+  const retry=await withGraph(GRAPH_UNCHANGED,()=>executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:2000}));
+  expect(retry.status,JSON.stringify(retry.error)).toBe("completed");
+  expect(f.git(f.repo,["ls-tree","-r","--name-only",`${retry.records.find(row=>row.operation==="commit").source_head}`,"--",`specs/archive/${f.taskId}`])).toContain("extra.md");
+});
