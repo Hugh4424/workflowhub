@@ -167,10 +167,20 @@ export function derivePhysicalDeliveryStatus(input = {}) {
   // Historical callers without that field remain readable; current close
   // readbacks always declare it and therefore cannot silently omit it.
   const currentSeven = Array.isArray(plan.steps) && JSON.stringify(plan.steps) === JSON.stringify(["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"]);
-  const missingFacts = PHYSICAL_DELIVERY_FACTS
-    .filter((name) => currentSeven || !["task_branch_pushed", "pull_request_opened"].includes(name))
-    .filter((name) => currentSeven || name !== "remote_branch_cleanup" || Object.prototype.hasOwnProperty.call(facts, name))
-    .filter((name) => facts[name] !== true);
+  // The ordinary route now archives inside the delivery commit and pushes the
+  // task branch separately. Its plan declares that ordering, so this reader
+  // requires the same verified action evidence instead of a legacy completion
+  // record that the current writer no longer produces.
+  const archiveBeforeCommit = plan.archive_before_commit === true && Array.isArray(plan.steps)
+    && JSON.stringify(plan.steps) === JSON.stringify(["commit", "merge", "archive", "push", "cleanup"]);
+  const strict = currentSeven || archiveBeforeCommit;
+  const legacyFacts = PHYSICAL_DELIVERY_FACTS
+    .filter((name) => !["task_branch_pushed", "pull_request_opened"].includes(name))
+    .filter((name) => name !== "remote_branch_cleanup" || Object.prototype.hasOwnProperty.call(facts, name));
+  const requiredFacts = currentSeven ? PHYSICAL_DELIVERY_FACTS
+    : archiveBeforeCommit ? PHYSICAL_DELIVERY_FACTS.filter((name) => name !== "pull_request_opened")
+    : legacyFacts;
+  const missingFacts = requiredFacts.filter((name) => facts[name] !== true);
   const cleanupRemoved = cleanup?.flags?.includes("removed");
 
   // A recovered plan may retain an immutable failed step for audit while its
@@ -179,12 +189,12 @@ export function derivePhysicalDeliveryStatus(input = {}) {
   // separate close.step_records view.
   const oid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
   let actionIndex = -1;
-  const missingActions = currentSeven ? plan.steps.filter(operation => {
+  const missingActions = strict ? plan.steps.filter(operation => {
     const index = steps.findIndex((step, index) => index > actionIndex && step.operation === operation && step.status === "completed" && oid(step.source_head) && oid(step.target_head));
     if (index < 0) return true;
     actionIndex = index; return false;
   }) : [];
-  if (currentSeven && missingFacts.length === 0 && missingActions.length === 0 && cleanupRemoved) return result("removed");
+  if (strict && missingFacts.length === 0 && missingActions.length === 0 && cleanupRemoved) return result("removed");
   if (!currentSeven && missingFacts.length === 0 && cleanupRemoved && completions.length === 1) {
     return result("removed", {
       plan_hash: planHash,
@@ -208,7 +218,7 @@ export function derivePhysicalDeliveryStatus(input = {}) {
     });
   }
 
-  if (currentSeven) return result("incomplete", { missing_facts: missingFacts, missing_actions: missingActions });
+  if (strict) return result("incomplete", { missing_facts: missingFacts, missing_actions: missingActions });
   if (missingFacts.length === 0 && cleanupRemoved) {
     return result("incomplete", {
       plan_hash: planHash,

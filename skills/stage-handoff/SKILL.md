@@ -15,11 +15,21 @@ description: 阶段收口内部发布当前、可复制的人读交接，保留�
 
 1. 先确定当前 task、stage 与对象范围。只对当前新流程任务执行下列写入动作；旧任务、未完成旧任务及历史对象保持只读，不修改或删除其文件，不产出新交接或兼容链。身份或范围无法确定时披露缺口，继续安全读取，不猜作当前任务。post 读取 decision-log、spec、相关独立 Phase 与指针 index，以及已发生的任务、测试、独立审查和 Git 事实；历史 plan/tasks 只读。尚未产生的下游材料写 not_applicable，应有却不可读的材料写具体失败，不借旧任务或旧交接补齐。
 2. 按下表定位四类信息，并给出有实际 source 指针的阶段工作陈述。仅使用 not-started、in-progress、succeeded、failed、blocked、unverified、abandoned 七值。build-code 的 `succeeded` 前置条件是 user case 全部执行完、宿主侧结论已算出、证据指针已写；验收 phase（Phase）未完成不得写 `succeeded`，未满足这些条件只能写 `unverified` 或 `blocked`，并说明具体原因；这约束完成陈述，不阻断同 task 修复。missing、unavailable、incomplete 等质量缺口另述，不转成 succeeded、blocked 或第八状态；游标、ready 值或命令 exit0 不能推定阶段成功。succeeded 须按当前 stage 合同，由当前实际交付、适用质量和现有事实支持；有既定方向或计划确认步骤的 stage 还须引用该 stage 的真实确认。build-code 在已确认方向和计划的授权范围内，依其当前合同核对实际交付、适用质量及无未处置严重问题等现有事实，不新增本阶段日常确认；上游确认不能单独推定当前 stage succeeded，工作完成陈述不代替人类业务验收或 Git 授权。依据不足时说明无法确定；源值非法则保留原值和来源作为问题，不采用它作合法阶段值，也不反写源 stage 状态。
-3. 发布前，实际回读来源中的 task/stage、四类信息、阶段值和纯文本引用路径，按“回读结果”报告本次检查结果、输入范围、具体路径和原始错误。先用现有安全写入工具把原始检查输出保存为当前 task 的 quality/tests 唯一原件，确认它已存在且可读；失败观察也如实保存。已有实际命令输出只引用原件，不复制。检查结果不是继续工作的许可；检查输出无法保存时如实披露，不能声称本次检查原件已产生。
+3. 发布前，实际回读来源中的 task/stage、四类信息、阶段值和纯文本引用路径，按“回读结果”报告本次检查结果、输入范围、具体路径和原始错误。先用现有安全写入工具把原始检查输出保存为当前 task 的 quality/tests 唯一原件，确认它已存在且可读；失败观察也如实保存。已有实际命令输出只引用原件，不复制。检查结果不是继续工作的许可；检查输出无法保存时如实披露，不能声称本次检查原件已产生。交接边界按下方「交接文档图回执」执行：本阶段 owner 产出文档图更新回执，正文只引用其绝对路径；读者按同一路径读回同一字节，不重跑代码图，不写每工作树副本。
 4. 按下方 13 区块人读内容合同组织正文，写当前可消费材料、四类 source、真实测试/审查与发现处置、风险、延期和具体未完事项。关键事实只引用已经存在且可读的发布前检查原件及其真实结果，不预填未来写后检查。四类信息确实无事项时明确“无”；缺失或读不到时明确 incomplete、影响和下一步，build-code 终末 同样如此。重要决策只放原决定指针；材料正文、原始测试/review 不在交接中复制。凡引用已冻结的原件，正文写它的 `commit:path`、Git 对象 id 与相对行位，并指向既有确认原件里同一对象的时点；交接本身不存摘要、不另建第二份哈希账本。开放问题写真实 owner 与恢复条件。包含最终 close 或 worktree/任务分支保留事项时，先读 `docs/standard-workflow.md` 默认安全收口，正文列实际归档/删除目标、具名例外与待最终范围确认的动作，不把保留整个 worktree 当惯例。
 5. 当前 stage owner 按已有目录职责准备当前 task 的既存真实目录 handoffDir＝quality/evidence/handoff。调用一次现有 runtime/interface/safe-write.mjs 的 appendRecord(handoffDir, '<stage>-handoff', 'md', bytes)，使用 make-decision、build-prd、build-plan、build-code 等既有名称。返回值是已经 create-only 发布的绝对路径 string，报告该实际路径，不再次 write/create 返回路径。UTC 日期、同目录当日三位序号与碰撞重试由现有工具分配；不另写固定名、current 副本或命名算法。
 6. 写后只读确认返回路径的本次字节、task 与 stage 是否对应刚才准备的正文，不把这次结果嵌回同一不可变 handoff。写入或确认失败时保留原始错误、目标绝对路径和旧件可能过时的影响；写入失败不声称生成新件，确认失败保留已经发布的原字节，结果进入既有质量事实或下一次普通记录，不回写本件。旧交接不能冒充本次成功；只准备正文未写入时明确未写。
 7. 新读者收到明确原件绝对路径时直接只读，核对 task/stage；引用带对象 id 时先 `git cat-file -e <对象>` 再 `git show` 读同一对象的字节，按记录的相对行位核对，读到的是同一份原件才继续；对象不存在、行位漂移或与确认原件不同版时，保留原错误并按记录的 owner 回原提供者，不改所读原件、不拿工作树当前字节顶替；仅给 task 入口时，从当前 facts 与材料定位实际 stage，再筛选 YYYY-MM-DD-NNN-<stage>-handoff.md，按同 stage 日期、序号选原件。旧固定名只读；选中最近名字不证明正文新鲜。按同一方法回读 source、四类与问题，说明状态、实际证据和具体下一步。已有任务授权的 build-code 直接接续，含两技能规定的必要 Git 动作，不因新会话或读取交接重新确认；接续至最终 close 时，按 `docs/standard-workflow.md` 默认安全收口回读交付与具名例外，取得一次实际范围确认后执行并回读；旧交接中的保留建议不是永久保留指令，交接读取本身也不是删除授权。方向与计划选择仍按对应上游阶段合同，不据交接改变方向或扩大范围。记录缺失、错 task 或读不到时披露具体问题，不用旧聊天或人工补答案假称已定位；继续能够定位的授权内工作，不因回读问题新增确认门。后续读取结果仍进入既有质量事实或下一次普通记录，不改所读原件。
+
+## 交接文档图回执
+
+交接需要文档图更新时，由当前 stage owner 在发布 handoff 正文前执行一次文档图增量更新，并留下可回读的既有对象，不新增目录、schema 或账本：
+
+1. **producer**：在认证 worktree 对本次真实改动文档执行 `graphify update . --no-cluster`（或 caller 给出的等价精确文档范围），记录 argv、cwd、退出、超时、原始 stdout/stderr 和 payload 变化；`updated` 只以 graph.json／manifest.json／.graphify_analysis.json／cache/semantic 的真实 blob 变化为证，stat-index 等 sidecar 单列，exit 0 也可能是 `unchanged`。工具不可用或失败记 `unavailable`／`failed` 与原始诊断，不阻断 handoff 发布，也不得用旧图、缓存或每工作树副本代读。
+2. **回执**：调用一次现有 `runtime/interface/safe-write.mjs` 的 `appendRecord(handoffDir, "knowledge-graph-handoff", "json", bytes)`，`handoffDir` 为既有 `quality/evidence/handoff`；字节为 `{task_id, stage, status: updated|unchanged|failed|unavailable, command, cwd, exit_code, signal, timed_out, payload_paths, sidecar_paths, reason, recorded_at}`。返回的绝对路径就是回执 ref，不另造固定名；同内容不重复写。
+3. **引用**：handoff 正文的「关键事实与数据状态」只写该绝对路径与回执字节的 sha256（可用 `shasum -a 256`），不复制回执正文、不把 sidecar 变化写成图更新。
+4. **consumer/读回**：下游从 handoff 正文取该绝对路径，先核 task/stage，再按同一路径读同一字节并核对 sha256；路径缺失、不可读或字节不符时具名失败 `HANDOFF_GRAPH_RECEIPT_MISSING` 并交回原 stage owner，不以当前工作树字节、旧图或缓存顶替，不猜最新文件名。
+5. 关闭侧的代码图回执是另一条 `close-graph` 原件，两者不互相替代；本回执不证明图语义质量。
 
 写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
 

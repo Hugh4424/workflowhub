@@ -5096,6 +5096,23 @@
       "retention_basis": "MT-2-023 / NARROW"
     },
     {
+      "source": "tools/cli/check-specs-archive.mjs",
+      "destination": "tools/cli/check-specs-archive.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "P8/T008 私有只读薄入口：调用现有 archiveReadback 回读已交付归档、两路推送回执与代码图回执，供收口者材料对账；不写计划、授权、状态或第二套收口。",
+      "owner": "P8/T008 收口实施者；归档能力退役时随入口移除",
+      "consumer": "node tools/cli/check-specs-archive.mjs --task-path=<任务>（缺省取最近 close plan，可追加 --plan-ref）的收口对账；skills/stage-close/SKILL.md 第6节与 P9 声明读回按此入口消费。",
+      "module_consumers": [
+        "tests/integration/vnext-delivery-close.test.mjs"
+      ],
+      "named_data_readers": [
+        "tools/cli/task-close.mjs"
+      ],
+      "delete_condition": "当归档回读职责由经独立验证的现有入口完整承接、skills/stage-close 与 P9 消费者改接后，由原 owner 删除该薄入口；原 RED/GREEN/effects 原件保留。",
+      "retention_basis": "P8/T008 写集与 AC-P9-001/AC-P9-002；只证隔离仓与本地裸远端动作，真实远端与物理收口留终末确认。"
+    },
+    {
       "source": "tools/cli/task-close.mjs",
       "destination": "tools/cli/task-close.mjs",
       "status": "retain",

@@ -1,4 +1,4 @@
-import{afterEach,expect,it}from"vitest";import{execFileSync}from"node:child_process";import{existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,realpathSync,rmSync,writeFileSync}from"node:fs";import{tmpdir}from"node:os";import{join}from"node:path";import{bootstrapTask}from"../../tools/cli/task-bootstrap.mjs";import{prepareDeliveryClosePlan,inspectDeliveryCloseState,confirmClosePlan,executeClosePlan}from"../../core/task-close.mjs";
+import{afterEach,expect,it}from"vitest";import{execFileSync}from"node:child_process";import{existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,realpathSync,rmSync,writeFileSync}from"node:fs";import{tmpdir}from"node:os";import{join}from"node:path";import{bootstrapTask}from"../../tools/cli/task-bootstrap.mjs";import{prepareDeliveryClosePlan,inspectDeliveryCloseState,confirmClosePlan,executeClosePlan}from"../../core/task-close.mjs";import{derivePhysicalDeliveryStatus}from"../../runtime/stage/current-close-projection.mjs";
 const roots=[];afterEach(()=>{for(const r of roots.splice(0))rmSync(r,{recursive:true,force:true});});
 async function fixture(existing=false){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-current-close-")));roots.push(root);const repo=join(root,"repo"),bare=join(root,"origin.git"),storage=join(root,"storage"),home=join(root,"home");for(const d of[repo,bare,storage,home])mkdirSync(d);const env={...process.env,HOME:home,WORKFLOWHUB_TASK_DIR:storage};for(const k of Object.keys(env))if(k.startsWith("GIT_"))delete env[k];const git=(cwd,args)=>execFileSync("git",args,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close"]);git(repo,["config","user.email","owned@test.invalid"]);writeFileSync(join(repo,"README.md"),"owned base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);const taskId="owned-close";let target=repo;if(existing){target=join(root,"existing");git(repo,["worktree","add","-q","-b",`task/workflowhub/${taskId}`,target,"main"]);}const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":target},{env,home}),wt=boot.workspace.worktree_root,taskDir=boot.task_path;const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Current decision\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned actual delivery\n");return{root,repo,bare,wt,taskDir,taskId,git};}
 it("reads actual close planning/Git observations without old completion or quality projection",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),bytes=readFileSync(p.plan_ref),head=f.git(f.repo,["rev-parse","HEAD"]),r=await inspectDeliveryCloseState({taskDir:f.taskDir,planRef:p.plan_ref});expect(r.quality_status).toBe("unknown");expect(r.step_records).toEqual([]);expect(r.facts.delivery_committed).toBe(false);expect(r.facts.archive).toBe(false);expect(r.facts.worktree_cleanup).toBe(false);expect(r.facts.push).toBe(true);expect(r).not.toHaveProperty("status_groups");expect(r).not.toHaveProperty("completed");expect(readFileSync(p.plan_ref)).toEqual(bytes);expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(head);});
@@ -43,4 +43,25 @@ it("propagates an unavailable required remote read through public inspect withou
     expect(existsSync(original)).toBe(false);
     renameSync(moved,original);
   }
+});
+
+// P8: the new ordinary ordering is a declared plan fact. Completion is read
+// only from verified actions, a pseudo archive cannot pass, and a legacy plan
+// without the ordering declaration keeps its original completion boundary.
+it("isolated archive before delivery projects completion only from verified new-order actions and rejects a pseudo archive",()=>{
+ const operations=["commit","merge","archive","push","cleanup"];
+ const plan={steps:operations,archive_before_commit:true};
+ const facts={delivery_committed:true,archive:true,merge:true,push:true,worktree_cleanup:true,formal_cleanup_safe:true,branch_cleanup:true,remote_branch_cleanup:true,task_branch_pushed:true,cleanup:{removed:true}};
+ const step_records=operations.map(operation=>({operation,status:"completed",source_head:"a".repeat(40),target_head:"b".repeat(40)}));
+ const input={plan,facts,step_records},before=JSON.stringify(input);
+ expect(derivePhysicalDeliveryStatus(input).status).toBe("removed");
+ expect(JSON.stringify(input), "old records stay read-only").toBe(before);
+ const pseudo=derivePhysicalDeliveryStatus({plan,facts,step_records:step_records.filter(row=>row.operation!=="archive")});
+ expect(pseudo.status).toBe("incomplete");
+ expect(pseudo.missing_actions).toEqual(["archive"]);
+ const unarchived=derivePhysicalDeliveryStatus({plan,facts:{...facts,archive:false},step_records});
+ expect(unarchived.status).toBe("incomplete");
+ expect(unarchived.missing_facts).toContain("archive");
+ const legacy=derivePhysicalDeliveryStatus({plan:{steps:operations},facts,step_records});
+ expect(legacy.status).toBe("incomplete");
 });

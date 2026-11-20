@@ -114,6 +114,10 @@ candidate = build_merge(complete_chunks, graph_path=root/'graphify-out/graph.jso
 
 无现图的首次宿主文档流程使用库`build([ast_chunk, semantic_chunk], root=root)`，不是忽略语义dedup的手拼图。沿现图方向；不要为凑计数切directed/undirected。对raw ID缺失逐canonical和具名关系映射判断，不能凭节点数差/label不出现删或重抽。
 
+### 阶段收口图回执
+
+阶段收口只消费代码图增量：关闭入口以 `graphify update . --no-cluster` 的实际退出、输出与图 payload 字节变化共同判定。exit 0 也可能是 unchanged（真实工具无变化打印 `no incremental changes`/`outputs left untouched` 或 `none of the … scanned files differ` 且 exit 0）；updated 必须以 graph.json/manifest/analysis/cache/semantic 的 payload blob 实际变化为证，stat-index 等 sidecar 只单列、不冒更新。结果连同命令、退出、诊断、payload 与 sidecar 路径记入 `close-graph` 回执；图失败、超时或缺工具、无 graphify-out 目录均落具名回执（failed/unavailable/not_applicable），不阻断合法收口，也不生成每工作树图副本。交接边界只读本阶段文档图回执，不重跑代码图。
+
 ### 写前核贡献，保存后读回
 
 对候选逐项比较所有**未改来源**的node属性、关系（两端/relation/origin/位置及属性）和hyperedge贡献；同节点被多来源引用时也核未改关系不会被归属替换吞掉。合法删除/去重必须有实际来源与关系保全解释。发现未改贡献丢失、缓存异常全miss、候选不可复现或保存保护拒绝，停止该写入并给原因与精确影响，不force、不把全cache重建当退路。
