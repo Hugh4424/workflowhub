@@ -5,7 +5,7 @@ import { closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync,
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
@@ -14,7 +14,7 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessProbeArgv, materialFingerprint } from "../../runtime/stage/stage-content-contracts.mjs";
 import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex, isPhaseMaterialFile } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
@@ -23,6 +23,7 @@ import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { withLock } from "../../runtime/interface/record-lock.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
 import { confirmClosePlan } from "../../core/task-close.mjs";
+import { environmentFingerprint, gateIdentityFromCapture, graphifyIdentity, workspaceIdentity, pendingSummary } from "../../runtime/task/delivery-claims.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails, workflowHubConfigPath } from "../../runtime/evidence/storage-root.mjs";
 import { precheckForActions } from "../../runtime/distribution/precheck.mjs";
@@ -952,8 +953,11 @@ export function projectStageExecutionOutcome(stage, outcomes, taskRows = []) {
   };
   const buildCodeRows = stage === "build-code" ? taskRows.filter((row) =>
     row?.record_kind === "stage" && row.stage === "build-code") : [];
+  // Readiness carries an ordinary fact reference on the same cursor source;
+  // that extension never turns the cursor into a stage-end result.
   const cursorOnly = buildCodeRows.length > 0 && buildCodeRows.every((row) =>
-    row.source === PHASE_PROGRESS_ONLY_SOURCE);
+    row.source === PHASE_PROGRESS_ONLY_SOURCE
+    || row.source?.startsWith(`${PHASE_PROGRESS_ONLY_SOURCE}${READINESS_SOURCE_MARKER}`));
   if (!cursorOnly) return outcome;
   return Object.freeze({
     status: "unavailable",
@@ -1033,6 +1037,105 @@ function captureOutputSettlement(input, recordDir, slug) {
   return { resolveOutputRef };
 }
 
+export { environmentFingerprint, workspaceIdentity, pendingSummary };
+
+function gitCaptureBytes(cwd, argv) {
+  return execFileSync("git", argv, { cwd, env: gitMetadataEnvironment(), stdio: ["ignore", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 });
+}
+
+function taskRelative(taskPath, path) {
+  if (typeof path !== "string" || !isAbsolute(path)) return null;
+  const rel = relative(taskPath, path);
+  return rel && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel) ? rel.split(sep).join("/") : null;
+}
+
+// Only the three current material files and the indexed Phase files are bound;
+// a malformed index binds no Phase bytes rather than inventing a file list.
+function gateMaterials(context) {
+  const read = (file) => {
+    try { return context.artifacts.read(file); }
+    catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  };
+  const spec = read("spec.md"), index = read("phases/index.md"), phases = {};
+  if (index !== null) {
+    let names = [];
+    try { names = phaseFilesFromIndex(index); } catch { names = []; }
+    for (const file of names) { const body = read(file); if (body !== null) phases[file] = body; }
+  }
+  return { spec, index, phases };
+}
+
+// One ordinary gate-results original per real capture. It binds the actual
+// argv/exit, the output bytes and receipt, the implementation diff, the
+// current material fingerprint and the environment, without a second ledger.
+export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receipt, materials, phaseId = null, now = new Date().toISOString() }) {
+  if (typeof taskId !== "string" || !taskId) throw new TypeError("gate result requires the current task id");
+  if (!receipt || typeof receipt !== "object") throw new TypeError("gate result requires the actual capture receipt");
+  if (typeof receipt.output_ref !== "string") throw new Error("gate result requires the captured output original");
+  const output = readFileSync(receipt.output_ref);
+  const head = String(gitCaptureBytes(worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
+  const manifest = JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"));
+  let baseline = null, committedDiff = Buffer.alloc(0);
+  if (GIT_OID.test(manifest.baseline_commit ?? "")) {
+    try { gitCaptureBytes(worktreeRoot, ["cat-file", "-e", `${manifest.baseline_commit}^{commit}`]); baseline = manifest.baseline_commit; }
+    catch { baseline = null; }
+  }
+  if (baseline !== null) committedDiff = gitCaptureBytes(worktreeRoot, ["diff", "--no-ext-diff", "--no-textconv", "--binary", `${baseline}..${head}`]);
+  const worktreeDiff = gitCaptureBytes(worktreeRoot, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "HEAD", "--"]);
+  const untrackedHash = createHash("sha256");
+  for (const name of gitCaptureBytes(worktreeRoot, ["ls-files", "--others", "--exclude-standard", "-z"]).toString("utf8").split("\0").filter(Boolean).sort()) {
+    untrackedHash.update(name); untrackedHash.update("\0");
+    try { const bytes = readFileSync(join(worktreeRoot, name)); untrackedHash.update(`${bytes.length}\0${sha256(bytes)}`); }
+    catch (error) { if (error.code !== "ENOENT") throw error; untrackedHash.update("absent"); }
+    untrackedHash.update("\0");
+  }
+  const pending = pendingSummary({ worktreeRoot });
+  if (pending === null) throw new Error("gate result requires the current task worktree for its pending implementation summary");
+  const workspace = workspaceIdentity({ worktreeRoot });
+  const spec = materials?.spec ?? null, index = materials?.index ?? null, phases = materials?.phases ?? {};
+  // Which declared Phase gate this capture actually is. A capture of any other
+  // command records no identity, so it can never be read back as the delivery
+  // gate or replace a red declared gate.
+  const gateIdentity = gateIdentityFromCapture({ phases, command: { argv: receipt.argv }, phaseId });
+  return {
+    schema_version: "gate-results.v1",
+    gate_identity: gateIdentity,
+    capture_route: "verify:execute",
+    capture_surface: "stage-runtime verify --action=execute (capture-tests)",
+    task_id: taskId,
+    stage: "build-code",
+    command: JSON.stringify(receipt.argv ?? []),
+    argv: [...(receipt.argv ?? [])],
+    exit_code: Number.isInteger(receipt.exit_code) ? receipt.exit_code : null,
+    cancelled: receipt.cancelled === true,
+    timed_out: receipt.timed_out === true,
+    error: receipt.error ? { code: receipt.error.code ?? null, message: receipt.error.message ?? null } : null,
+    output_ref: taskRelative(taskPath, receipt.output_ref) ?? receipt.output_ref,
+    output_sha256: sha256(output),
+    output_bytes: output.length,
+    receipt_ref: taskRelative(taskPath, receipt.receipt_ref) ?? receipt.receipt_ref ?? null,
+    receipt_sha256: typeof receipt.receipt_ref === "string" ? sha256(readFileSync(receipt.receipt_ref)) : null,
+    started_at: receipt.started_at ?? null,
+    ended_at: receipt.ended_at ?? null,
+    cwd: worktreeRoot,
+    head, baseline,
+    diff_sha256: baseline === null ? null : sha256(committedDiff),
+    pending,
+    pending_digest: pending.digest,
+    implementation_sha256: sha256(JSON.stringify({ baseline, head, committed: baseline === null ? null : sha256(committedDiff), pending: pending.digest })),
+    worktree_diff_sha256: sha256(worktreeDiff),
+    untracked_sha256: untrackedHash.digest("hex"),
+    material_sha256: materialFingerprint({ spec: spec ?? "", index: index ?? "", phases }),
+    material_missing: [...(spec === null ? ["spec.md"] : []), ...(index === null ? ["phases/index.md"] : [])],
+    material_files: [...(spec === null ? [] : ["spec.md"]), ...(index === null ? [] : ["phases/index.md"]), ...Object.keys(phases)],
+    environment: { platform: process.platform, arch: process.arch, node: process.version, node_major: process.versions.node.split(".")[0], graphify: graphifyIdentity() },
+    environment_sha256: environmentFingerprint(),
+    workspace,
+    workspace_sha256: workspace.sha256,
+    created_at: now,
+  };
+}
+
 async function recordBuildCodeCommandEvidence(context, receipt) {
   return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
     const current = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
@@ -1046,11 +1149,262 @@ async function recordBuildCodeCommandEvidence(context, receipt) {
         failure_signature: receipt.output_disposition && !signature.includes(receipt.output_disposition)
           ? `${signature}; ${receipt.output_disposition}` : signature });
     }
+    // The gate original is the only additional pointer; the evidence entry
+    // keeps its exact three ordinary fact keys. A failed binding is named in
+    // the source so the claim reader rejects the declaration instead of
+    // treating a missing marker as "no contract required".
+    let gateMarker;
+    try {
+      const artifact = buildGateResultArtifact({ taskId: context.identity.taskId, taskPath: context.task.taskPath,
+        worktreeRoot: context.workspace.worktreeRoot, receipt, materials: gateMaterials(context),
+        phaseId: current?.phase_progress?.phase_id ?? null });
+      const bytes = Buffer.from(`${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+      const phase = current?.phase_progress?.phase_id?.toLowerCase();
+      const ref = await context.task.appendRecord({ dir: "quality/evidence/gate-results", slug: `build-code-${phase ?? "unphased"}`, ext: "json", bytes });
+      gateMarker = `; gate: ${relative(context.task.taskPath, ref).split(sep).join("/")}#sha256=${sha256(bytes)}`;
+    } catch (error) {
+      gateMarker = `; gate: unavailable (${error.code ?? error.name ?? "GATE_BINDING"}: ${String(error.message).replace(/[\r\n;]+/g, " ")})`;
+    }
     await writeStageRow(context.task.taskPath, { ...prior, record_kind: "stage", task_id: context.identity.taskId, stage: "build-code",
-      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}`
-        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}`,
+      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}${gateMarker}`
+        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}${gateMarker}`,
       evidence: evidence.length ? { value: evidence } : { value: null, reason: `no integer command exit; receipt: ${receipt.receipt_ref}` } });
   });
+}
+
+const READINESS_SOURCE_MARKER = "; readiness: ";
+const READINESS_SEGMENT_PREFIX = READINESS_SOURCE_MARKER.slice(2);
+const READINESS_RUNNER = "build-code run --action=execute first step";
+
+// A cursor write owns the readiness fact and nothing else. Every other semicolon
+// segment on the same source (`receipt:`, `output:`, `gate:` and any later fact)
+// belongs to another writer and survives the rebuild byte for byte. Readiness is
+// replaced once, where it already sits, and never invented or duplicated.
+function sourceWithReadiness(source, readinessRef) {
+  const segment = `${READINESS_SEGMENT_PREFIX}${readinessRef}`;
+  const rebuilt = [];
+  let placed = false;
+  for (const part of String(source).split("; ")) {
+    if (!part.startsWith(READINESS_SEGMENT_PREFIX)) { rebuilt.push(part); continue; }
+    if (!placed) { rebuilt.push(segment); placed = true; }
+  }
+  // No prior readiness: it follows the source identity, the position the cursor
+  // contract already publishes, and every existing fact keeps its order.
+  if (!placed) rebuilt.splice(1, 0, segment);
+  return rebuilt.join("; ");
+}
+
+// Latest readiness original for one Phase, read from the task evidence area.
+// The entry is the only executor; every other reader reuses this original.
+function latestReadiness(context, phaseId) {
+  const dir = join(context.task.taskPath, "quality", "tests");
+  let names;
+  // ENOENT is the only "no prior original" case. Any other read error
+  // (EACCES/EPERM/EMFILE...) is a named failure, never a first-run pass.
+  try { names = readdirSync(dir); }
+  catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new Error(`ORACLE-PHASE-READINESS: cannot read readiness originals in ${dir} `
+      + `(${error.code ?? error.message}); refusing to treat it as a first run`);
+  }
+  const pattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-\\d{3}-readiness-${phaseId.toLowerCase()}(-stale)?\\.json$`);
+  const matches = names.filter((name) => pattern.test(name)).sort();
+  if (matches.length === 0) return null;
+  const name = matches.at(-1), ref = join(dir, name);
+  let record;
+  try { record = JSON.parse(readFileSync(ref, "utf8")); } catch { record = null; }
+  return Object.freeze({ ref, record, marker: name.endsWith("-stale.json") });
+}
+
+function readinessOwner(rows) {
+  const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
+  return owners.length ? owners.join(", ") : "计划负责人";
+}
+
+function readinessProbeKind(mode) {
+  const text = String(mode ?? "").toLowerCase();
+  if (text.includes("机器") || text.includes("machine")) return "machine";
+  if (text.includes("人") || text.includes("human") || text.includes("manual")) return "human";
+  return "unknown";
+}
+
+// Only a structured EACCES/EPERM error code classifies a permission failure.
+// Output text is auxiliary: a normal failed probe that merely prints
+// "permission denied" stays a failed probe, never a permission conclusion.
+function classifyProbeFailure(receipt) {
+  const code = receipt?.error?.code ?? null;
+  if (code === "EACCES" || code === "EPERM") {
+    return Object.freeze({ kind: "permission-unobservable", reason: `error.code=${code}` });
+  }
+  let note = "";
+  if (receipt?.output_ref) {
+    try {
+      const observed = readFileSync(receipt.output_ref, "utf8").slice(0, 8192);
+      if (/\b(?:EACCES|EPERM)\b|permission denied|operation not permitted/i.test(observed)) {
+        note = " (output mentions permission denial; not classified as permission without an errno code)";
+      }
+    } catch { /* receipt still names the original */ }
+  }
+  if (receipt?.timed_out === true) return Object.freeze({ kind: "timed out", reason: `probe timed out${note}` });
+  return Object.freeze({ kind: "probe failed", reason: `exit mismatch${note}` });
+}
+
+async function writeReadinessOriginal(context, phaseId, record) {
+  const marker = record.status === "stale";
+  const ref = await context.task.appendRecord({
+    dir: "quality/tests", slug: `readiness-${phaseId.toLowerCase()}${marker ? "-stale" : ""}`,
+    ext: "json", bytes: Buffer.from(`${JSON.stringify(record, null, 2)}\n`, "utf8"),
+  });
+  let readBack;
+  try { readBack = JSON.parse(readFileSync(ref, "utf8")); }
+  catch (error) { throw new Error(`ORACLE-PHASE-READINESS: readiness original is not readable: ${ref} (${error.code ?? error.message})`); }
+  return { ref, readBack };
+}
+
+// One pre-dispatch readiness check. A declared five-column table plus real
+// probes is the dispatch condition: a missing table fails by name, a changed
+// material fingerprint is refused as stale, and an unchanged passing original
+// is reused so repeated calls never re-run non-idempotent probes.
+async function evaluateBuildCodeReadiness(context, materials, phaseId) {
+  const spec = materials["spec.md"], index = materials["phases/index.md"];
+  const phases = Object.fromEntries(Object.entries(materials).filter(([file]) =>
+    file.startsWith("phases/") && file !== "phases/index.md"));
+  const phaseFile = Object.keys(phases).find((file) => file === `phases/${phaseId}.md` || file.startsWith(`phases/${phaseId}-`));
+  if (!phaseFile) throw new Error(`ORACLE-PHASE-READINESS: phase ${phaseId} is not in current materials`);
+  const table = phaseReadinessRows(phases[phaseFile]);
+  if (!table.declared) {
+    throw new Error(`ORACLE-PHASE-READINESS: missing readiness table in ${phaseFile} `
+      + `(build-code dispatch requires the five columns 命令/期望/证据/机器或人判/负责人; owner=计划负责人)`);
+  }
+  const parsed = validatePostPhaseContract({ spec, index, phases, require_readiness: true });
+  if (!parsed.ok) throw new Error(`ORACLE-PHASE-READINESS: ${parsed.errors.join("; ")}`);
+  if (table.error) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness ${table.error}`);
+  if (!table.rows.length) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness table has no probe rows (missing probe; owner=计划负责人)`);
+  const material_sha256 = materialFingerprint({ spec, index, phases });
+  const previous = latestReadiness(context, phaseId);
+  if (previous && previous.record === null) {
+    throw new Error(`ORACLE-PHASE-READINESS: latest readiness original is not readable: ${previous.ref} `
+      + `(owner=${readinessOwner(table.rows)}; repair or archive it, then rerun the same entry)`);
+  }
+  if (previous && previous.record.material_sha256 === material_sha256) {
+    if (previous.record.status === "pass" && !previous.marker) {
+      return Object.freeze({ ref: previous.ref, record: previous.record, reused: true });
+    }
+    if (previous.marker) {
+      // The stale refusal was reviewed; this rerun is the explicit recovery.
+    } else {
+      throw new Error(`ORACLE-PHASE-READINESS: readiness original ${previous.ref} has status ${JSON.stringify(previous.record.status)}; `
+        + `expected pass (owner=${readinessOwner(table.rows)})`);
+    }
+  } else if (previous) {
+    const stale = Object.freeze({
+      schema_version: "readiness.v1",
+      phase: phaseId,
+      material_sha256,
+      previous_ref: previous.ref,
+      previous_material_sha256: previous.record.material_sha256 ?? null,
+      probe: "0 machine; 0 human",
+      status: "stale",
+      runner: READINESS_RUNNER,
+      at: new Date().toISOString(),
+      stale_reason: "material bytes changed after the recorded pass",
+      recover: Object.freeze({
+        action: "rerun-same-entry",
+        command: "run --action=execute (same entry)",
+        executor: "the next caller of the same entry; its runner and time are recorded on the recovery original",
+        current_original_stays_unchanged: true,
+        at: null,
+      }),
+      owner: readinessOwner(table.rows),
+    });
+    const written = await writeReadinessOriginal(context, phaseId, stale);
+    throw new Error(`ORACLE-PHASE-READINESS: stale readiness result ${previous.ref} is bound to material_sha256 `
+      + `${stale.previous_material_sha256 ?? "unknown"}, current materials are ${material_sha256}; `
+      + `recorded stale original ${written.ref} (owner=${stale.owner}). `
+      + `Recovery: rerun this same entry (run --action=execute) against the current materials; `
+      + `the recovered pass records recovered_from=${written.ref} and its executor/time, while the stale original stays unchanged.`);
+  }
+  const probes = [], humanRows = [];
+  for (const [offset, row] of table.rows.entries()) {
+    const label = `${phaseFile} readiness row ${offset + 1}`;
+    if (row.malformed) throw new Error(`ORACLE-PHASE-READINESS: ${label} needs five columns`);
+    if (!row.command) throw new Error(`ORACLE-PHASE-READINESS: ${label} has an empty command`);
+    if (!row.evidence) throw new Error(`ORACLE-PHASE-READINESS: ${label} lacks evidence`);
+    if (!row.owner) throw new Error(`ORACLE-PHASE-READINESS: ${label} lacks owner`);
+    const kind = readinessProbeKind(row.mode);
+    if (kind === "unknown") throw new Error(`ORACLE-PHASE-READINESS: ${label} has unknown judgement mode ${JSON.stringify(row.mode)}`);
+    if (kind === "human") {
+      // Human rows stay unverified; they never block dispatch and never claim a pass.
+      humanRows.push(Object.freeze({ command: row.command, expected: row.expected, evidence: row.evidence, owner: row.owner, status: "unverified" }));
+      continue;
+    }
+    if (!/^(?:nonzero|非零|-?\d+)$/i.test(row.expected)) throw new Error(`ORACLE-PHASE-READINESS: ${label} expects a non-integer exit ${JSON.stringify(row.expected)}`);
+    const expected = /^-?\d+$/.test(row.expected) ? Number(row.expected) : null;
+    let argv;
+    try { argv = readinessProbeArgv(row.command); }
+    catch (error) { throw new Error(`ORACLE-PHASE-READINESS: ${label} ${error.message} (owner=${row.owner}, evidence=${row.evidence})`); }
+    let captured;
+    try {
+      captured = await context.task.captureCommand({
+        cwd: context.workspace.worktreeRoot,
+        slug: `readiness-${phaseId.toLowerCase()}-${offset + 1}`,
+        argv, timeoutMs: 60_000,
+      });
+    } catch (error) {
+      const code = error.code ?? error.execution_error?.code ?? null;
+      const kind = code === "EACCES" || code === "EPERM"
+        ? "permission-unobservable" : "probe could not run";
+      throw new Error(`ORACLE-PHASE-READINESS: ${label} ${kind}: command=${JSON.stringify(row.command)} `
+        + `${code ?? "CAPTURE_FAILED"}: ${error.message} (owner=${row.owner}, evidence=${row.evidence}`
+        + `${error.receipt_ref ? `, receipt=${error.receipt_ref}` : ""})`);
+    }
+    const actual = captured.exit_code;
+    const passed = expected === null ? actual !== 0 : actual === expected;
+    const probe = Object.freeze({
+      phase: phaseId, material_sha256, probe: row.command, status: passed ? "pass" : "failed",
+      expected: row.expected, exit_code: actual, signal: captured.signal ?? null,
+      timed_out: captured.timed_out === true, argv, cwd: context.workspace.worktreeRoot,
+      owner: row.owner, evidence: row.evidence, runner: READINESS_RUNNER,
+      at: captured.started_at ?? new Date().toISOString(),
+      receipt_ref: captured.receipt_ref, output_ref: captured.output_ref,
+    });
+    if (!passed) {
+      const failure = classifyProbeFailure(captured);
+      throw new Error(`ORACLE-PHASE-READINESS: ${label} ${failure.kind} (${failure.reason}): command=${JSON.stringify(row.command)} `
+        + `expected=${row.expected} actual=${actual ?? captured.signal ?? "no-exit"} `
+        + `owner=${row.owner} evidence=${row.evidence} receipt=${captured.receipt_ref} output=${captured.output_ref}`);
+    }
+    probes.push(probe);
+  }
+  const record = Object.freeze({
+    schema_version: "readiness.v1",
+    phase: phaseId,
+    material_sha256,
+    probe: `${probes.length} machine; ${humanRows.length} human`,
+    status: "pass",
+    runner: READINESS_RUNNER,
+    at: new Date().toISOString(),
+    cwd: context.workspace.worktreeRoot,
+    phase_file: phaseFile,
+    probes: Object.freeze(probes),
+    human_rows: Object.freeze(humanRows),
+    ...(previous?.marker ? {
+      recovered_from: previous.ref,
+      recovered: Object.freeze({
+        from: previous.ref,
+        action: "rerun-same-entry",
+        executor: READINESS_RUNNER,
+        at: new Date().toISOString(),
+      }),
+    } : {}),
+  });
+  const written = await writeReadinessOriginal(context, phaseId, record);
+  // A pass is published only after the original reads back with the same binding.
+  if (written.readBack?.status !== "pass" || written.readBack?.material_sha256 !== material_sha256
+    || !Array.isArray(written.readBack?.probes) || written.readBack.probes.length !== probes.length) {
+    throw new Error(`ORACLE-PHASE-READINESS: readiness original read-back does not match the executed probes: ${written.ref}`);
+  }
+  return Object.freeze({ ref: written.ref, record, reused: false });
 }
 
 async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
@@ -1068,6 +1422,7 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
     if (!phaseProgressTargetExists(inputCursor, materials)) {
       throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
     }
+    const readiness = await evaluateBuildCodeReadiness(context, materials, inputCursor.phase_id);
     const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
       row?.record_kind === "stage" && row.stage === "build-code") ?? null;
     const cursor = currentRow?.phase_progress;
@@ -1104,7 +1459,14 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
         close_action: { value: null, reason: "a resume cursor carries no close action" },
         handoff: { value: null, reason: "a resume cursor publishes no handoff" },
       };
-    const written = await writeStageRow(context.task.taskPath, { ...rowInput, material_bytes: materialBaseline });
+    // A readiness original is linked as an ordinary fact reference on the same
+    // stage row; the cursor-only identity stays stable because the marker is a
+    // declared extension of PHASE_PROGRESS_ONLY_SOURCE, never a second ledger.
+    // The rebuild replaces the readiness segment only: receipt/output/gate facts
+    // written by later captures stay on the row, so the declared gate remains
+    // readable after a resume cursor write.
+    const source = sourceWithReadiness(rowInput.source, readiness.ref);
+    const written = await writeStageRow(context.task.taskPath, { ...rowInput, source, material_bytes: materialBaseline });
     return Object.freeze({
       status: "recorded",
       stage: "build-code",
@@ -1572,6 +1934,34 @@ function terminalAssessmentQuality(context, row) {
     coverage_limits:[...new Set(coverage)],gaps,evidence_refs:refs};
 }
 
+const REPLAY_CASES_REF = /^quality\/evidence\/replay-cases\/[A-Za-z0-9._-][A-Za-z0-9._/-]*$/;
+
+// Bind one frozen replay-cases original to the build-code row. Only the real
+// run entry writes this pointer; the replay CLI then re-reads the exact bytes.
+async function writeReplayCasesBinding(context, reference) {
+  return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
+    if (!reference || Object.keys(reference).sort().join("\0") !== "ref\0sha256"
+        || typeof reference.ref !== "string" || !REPLAY_CASES_REF.test(reference.ref) || reference.ref.includes("\\")
+        || reference.ref.split("/").some((part) => !part || part === "." || part === "..")
+        || !/^[a-f0-9]{64}$/.test(reference.sha256 ?? "")) throw new TypeError("replay_cases_ref must name a task-relative quality/evidence/replay-cases original with sha256");
+    const bytes = context.task.readRecordBytes(reference.ref);
+    if (sha256(bytes) !== reference.sha256) throw new Error("replay_cases_ref sha256 mismatch");
+    let value;
+    try { value = JSON.parse(bytes.toString("utf8")); }
+    catch { throw new Error("replay_cases_ref must name a readable replay cases JSON original"); }
+    if (!value || typeof value !== "object" || !Array.isArray(value.cases)) throw new Error("replay_cases_ref must name a replay cases JSON original with a cases array");
+    const current = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
+    if (!current) throw new Error("replay case binding requires an existing build-code facts row");
+    const prior = Object.fromEntries([...STAGE_ROW_KEYS, "phase_progress"].filter(key => Object.hasOwn(current, key)).map(key => [key, current[key]]));
+    const marker = `; replay-cases: ${reference.ref}#sha256=${reference.sha256}`;
+    const source = String(current.source ?? "replay cases binding").includes(marker) ? String(current.source) : `${current.source ?? "replay cases binding"}${marker}`;
+    const saved = await writeStageRow(context.task.taskPath, { ...prior, source });
+    const row = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
+    if (!String(row?.source ?? "").includes(marker)) throw new Error("replay case binding readback differs");
+    return { status: "recorded", task_id: context.identity.taskId, stage: "build-code", replay_cases_ref: { ref: reference.ref, sha256: reference.sha256 }, ref: saved.ref };
+  });
+}
+
 async function writeTerminalAssessmentReference(context, reference) {
   return withLock(context.task.taskPath,"workflowhub-build-code-row",async()=>{
     if(!reference||Object.keys(reference).sort().join("\0")!=="ref\0sha256"||typeof reference.ref!=="string"||!reference.ref.startsWith("quality/evidence/")||reference.ref.includes("\\")||reference.ref.split("/").some(p=>!p||p==="."||p==="..")||!/^[a-f0-9]{64}$/.test(reference.sha256??""))throw new TypeError("terminal_assessment_ref must contain a safe evidence ref and sha256");
@@ -1865,6 +2255,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       return { ...result, exit_code: result.state === "failed" ? 1 : 0 };
     }
     if(input && values.stage === "build-code" && Object.keys(input).join("\0") === "terminal_assessment_ref") return writeTerminalAssessmentReference(context,input.terminal_assessment_ref);
+    if(input && values.stage === "build-code" && Object.keys(input).join("\0") === "replay_cases_ref") return writeReplayCasesBinding(context,input.replay_cases_ref);
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).join("\0") !== "phase_progress" || values.stage !== "build-code") {
       throw new TypeError("run --action=execute only records the existing build-code phase_progress cursor; official stage execution is retired");
     }

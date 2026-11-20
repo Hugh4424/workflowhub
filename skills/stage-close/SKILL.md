@@ -43,7 +43,9 @@ openTask从已定位包的runtime/task/task-handle.mjs导入，taskRoot/projectN
 
 ## 3. 提交前委派知识owner更新
 
-在任务worktree、功能写入结束且提交前，读取并调用 `skills/knowledge-graph/SKILL.md` 的更新分支。只把本任务真实改动路径和已有图/缓存/授权交知识owner；不是另一个图writer，不把全部repo交去重抽。代码图与文档图分别读回真实状态、原件/退出和未覆盖；exit1只有工具输出与空差异确证无工作时才解释为无变化，exit0不能证明文档更新。
+在任务worktree、功能写入结束且提交前，读取并调用 `skills/knowledge-graph/SKILL.md` 的更新分支。只把本任务真实改动路径和已有图/缓存/授权交知识owner；不是另一个图writer，不把全部repo交去重抽。交接边界由交接方法读取本阶段文档图更新的实际原件；关闭只对代码图作增量更新。代码图与文档图分别读回真实状态、原件/退出和未覆盖；exit1只有工具输出与空差异确证无工作时才解释为无变化，exit0不能证明文档更新。
+
+关闭入口只调用一次代码图增量更新，把 updated、unchanged、failed、timeout、not_applicable 的实际命令、退出、诊断与 payload/sidecar 路径记入 `close-graph` 回执；updated 只以图 payload 字节实际变化为证，exit 0 但无 payload 变化记 unchanged。图失败、超时或缺工具不阻断合法收口，回执只是事实，不写每工作树图副本。
 
 文档先核本次变化与当前prompt/mode缓存miss，优先免费正常重放。新增抽取先给精确文档/份数、当前缓存、成本依据/区间与不确定性，取得本次真实范围许可；拒绝/未答保文档未更新，不冒代码命令成功为全图完成。图不可用/保存保护拒绝时保原始失败与影响，不绕过、不手改graph/manifest/cache，其它授权内交付继续。P1这类当前质量报告限制随图消费，不能靠收尾清掉未定事实。
 
@@ -52,6 +54,8 @@ openTask从已定位包的runtime/task/task-handle.mjs导入，taskRoot/projectN
 ## 4. 提交、推送任务分支与PR
 
 对照当前材料、真实diff和允许写集，按具名路径stage，再读回索引。提交授权record/consume后执行普通commit；若无改动保真实no-change原因，不造空提交冒实施。读回commit/tree、branch/HEAD和clean状态。提交后任何新字节回本步骤核，不漏掉当前材料或本次图变化。
+
+无 PR 的普通路线在提交后、合并前单独推送任务分支：任务分支与目标分支各用自身 branch/HEAD 经 `runtime/interface/git-authorize.mjs` record/consume，各留 consumed 回执；不把目标推送授权冒充任务分支发布，也不重复已成功的第一次推送。
 
 交付说明只在真正执行关闭的阶段生成。据真实task/spec、已验AC与未验项、base到task HEAD提交/diff、facts及测试原ref成稿。
 
@@ -115,7 +119,7 @@ PR能力不可用/环境不支持时保真实错误，继续可执行的普通�
 
 先核具名当前消费者是否必须使用材料的现有路径：能在本次授权范围内安全迁接的reader、技能链接和测试依赖，随归档更新到目标路径并读回；确需原路径且不能同批安全迁接的，逐项写明消费者、用途和保留原因。只读历史引用、immutable证据与图中历史source_file保留原文，不单独构成材料必须原位保留的理由；图更新按第3节与knowledge-graph规则执行，未更新如实说明。父规划材料仍被后续子任务消费时，保留其具体路径和用途，不由子任务归档/移动/删除父/兄弟材料；已安全交付也不等于所有执行侧资料可弃。旧worktree备忘逐件核外置唯一原件保管位置或用户明确可弃范围，本次备忘从创建就经已认证task.appendRecord({dir:"quality/evidence",slug,ext:"md",bytes})外置（底层复用appendRecord），不因目录名当可丢缓存。确认拒绝/缺失时，若因PR合并可能自动删除源任务分支（包括宿主设置未知）而在merge前请求确认，则停该merge以及archive/删除/cleanup；其它场景只停archive/删除/cleanup。已完成commit/merge/push事实不改写，保留实际路径和下一步条件。确认只授权列出的物理范围，不接受质量风险或让incomplete变完成。
 
-归档使用既有 task-close 入口；仅保留前述确需原路径且不能安全迁接的具名例外。参数统一 `--key=value`，从真实返回取 plan-ref 与 confirmation-ref，不手造：
+归档使用既有 task-close 入口；仅保留前述确需原路径且不能安全迁接的具名例外。普通路线在 task-close 的任务 worktree 内先移动整目录，再把它与交付字节同一提交；`archive` 步骤只读回已交付目标树，不另作归档提交。参数统一 `--key=value`，从真实返回取 plan-ref 与 confirmation-ref，不手造：
 
 ```bash
 node tools/cli/task-close.mjs prepare --project=<项目> --task=<任务> --spec-source=<源> --spec-archive=<归档>
@@ -127,9 +131,11 @@ node tools/cli/task-close.mjs execute --project=<项目> --task=<任务> --plan-
 node tools/cli/task-close.mjs status --project=<项目> --task=<任务> --plan-ref=<计划原ref>
 ```
 
-execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name-only <实际目标commit> -- <归档路径>`；缺 --confirmation-ref 明确报错，不执行。该入口承接现有归档动作及授权核对，不新增计划格式或恢复流程。只有授权缺失才降级为具名人工 `git mv` 步骤说明；授权缺失时只交回待执行命令，不实际移动、不提交、不声明归档完成。获确认后的归档新字节仍核当前 archive/commit 授权并正常 merge/push；不跳过本节最终范围确认。若路径/HEAD/保留需求变化超原确认范围，先重新展示变化并取得新增范围答复；不靠时间或先前机器记录扩大授权。
+execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name-only <实际目标commit> -- <归档路径>`；缺 --confirmation-ref 明确报错，不执行。需要只读材料对账时用 `node tools/cli/check-specs-archive.mjs --task-path=<任务>`（缺省取该任务最近一份 close plan）或追加 `--plan-ref=<计划原ref>`，读回归档完整性、两路推送与图回执，它不写状态。该入口承接现有归档动作及授权核对，不新增计划格式或恢复流程。只有授权缺失才降级为具名人工 `git mv` 步骤说明；授权缺失时只交回待执行命令，不实际移动、不提交、不声明归档完成。获确认后的归档新字节仍核当前 archive/commit 授权并正常 merge/push；不跳过本节最终范围确认。若路径/HEAD/保留需求变化超原确认范围，先重新展示变化并取得新增范围答复；不靠时间或先前机器记录扩大授权。
 
 完成：最终scope和真实答复原ref可读，归档/保留逐项实际结果可定位；拒绝或未答无对应副作用。
+
+收口执行前，`core/task-close.mjs` 从当前任务原件重读三种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹）、验证声明读同次 gate 退出 0 与捕获回执、接受声明读 `quality/evidence/verdict.json` 的独立签字人、被审材料指纹、所审 gate 引用和实际下游读回。gate 红、缺证据、签字人属于实施作者、签后材料字节变化或没有读回时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。声明通过时在同一 close 证据区写 `close-claims-readback`，记录本次实际读回的门、签字、材料指纹与计划。只读核对用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。质量签字只证明被审材料，不代 Git 授权；commit/push/merge/archive/cleanup 仍逐项按本节取得并保存真实范围答复。
 
 ## 7. 安全移除、分支删除与逐项读回
 
@@ -151,7 +157,7 @@ if (!await removal.verify(after)) throw new Error('worktree removal not verified
 
 worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`git branch -d -- <实际任务分支>`删除已合入本地任务分支，禁止`-D`。删除同名远端任务分支前用`git ls-remote --heads`核真实存在/OID和已交付范围，再按本次远端删除授权record/consume后普通`git push <remote> --delete <实际任务分支>`；不存在记不存在，不造失败或删除成功。清理授权必须明确覆盖远端同名分支删除；范围不含则保留，不借push授权扩大。不得force/强推、整树丢弃或删除main/existing workspace。
 
-交回caller逐项清单：实施/质量/业务验收/发布的真实状态；代码图、文档图；commit/push-task/PR/merge/push；归档/具名保留；worktree/本地分支/远端同名分支清理；每项实际命令/退出/原件及未完成owner/条件。caller据此保存已有正式事实与stage-handoff，报告实际不可变handoff绝对路径，本方法不另写第二进度对象。动作失败、unknown或skipped保原样，不用总计绿填平。
+交回caller逐项清单：实施/质量/业务验收/发布的真实状态；代码图、文档图各自的更新/无变化/失败回执；commit/push-task/PR/merge/push；两路推送各自的 branch/HEAD 与 consumed 回执；归档/具名保留；worktree/本地分支/远端同名分支清理；每项实际命令/退出/原件及未完成owner/条件。caller据此保存已有正式事实与stage-handoff，报告实际不可变handoff绝对路径，本方法不另写第二进度对象。动作失败、unknown或skipped保原样，不用总计绿填平。
 
 完成：每项声明都与实际效果及原件对应，本次自建临时物只清具名且确定可再生项；历史raw/review、未知/私有/未交付字节和父材料例外仍可读。真实PR服务、用户选择或外部平台未执行时明确未覆盖。
 

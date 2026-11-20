@@ -13,6 +13,7 @@ import { readTaskFacts } from "../runtime/task/task-store.mjs";
 import { openTask } from "../runtime/task/task-handle.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
+import { readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
 const AUTH = fileURLToPath(new URL("../runtime/interface/git-authorize.mjs", import.meta.url));
@@ -128,6 +129,203 @@ function declaredTaskType(markdown) {
 function actionFacts(c, planRef) {
   const base = closeEvidencePath(c.taskDir);
   return readdirSync(base).filter(name => /^\d{4}-\d{2}-\d{2}-\d{3}-close-action\.json$/.test(name)).sort().map(name => JSON.parse(readFile(base,name))).filter(row => row.plan_ref === planRef);
+}
+const GRAPH_DIRECTORY = "graphify-out";
+const GRAPH_UPDATE_COMMAND = ["update", ".", "--no-cluster"];
+const GRAPH_RECEIPT = /^\d{4}-\d{2}-\d{2}-\d{3}-close-graph\.json$/;
+function graphReceipts(c, planRef) {
+  const base = closeEvidencePath(c.taskDir);
+  return readdirSync(base).filter(name => GRAPH_RECEIPT.test(name)).sort()
+    .map(name => ({ row: JSON.parse(readFile(base, name)), path: join(base, name) }))
+    .filter(entry => entry.row.plan_ref === planRef);
+}
+// The two pushes are separate native actions under one confirmed plan. Their
+// immutability lives in the consumed grants; read the original grant rather
+// than inventing a second receipt shape.
+function pushReceipts(c, planRef) {
+  const dir = join(realDirectory(c.taskDir), "quality", "evidence", "git-authorizations");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter(name => /^\d{4}-\d{2}-\d{2}-\d{3}-consumed-push\.json$/.test(name)).sort()
+    .map(name => {
+      const row = JSON.parse(readFile(dir, name));
+      if (typeof row.step_id !== "string" || !row.step_id.startsWith(`${planRef}:`)) return null;
+      if (typeof row.authorization_ref !== "string" || dirname(row.authorization_ref) !== dir || basename(row.authorization_ref) === "") throw failure("PUSH_RECEIPT_UNREADABLE", `consumed push receipt ${name} references a grant outside this task`);
+      let grant;
+      try { grant = JSON.parse(readFile(dir, basename(row.authorization_ref))); }
+      catch (error) { throw failure("PUSH_RECEIPT_UNREADABLE", `consumed push receipt ${name} has an unreadable grant: ${error.message}`); }
+      if (!grant || grant.operation !== "push" || typeof grant.branch !== "string" || typeof grant.head !== "string" || typeof grant.confirmation_ref !== "string") throw failure("PUSH_RECEIPT_UNREADABLE", `consumed push receipt ${name} has an invalid original grant`);
+      return { step_id: row.step_id, branch: grant.branch, head: grant.head, confirmation_ref: grant.confirmation_ref };
+    }).filter(Boolean);
+}
+function graphReadback(c, planRef) {
+  const rows = graphReceipts(c, planRef);
+  const latest = rows.at(-1);
+  if (!latest) return { status: "not_started", reason: "no close graph receipt exists for this plan", receipt_ref: null };
+  const row = latest.row;
+  return { status: row.status, reason: row.reason ?? null, receipt_ref: latest.path, command: row.command ?? null,
+    exit_code: row.exit_code ?? null, signal: row.signal ?? null, timed_out: row.timed_out === true, changed_paths: Array.isArray(row.changed_paths) ? row.changed_paths : [],
+    sidecar_paths: Array.isArray(row.sidecar_paths) ? row.sidecar_paths : [], changed_objects: Array.isArray(row.changed_objects) ? row.changed_objects : [] };
+}
+function pathUnder(prefix, path) { return path === prefix || path.startsWith(`${prefix}/`); }
+function isGraphPayload(path) {
+  if (!path.startsWith(`${GRAPH_DIRECTORY}/`)) return false;
+  const rest = path.slice(GRAPH_DIRECTORY.length + 1);
+  return rest === "graph.json" || rest === "manifest.json" || rest === ".graphify_analysis.json" || rest.startsWith("cache/semantic/");
+}
+function stagedRows(root, rel) {
+  return git(root, ["ls-files", "-s", "-z", "--", rel]).split("\0").filter(Boolean).map(row => {
+    const tab = row.indexOf("\t"), meta = row.slice(0, tab).split(" ");
+    return { mode: meta[0], blob: meta[1], stage: meta[2], path: row.slice(tab + 1) };
+  });
+}
+function relativeRows(rows, prefix) {
+  return rows.map(row => ({ mode: row.mode, blob: row.blob, path: row.path.slice(prefix.length + 1) })).sort((a, b) => a.path.localeCompare(b.path));
+}
+function treeRows(root, commit, rel) {
+  return git(root, ["ls-tree", "-r", "-z", "--full-tree", commit, "--", rel]).split("\0").filter(Boolean).map(row => {
+    const tab = row.indexOf("\t"), meta = row.slice(0, tab).split(" ");
+    return { mode: meta[0], type: meta[1], blob: meta[2], path: row.slice(tab + 1) };
+  });
+}
+function verifyArchiveReadback(root, plan, commit, expectation) {
+  const source = git(root, ["ls-tree", "-r", "--name-only", commit, "--", plan.spec_source_path]).trim();
+  const rows = treeRows(root, commit, plan.spec_archive_path);
+  const relative = rows.map(row => ({ mode: row.mode, blob: row.blob, path: row.path.slice(plan.spec_archive_path.length + 1) }));
+  const result = { status: "ok", source_present: Boolean(source), object_count: relative.length, missing: [], extra: [], mismatched: [], complete: Boolean(expectation?.objects) };
+  if (!rows.length) result.reason = "the delivered archive tree is empty";
+  else if (source) result.reason = `the source path is still active at ${plan.spec_source_path}`;
+  if (expectation?.objects) {
+    const expected = expectation.objects.slice().sort((a, b) => a.path.localeCompare(b.path));
+    const actual = relative.slice().sort((a, b) => a.path.localeCompare(b.path));
+    const expectedMap = new Map(expected.map(row => [row.path, row])), actualMap = new Map(actual.map(row => [row.path, row]));
+    result.missing = expected.filter(row => !actualMap.has(row.path)).map(row => row.path);
+    result.extra = actual.filter(row => !expectedMap.has(row.path)).map(row => row.path);
+    result.mismatched = expected.filter(row => { const actualRow = actualMap.get(row.path); return actualRow && (actualRow.mode !== row.mode || actualRow.blob !== row.blob); }).map(row => row.path);
+  }
+  const mismatch = !rows.length || Boolean(source) || result.missing.length > 0 || result.extra.length > 0 || result.mismatched.length > 0;
+  if (mismatch) {
+    result.status = "mismatch";
+    result.reason = result.reason ?? [result.missing.length ? `missing ${result.missing.join(", ")}` : "", result.extra.length ? `unexpected ${result.extra.join(", ")}` : "", result.mismatched.length ? `changed ${result.mismatched.join(", ")}` : ""].filter(Boolean).join("; ");
+  }
+  return result;
+}
+async function recordCloseGraph(c, plan, planRef, timeoutMs) {
+  if (plan.archive_before_commit !== true) return null;
+  const existing = graphReceipts(c, planRef).at(-1);
+  if (existing) return existing.row;
+  const directory = join(plan.worktree_root, GRAPH_DIRECTORY);
+  if (!existsSync(directory) || !lstatSync(directory).isDirectory()) {
+    const value = { plan_ref: planRef, stage: "close", kind: "code", command: `graphify ${GRAPH_UPDATE_COMMAND.join(" ")}`, cwd: plan.worktree_root,
+      status: "not_applicable", reason: "the task worktree has no code graph directory", exit_code: null, signal: null, timed_out: false,
+      stdout: "", stderr: "", changed_paths: [], sidecar_paths: [], changed_objects: [], recorded_at: new Date().toISOString() };
+    const ref = await writeEvidence(c, "close-graph", value);
+    return { ...value, ref };
+  }
+  const env = { ...process.env };
+  delete env.GRAPHIFY_FORCE;
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000;
+  const result = spawnSync("graphify", GRAPH_UPDATE_COMMAND, { cwd: plan.worktree_root, env, encoding: "utf8", timeout, maxBuffer: 16 * 1024 * 1024 });
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  const timedOut = result.error?.code === "ETIMEDOUT" || result.signal === "SIGTERM";
+  let changedRows = null, changedError = null;
+  try {
+    changedRows = git(plan.worktree_root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", GRAPH_DIRECTORY]).split("\0").filter(Boolean)
+      .map(row => ({ path: safeRelative(row.slice(3), "graph changed path"), status: row.slice(0, 2) }));
+  } catch (error) { changedError = error.message; }
+  const payload = (changedRows ?? []).filter(row => isGraphPayload(row.path));
+  const sidecars = (changedRows ?? []).filter(row => !isGraphPayload(row.path)).map(row => row.path);
+  const changedObjects = payload.filter(row => row.status !== " D" && existsSync(join(plan.worktree_root, row.path))).map(row => {
+    const file = join(plan.worktree_root, row.path), stat = lstatSync(file);
+    if (!stat.isFile()) throw failure("UNSAFE_FILE", `graph payload is not a regular file: ${row.path}`);
+    const hashed = spawnSync("git", ["hash-object", "--path", row.path, file], { cwd: plan.worktree_root, env: gitEnv(), encoding: "utf8" });
+    if (hashed.error || hashed.status !== 0) throw failure("GIT_COMMAND_FAILED", `graph payload blob could not be read: ${row.path}`);
+    return { path: row.path, mode: stat.mode & 0o111 ? "100755" : "100644", blob: hashed.stdout.trim() };
+  });
+  const noWork = /no incremental changes|outputs left untouched|no changes detected|nothing to update|no tracked code files in change set|none of the .* scanned files differ|no (?:code[- ]graph )?work|没有(?:任何)?(?:变更|变化)/i.test(output);
+  let status, reason;
+  if (result.error?.code === "ENOENT") { status = "unavailable"; reason = "graphify is not installed in this environment"; }
+  else if (timedOut) { status = "failed"; reason = `graph command timed out after ${timeout}ms`; }
+  else if (changedError) { status = "failed"; reason = `graph byte changes could not be read: ${changedError}`; }
+  else if (result.status !== 0 && noWork && payload.length === 0) { status = "unchanged"; reason = "graph command reported no work"; }
+  else if (result.status !== 0) { status = "failed"; reason = `graph command exited ${result.status ?? result.signal ?? "unknown"}`; }
+  else if (noWork) { status = "unchanged"; reason = "graph command reported no work"; }
+  else if (payload.length > 0) { status = "updated"; reason = "graph payload bytes changed"; }
+  else { status = "unchanged"; reason = "graph command exited 0 without graph payload byte changes"; }
+  const trackedSidecars = (changedRows ?? []).filter(row => !isGraphPayload(row.path) && row.status[0] !== "?").map(row => row.path);
+  const trackedPayload = payload.filter(row => row.status[0] !== "?").map(row => row.path);
+  const revertedPayload = status === "updated" ? [] : trackedPayload;
+  const revert = [...new Set([...trackedSidecars, ...revertedPayload])];
+  if (revert.length) {
+    try { git(plan.worktree_root, ["checkout", "--", ...revert]); }
+    catch { /* the receipt keeps the observed paths even if the worktree cannot be restored */ }
+  }
+  const value = { plan_ref: planRef, stage: "close", kind: "code", command: `graphify ${GRAPH_UPDATE_COMMAND.join(" ")}`, cwd: plan.worktree_root,
+    status, reason, exit_code: result.status ?? null, signal: result.signal ?? null, timed_out: timedOut,
+    stdout: String(result.stdout ?? "").slice(0, 65536), stderr: String(result.stderr ?? "").slice(0, 65536),
+    changed_paths: payload.map(row => row.path), sidecar_paths: sidecars, changed_objects: changedObjects, reverted_payload_paths: revertedPayload, changed_error: changedError, recorded_at: new Date().toISOString() };
+  const ref = await writeEvidence(c, "close-graph", value);
+  return { ...value, ref };
+}
+// Move the whole task materials directory inside the task worktree and stage
+// it together with the delivery bytes. Every object is checked against the
+// original relative path, mode and Git blob before the delivery commit.
+function moveMaterials(c, plan) {
+  const root = c.worktree, sourceRel = plan.spec_source_path, archiveRel = plan.spec_archive_path;
+  const sourcePath = join(root, sourceRel), archivePath = join(root, archiveRel);
+  if (!within(root, sourcePath) || !within(root, archivePath)) throw failure("ARCHIVE_SCOPE", "archive source/target is outside the task worktree");
+  realDirectory(sourcePath);
+  if (existsSync(archivePath) || git(root, ["ls-files", "-z", "--", archiveRel]).trim() !== ""
+      || git(root, ["cat-file", "-e", `HEAD:${archiveRel}`], { optional: true }).status === 0) throw failure("ARCHIVE_TARGET_CONFLICT", "the archive target already exists; refusing to absorb it into the delivery commit");
+  const files = [];
+  const walk = rel => {
+    for (const name of readdirSync(join(root, rel)).sort()) {
+      const child = `${rel}/${name}`;
+      const stat = lstatSync(join(root, child));
+      if (stat.isSymbolicLink()) throw failure("PATH_ALIAS", `archive source contains a symlink: ${child}`);
+      if (stat.isDirectory()) { realDirectory(join(root, child)); walk(child); continue; }
+      if (!stat.isFile()) throw failure("UNSAFE_FILE", `archive source contains a non-regular file: ${child}`);
+      files.push(child);
+    }
+  };
+  walk(sourceRel);
+  const tracked = new Set(git(root, ["ls-files", "-z", "--", sourceRel]).split("\0").filter(Boolean));
+  const planned = new Set(plan.source.changes.map(row => row.path));
+  const unexpected = files.filter(rel => !tracked.has(rel) && !planned.has(rel));
+  if (unexpected.length) throw failure("ARCHIVE_CONTENT_MISMATCH", `archive source contains bytes outside the confirmed plan: ${unexpected.join(", ")}`);
+  git(root, ["add", "-A", "--", sourceRel]);
+  const expected = relativeRows(stagedRows(root, sourceRel), sourceRel);
+  if (!expected.length) throw failure("ARCHIVE_CONTENT_MISMATCH", "the archive source contains no files to move");
+  const parent = dirname(archivePath);
+  if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
+  realDirectory(parent);
+  git(root, ["mv", "--", sourceRel, archiveRel]);
+  const actual = relativeRows(stagedRows(root, archiveRel), archiveRel);
+  if (!same(actual, expected)) throw failure("ARCHIVE_BLOB_MISMATCH", "archived Git objects differ from the original relative paths, modes or blob digests");
+  if (stagedRows(root, sourceRel).length) throw failure("ARCHIVE_BLOB_MISMATCH", "the source path is still present in the index after the move");
+  return { file_count: expected.length, objects: expected.map(row => ({ path: row.path, mode: row.mode, blob: row.blob })) };
+}
+function stagedDelivery(root, plan, graphExpectation = null) {
+  const staged = git(root, ["diff", "--cached", "--name-only", "-z"]).split("\0").filter(Boolean);
+  const graphObjects = new Map((graphExpectation?.changed_objects ?? []).map(row => [row.path, row]));
+  const allowed = path => plan.source.changes.some(change => change.path === path || change.source_path === path)
+    || pathUnder(plan.spec_source_path, path) || pathUnder(plan.spec_archive_path, path) || graphObjects.has(path);
+  const unexpected = staged.filter(path => !allowed(path));
+  if (unexpected.length) throw failure("ARCHIVE_CONTENT_MISMATCH", `staged bytes outside the confirmed delivery: ${unexpected.join(", ")}`);
+  for (const [path, expected] of graphObjects) {
+    const rows = stagedRows(root, path);
+    if (!rows.some(row => row.path === path && row.mode === expected.mode && row.blob === expected.blob)) throw failure("GRAPH_BYTES_UNSEALED", `staged graph bytes differ from the close graph receipt: ${path}`);
+  }
+  for (const change of plan.source.changes) {
+    const archived = plan.archive_before_commit === true && pathUnder(plan.spec_source_path, change.path) ? `${plan.spec_archive_path}${change.path.slice(plan.spec_source_path.length)}` : change.path;
+    if (change.sha256 === null) {
+      if (git(root, ["ls-files", "-z", "--", archived]).trim() !== "") throw failure("ARCHIVE_BLOB_MISMATCH", `a planned deletion is still staged: ${archived}`);
+      continue;
+    }
+    const blob = spawnSync("git", ["show", `:${archived}`], { cwd: root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
+    if (blob.error || blob.status !== 0 || digest(blob.stdout) !== change.sha256) throw failure("ARCHIVE_BLOB_MISMATCH", `staged bytes differ from the confirmed plan: ${archived}`);
+    if (change.source_path && git(root, ["ls-files", "-z", "--", change.source_path]).trim() !== "") throw failure("ARCHIVE_BLOB_MISMATCH", `a planned rename source is still staged: ${change.source_path}`);
+  }
+  return staged;
 }
 function entries(root) {
   const fields = git(root, ["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0");
@@ -308,6 +506,16 @@ function validatePlan(plan, c) {
   const expected = plan.mode === "planning" ? ["commit", "merge", "push", "cleanup"] : plan.mode === "post-cleanup-archive" ? ["archive", "push"]
     : plan.mode === "ordinary" && plan.pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"];
   if (!same(plan.steps, expected)) throw failure("CLOSE_PLAN_ACTIONS", "close action set was changed");
+  // A declared task-branch publication is part of the confirmed plan bytes; a
+  // plan that still carries a declaration must keep it consistent with the
+  // action set it belongs to. Old plans without the declaration stay readable.
+  if (plan.task_branch_push !== undefined) {
+    const push = plan.task_branch_push;
+    if (!push || typeof push !== "object" || Array.isArray(push) || push.step !== "push-task" || push.operation !== "push"
+      || push.branch !== plan.task_branch || push.remote !== plan.remote || push.ordering !== "before merge"
+      || expected.includes("push-task")) throw failure("CLOSE_PLAN_ACTIONS", "the declared task-branch publication differs from the plan's action set");
+  }
+  if (plan.archive_before_commit !== (plan.mode === "ordinary")) throw failure("CLOSE_PLAN_ORDER", "archive_before_commit must be declared exactly for the ordinary delivery order");
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.task_branch) || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.target_branch) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(plan.remote)) throw failure("CLOSE_PLAN_REFS", "unsafe branch or remote");
   if (plan.worktree_root !== (plan.mode === "post-cleanup-archive" ? c.root : c.worktree)) throw failure("CLOSE_PLAN_WORKTREE", "close plan worktree differs from the registered task");
   if (plan.source?.remote_identity !== undefined) validateRemoteIdentity(plan.source.remote_identity);
@@ -376,7 +584,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
     realDirectory(join(c.root, prior.spec_source_path));
     if (existsSync(join(c.root, prior.spec_archive_path))) throw failure("ARCHIVE_SCOPE", "archive target already exists");
     const source = { ...sourceState(c.root, prior.task_id), remote_identity: remoteIdentity(c, prior.remote) };
-    const plan = { ...prior, mode: "post-cleanup-archive", worktree_root: c.root, task_branch: prior.target_branch, target_head: head,
+    const plan = { ...prior, mode: "post-cleanup-archive", archive_before_commit: false, worktree_root: c.root, task_branch: prior.target_branch, target_head: head,
       remote_target_head: remoteOid(c.root, prior.remote, prior.target_branch).oid, remote_task_head: null,
       source, preserve_existing_workspace: true, steps: ["archive", "push"], archive_declaration_ref: archiveDeclarationRef, created_at: new Date().toISOString() };
     validatePlan(plan, c);
@@ -397,13 +605,18 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   if (remoteTarget.oid !== baseline) throw failure("TARGET_REMOTE_HEAD_MISMATCH", "target branch differs from its remote before planning");
   await assertCleanTarget({ root: c.root, target: c.root, baseline, expectBranch: targetBranch });
   const pr = mode === "ordinary" ? preparePr(c, delivery.pr, { baseline, source, head: taskBranch, base: targetBranch, remote }) : null;
-  const plan = { task_id: c.manifest.task_id, project_name: c.manifest.project_name, mode, target_repo_root: c.root,
+  // The ordinary non-PR route publishes the task branch as a named sub-step of
+  // the single push authorization. The displayed plan declares it, so the
+  // confirmation binds an action the user can actually read.
+  const taskBranchPush = mode === "ordinary" && pr?.status !== "available"
+    ? { step: "push-task", operation: "push", branch: taskBranch, remote, ordering: "before merge", scope: "this plan's push authorization" } : undefined;
+  const plan = { task_id: c.manifest.task_id, project_name: c.manifest.project_name, mode, archive_before_commit: mode === "ordinary", target_repo_root: c.root,
     worktree_root: c.worktree, task_branch: taskBranch, target_branch: targetBranch, target_head: baseline,
     remote, remote_target_head: remoteTarget.oid, remote_task_head: remoteOid(c.root, remote, taskBranch).oid,
     spec_source_path: delivery.spec_source_path ?? `specs/${c.manifest.task_id}`, spec_archive_path: delivery.spec_archive_path ?? `specs/archive/${c.manifest.task_id}`,
     preserve_existing_workspace: c.explicit, source, steps: mode === "planning" ? ["commit", "merge", "push", "cleanup"]
       : pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"],
-    ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
+    ...(taskBranchPush ? { task_branch_push: taskBranchPush } : {}), ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
   validatePlan(plan, c);
   realDirectory(join(c.worktree, plan.spec_source_path));
   const planRef = await writeEvidence(c, "close-plan", plan);
@@ -469,7 +682,11 @@ export async function authorizeClosePlan({ taskDir, planRef, confirmationRef, op
   acceptedConfirmation(c, planRef, confirmationRef, plan);
   const chosen = operations ?? plan.steps;
   if (!Array.isArray(chosen) || chosen.some((op) => !plan.steps.includes(op))) throw failure("AUTH_SCOPE", "authorization exceeds the displayed close plan");
-  return [...new Set(chosen)].map((action) => {
+  // The declared task-branch publication is recorded with the actions that can
+  // perform it (merge publishes it before merging; push is its own scope). Its
+  // own step id keeps a separate receipt from the target push.
+  const declared = plan.task_branch_push && (chosen.includes("merge") || chosen.includes("push")) ? ["push-task"] : [];
+  return [...new Set([...chosen, ...declared])].map((action) => {
     const { operation, cwd } = closeActionScope(c, action);
     acceptedConfirmation(c, planRef, confirmationRef, plan);
     return authorize(c, operation, "record", { confirmationRef, targetArchive: true, cwd });
@@ -535,7 +752,9 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   if (remoteTask.status === "unavailable") readErrors.push(remoteTask.reason);
   const actions = actionFacts(c, planRef);
   const commitAction = actions.find(row => row.operation === "commit" && row.status === "completed");
-  let sourceCommit = task ?? actions.filter(row => row.status === "completed" && row.source_head).at(-1)?.source_head ?? commitAction?.source_head ?? plan.source.head;
+  const validOid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
+  const existingHead = row => validOid(row.source_head) && git(c.root, ["cat-file", "-e", `${row.source_head}^{commit}`], { optional: true }).status === 0;
+  let sourceCommit = task ?? actions.filter(row => row.status === "completed" && existingHead(row)).at(-1)?.source_head ?? commitAction?.source_head ?? plan.source.head;
   let sourceAnchor = task ?? (remoteTask.status === "available" ? remoteTask.oid : null);
   if (plan.steps.includes("pr") && !sourceAnchor) {
     try {
@@ -552,8 +771,8 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   if (plan.steps.includes("pr") && sourceAnchor) sourceCommit = sourceAnchor;
   const sourceAvailable = check(git(c.root, ["cat-file", "-e", `${sourceCommit}^{commit}`], { optional: true }), "source commit object");
   const merged = Boolean(target && sourceAvailable && check(git(c.root, ["merge-base", "--is-ancestor", sourceCommit, target], { optional: true }), "source/target ancestry", 1));
-  const archiveRead = git(c.root, ["ls-tree", "--name-only", target ?? plan.target_head, "--", plan.spec_archive_path], { optional: true });
-  const archive = check(archiveRead, "archive tree") && archiveRead.stdout.trim() !== "";
+  const archiveReadback = verifyArchiveReadback(c.root, plan, target ?? plan.target_head, commitAction?.archive);
+  const archive = archiveReadback.status === "ok";
   let existing = false, cleanupScan;
   try {
     try { lstatSync(plan.worktree_root); existing = true; } catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -589,8 +808,21 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
     }
     if (remoteTask.status === "unavailable") pr = { ...pr, status: "unavailable", reason: remoteTask.reason };
   }
+  const pushes = pushReceipts(c, planRef);
+  if (!plan.steps.includes("pr") && plan.archive_before_commit === true) {
+    // The task-branch push is a separate native action. Its receipt is the
+    // immutable consumed grant; the remote ref alone cannot carry the branch.
+    const receipt = pushes.find(row => row.branch === plan.task_branch && row.head === sourceCommit);
+    const published = remoteTask.status === "available" && remoteTask.oid === sourceCommit;
+    const cleanupDone = actions.some(row => row.operation === "cleanup" && row.status === "completed");
+    // Consumed authorization is issued before the native send, so it is not
+    // by itself proof of publication. A remote-equivalent OID before cleanup
+    // is; after cleanup the completed cleanup action is the postcondition.
+    facts.task_branch_pushed = Boolean(receipt) && (published || cleanupDone);
+  }
   let verifiedActions = actions;
   if (plan.steps.includes("pr")) {
+
     const selected = [], oid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
     const object = value => {
       if (!oid(value)) return false;
@@ -611,11 +843,12 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
         if (operation === "commit") {
           if (row.target_head !== plan.target_head || plan.source.changes.length && sourceAnchor === plan.source.head) return false;
           return plan.source.changes.every(change => {
+            const archived = plan.archive_before_commit === true && pathUnder(plan.spec_source_path, change.path) ? `${plan.spec_archive_path}${change.path.slice(plan.spec_source_path.length)}` : change.path;
             if (change.sha256 === null) {
-              const result = git(c.root, ["ls-tree", "--name-only", sourceAnchor, "--", change.path], { optional: true });
+              const result = git(c.root, ["ls-tree", "--name-only", sourceAnchor, "--", archived], { optional: true });
               return check(result, "committed deletion tree") && result.stdout.trim() === "";
             }
-            const blob = spawnSync("git", ["show", `${sourceAnchor}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
+            const blob = spawnSync("git", ["show", `${sourceAnchor}:${archived}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
             if (blob.error) { readErrors.push(`committed planned blob: ${blob.error.message}`); return false; }
             return check({ ...blob, stderr: blob.stderr?.toString("utf8") }, "committed planned blob") && digest(blob.stdout) === change.sha256;
           });
@@ -634,27 +867,87 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
     // Only the local reader input excludes unverified successful rows. The
     // immutable original action view, including failed/tampered bytes, stays.
     verifiedActions = actions.filter(row => row.status !== "completed" || selected.includes(row));
+  } else if (plan.archive_before_commit === true) {
+    const selected = [], oid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
+    const object = value => {
+      if (!oid(value)) return false;
+      const result = git(c.root, ["cat-file", "-e", `${value}^{commit}`], { optional: true });
+      if (result.status !== 0 && !/not a valid object|bad object|could not get object|Not a valid object/i.test(result.stderr ?? "")) readErrors.push(`action object read: ${result.stderr || result.status}`);
+      return result.status === 0;
+    };
+    const ancestor = (before, after) => object(before) && object(after) && check(git(c.root, ["merge-base", "--is-ancestor", before, after], { optional: true }), "action ancestry", 1);
+    let priorTarget = plan.target_head, afterIndex = -1;
+    for (const operation of plan.steps) {
+      const candidates = actions.map((row, index) => ({ row, index })).filter(({ row, index }) => index > afterIndex && row.operation === operation && row.status === "completed").reverse();
+      const picked = candidates.find(({ row }) => {
+        if (!object(row.source_head) || !object(row.target_head)) return false;
+        if (operation === "commit") {
+          if (row.target_head !== plan.target_head || !facts.delivery_committed || existsSync(c.worktree) && entries(c.worktree).length || plan.source.changes.length && row.source_head === plan.source.head) return false;
+          const blobs = plan.source.changes.every(change => {
+            const archived = pathUnder(plan.spec_source_path, change.path) ? `${plan.spec_archive_path}${change.path.slice(plan.spec_source_path.length)}` : change.path;
+            if (change.sha256 === null) return git(c.root, ["ls-tree", "--name-only", row.source_head, "--", archived]).trim() === "";
+            const blob = spawnSync("git", ["show", `${row.source_head}:${archived}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
+            return !blob.error && blob.status === 0 && digest(blob.stdout) === change.sha256;
+          });
+          return blobs && verifyArchiveReadback(c.root, plan, row.source_head, row.archive).status === "ok";
+        }
+        if (operation === "merge") return ancestor(priorTarget, row.target_head) && ancestor(row.source_head, row.target_head) && ancestor(row.target_head, target);
+        if (operation === "archive") {
+          const commitRow = selected.find(entry => entry.operation === "commit");
+          return row.target_head === priorTarget && verifyArchiveReadback(c.root, plan, row.target_head, commitRow?.archive).status === "ok";
+        }
+        if (operation === "push") return row.target_head === target && row.target_head === remote.oid;
+        if (operation === "cleanup") return row.target_head === target && facts.cleanup?.removed === true && facts.push === true;
+        return false;
+      });
+      if (!picked) break;
+      selected.push(picked.row); afterIndex = picked.index; priorTarget = picked.row.target_head;
+    }
+    verifiedActions = actions.filter(row => row.status !== "completed" || selected.includes(row));
   }
   const physical = derivePhysicalDeliveryStatus({ task_id: plan.task_id, plan, facts, step_records: verifiedActions, workspace_mode: c.manifest.workspace_mode,
     ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}) });
-  return { task_id: plan.task_id, plan_ref: planRef, facts, remote, step_records: actions, quality_status: "unknown", known_gaps: plan.known_gaps, ...(pr ? { pr } : {}), physical_delivery_status: physical.status };
+  // Read-only projection of the three delivery claims. Quality stays "unknown"
+  // as before; this field never becomes a close or Git permit by itself.
+  let deliveryClaims;
+  try { deliveryClaims = readDeliveryClaims({ taskPath: c.taskDir }); }
+  catch (error) { deliveryClaims = { status: "unavailable", reason: error.message, claims: {} }; }
+  return { task_id: plan.task_id, plan_ref: planRef, facts, remote, pushes, graph: graphReadback(c, planRef), archive_readback: archiveReadback, step_records: actions, quality_status: "unknown", delivery_claims: deliveryClaims, known_gaps: plan.known_gaps, ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}), ...(pr ? { pr } : {}), physical_delivery_status: physical.status };
 }
-export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal, until } = {}) {
+export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal, until, graphTimeoutMs } = {}) {
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
   if (until !== undefined && !plan.steps.includes(until)) throw failure("AUTH_SCOPE", "close cutoff must be an action in the confirmed plan");
+  // The ordinary non-PR route publishes the task branch during merge. A plan
+  // that does not declare that publication cannot push under a scope its user
+  // never saw; the current plan is re-prepared instead.
+  if (plan.mode === "ordinary" && plan.archive_before_commit === true && !plan.steps.includes("push-task") && !plan.task_branch_push) {
+    throw failure("PUSH_STEP_UNDECLARED", "the confirmed plan does not declare the task-branch publication; display a current plan before publishing");
+  }
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
   else if (existsSync(c.worktree)) realDirectory(c.worktree);
   else if (plan.preserve_existing_workspace || !cleanupWasSent(c, plan, planRef, branchOid(c.root, plan.target_branch))) throw failure("CLEANUP_UNSAFE", "missing task worktree is not covered by a prior authorized cleanup");
   acceptedConfirmation(c, planRef, confirmationRef, plan);
   const directory = evidenceDirectory(c.taskDir);
   return withLock(dirname(directory), "close.execution", async () => {
+    // The current task's real claims are re-read from their originals before
+    // any Git action. A failed or missing claim rejects the close instead of
+    // publishing a success it cannot source; nothing is deleted on rejection.
+    let claimsReadback;
+    try { claimsReadback = await recordCloseClaimsReadback({ taskPath: c.taskDir, planRef, worktreeRoot: c.worktree }); }
+    catch (error) {
+      const ref = await writeEvidence(c, "close-action", { operation: "claims", status: "failed", plan_ref: planRef,
+        error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
+      return { status: "failed", operation: "claims", error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records: [],
+        physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+    }
     let sourceHead = plan.source.head, targetHead = plan.target_head;
     const records = [];
     const priorActions = actionFacts(c, planRef);
     const validOid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
-    const failedCleanupRecorded = priorActions.some(row => row.operation === "cleanup" && row.status === "failed");
-    const shouldReplayActions = (plan.steps.includes("pr") && priorActions.some(row => row.status === "completed")) || failedCleanupRecorded;
+    // Any verified completed action is an actual original: resume from it
+    // instead of re-running already published work. Failed rows stay visible.
+    const shouldReplayActions = priorActions.some(row => row.status === "completed");
     if (shouldReplayActions) {
       const physical = await inspectDeliveryCloseState({ taskDir, planRef });
       if (physical.physical_delivery_status === "unavailable") throw failure("REMOTE_UNAVAILABLE", physical.pr?.reason ?? physical.remote.reason ?? "required close readback is unavailable");
@@ -676,8 +969,9 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           if (operation === "commit") {
             if (row.target_head !== plan.target_head || !physical.facts.delivery_committed || existsSync(c.worktree) && entries(c.worktree).length || plan.source.changes.length && actualSource === plan.source.head) return false;
             return plan.source.changes.every(change => {
-              if (change.sha256 === null) return git(c.root, ["ls-tree", "--name-only", actualSource, "--", change.path]).trim() === "";
-              const blob = spawnSync("git", ["show", `${actualSource}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
+              const archived = plan.archive_before_commit === true && pathUnder(plan.spec_source_path, change.path) ? `${plan.spec_archive_path}${change.path.slice(plan.spec_source_path.length)}` : change.path;
+              if (change.sha256 === null) return git(c.root, ["ls-tree", "--name-only", actualSource, "--", archived]).trim() === "";
+              const blob = spawnSync("git", ["show", `${actualSource}:${archived}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
               return !blob.error && blob.status === 0 && digest(blob.stdout) === change.sha256;
             });
           }
@@ -699,10 +993,8 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
       const branch = git(cwd, ["branch", "--show-current"]), expectedBranch = taskAction ? plan.task_branch : plan.target_branch;
       const current = git(cwd, ["rev-parse", "HEAD"]), expectedCurrent = taskAction ? sourceHead : targetHead;
       if (branch !== expectedBranch || current !== expectedCurrent) throw failure("AUTHORIZATION_HEAD_MISMATCH", "HEAD or branch moved outside this close transaction");
-      const grant = authorizationForPlan(c, operation, confirmationRef, branch);
       const initial = taskAction ? plan.source.head : plan.target_head;
       const knownHeads = [initial, ...records.map(row => taskAction ? row.source_head : row.target_head)];
-      if (!knownHeads.includes(grant.value.head)) throw failure("AUTHORIZATION_HEAD_MISMATCH", "recorded authorization does not cover a verified transaction HEAD");
       const priorConsumes = readdirSync(authorizationDirectory(c.taskDir)).filter(name => new RegExp(`^\\d{4}-\\d{2}-\\d{2}-\\d{3}-consumed-${operation}\\.json$`).test(name))
         .map(name => JSON.parse(readFile(authorizationDirectory(c.taskDir), name)));
       const retry = priorConsumes.find(row => row.step_id === `${planRef}:${action}`);
@@ -714,8 +1006,11 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         acceptedConfirmation(c, planRef, confirmationRef, plan);
         return consumed;
       }
-      // A scope grant must already exist. Record its fresh actual action HEAD
-      // immediately before native consume, never manufacture missing consent.
+      const grant = authorizationForPlan(c, operation, confirmationRef, branch);
+      if (!knownHeads.includes(grant.value.head)) throw failure("AUTHORIZATION_HEAD_MISMATCH", "recorded authorization does not cover a verified transaction HEAD");
+      // The recorded grant for this confirmed action must cover a verified
+      // transaction HEAD; a fresh native record is written immediately before
+      // the consume at the actual action HEAD.
       const fresh = authorize(c, operation, "record", { confirmationRef, targetArchive, cwd });
       const actual = JSON.parse(readFile(authorizationDirectory(c.taskDir), basename(fresh.path)));
       if (actual.operation !== operation || actual.confirmation_ref !== confirmationRef || actual.head !== current || actual.branch !== branch) throw failure("AUTH_SCOPE", "fresh native grant differs from the verified action identity");
@@ -733,6 +1028,9 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           return row.operation === operation && row.step_id === `${planRef}:${action}`;
         });
     };
+    let currentAction = null, archiveExpectation = null;
+    const replayedCommit = records.find(row => row.operation === "commit");
+    if (replayedCommit?.archive) archiveExpectation = replayedCommit.archive;
     for (const operation of plan.steps) {
       if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       if (records.some(row => row.operation === operation && row.status === "completed")) {
@@ -742,6 +1040,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
       try {
         acceptedConfirmation(c, planRef, confirmationRef, plan);
         let prResult;
+        currentAction = operation;
         closeActionScope(c, operation);
         if (existsSync(plan.worktree_root)) {
           assertNoSidecars(plan.worktree_root, plan.task_id);
@@ -749,14 +1048,28 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         }
         if (git(c.root, ["branch", "--show-current"]) !== plan.target_branch || branchOid(c.root, plan.target_branch) !== targetHead) throw failure("TARGET_HEAD_DRIFT", "target branch or HEAD changed after close planning");
         if (operation === "commit") {
+          const priorGraph = graphReceipts(c, planRef).at(-1)?.row ?? null;
+          const graphPaths = new Set(priorGraph?.changed_paths ?? []);
           const actualSource = sourceState(c.worktree, plan.task_id);
+          if (graphPaths.size) actualSource.changes = actualSource.changes.filter(row => !graphPaths.has(row.path) && !(row.source_path && graphPaths.has(row.source_path)));
           if (plan.source.remote_identity !== undefined) actualSource.remote_identity = remoteIdentity(c, plan.remote);
           if (!same(actualSource, plan.source)) throw failure("SOURCE_BYTES_DRIFT", "task source bytes or remote destinations changed after close planning");
           consume("commit");
-          if (plan.source.changes.length) {
-            const paths = [...new Set(plan.source.changes.flatMap((row) => [row.path, ...(row.source_path ? [row.source_path] : [])]))];
-            git(c.worktree, ["add", "--", ...paths]);
-            assertNoSidecars(c.worktree, plan.task_id);
+          let graphReceipt = priorGraph;
+          if (plan.archive_before_commit === true) {
+            // Best-effort code graph update at close: an explicit receipt is
+            // published for updated/unchanged/failed, and none of those states
+            // may block a lawful close.
+            graphReceipt = await recordCloseGraph(c, plan, planRef, graphTimeoutMs);
+            if (graphReceipt?.status === "updated" && graphReceipt.changed_paths.length) git(c.worktree, ["add", "-A", "--", ...graphReceipt.changed_paths]);
+            const moved = moveMaterials(c, plan);
+            archiveExpectation = { source_path: plan.spec_source_path, archive_path: plan.spec_archive_path, objects: moved.objects };
+          }
+          const paths = [...new Set(plan.source.changes.flatMap((row) => [row.path, ...(row.source_path ? [row.source_path] : [])]))]
+            .filter((path) => plan.archive_before_commit !== true || (!pathUnder(plan.spec_source_path, path) && !pathUnder(plan.spec_archive_path, path)));
+          if (paths.length) git(c.worktree, ["add", "-A", "--", ...paths]);
+          assertNoSidecars(c.worktree, plan.task_id);
+          if (stagedDelivery(c.worktree, plan, graphReceipt).length) {
             git(c.worktree, ["commit", "-m", `close ${plan.task_id}: publish task source`]);
             sourceHead = git(c.worktree, ["rev-parse", "HEAD"]);
           }
@@ -796,6 +1109,25 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
           if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
           if (entries(c.worktree).length) throw failure("SOURCE_DIRTY_AFTER_COMMIT", "source must be clean before merge");
+          if (plan.archive_before_commit === true && !plan.steps.includes("pr")) {
+            // Without a PR the task branch still gets its own publication and
+            // receipt before the merge; it is not the target push.
+            currentAction = "push-task";
+            const remoteTask = remoteOid(c.root, plan.remote, plan.task_branch);
+            if (remoteTask.status === "unavailable") throw failure("REMOTE_UNAVAILABLE", remoteTask.reason);
+            const receipt = pushReceipts(c, planRef).find(row => row.step_id === `${planRef}:push-task` && row.branch === plan.task_branch && row.head === sourceHead);
+            const alreadyPublished = remoteTask.oid === sourceHead && Boolean(receipt);
+            if (plan.remote_task_head !== null && remoteTask.status === "absent") throw failure("REMOTE_TASK_DRIFT", "the planned remote task branch disappeared before task publication");
+            if (remoteTask.oid !== plan.remote_task_head && !alreadyPublished) throw failure("REMOTE_TASK_DRIFT", "remote task branch changed before task publication");
+            if (!alreadyPublished) {
+              // The declared sub-step consumes its own recorded grant; no fresh
+              // grant is manufactured outside the confirmed plan.
+              consume("push-task");
+              git(c.worktree, ["push", plan.remote, `${plan.task_branch}:${plan.task_branch}`]);
+              if (remoteOid(c.root, plan.remote, plan.task_branch).oid !== sourceHead) throw failure("PUSH_READBACK", "remote task differs after task push");
+            }
+            currentAction = "merge";
+          }
           consume("merge");
           try { git(c.root, ["merge", "--no-ff", "--no-edit", plan.task_branch]); }
           catch (error) {
@@ -809,13 +1141,22 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         } else if (operation === "archive") {
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
           if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
-          if (!within(c.root, join(c.root, plan.spec_source_path)) || existsSync(join(c.root, plan.spec_archive_path))) throw failure("ARCHIVE_SCOPE", "archive source/target is unsafe");
-          realDirectory(join(c.root, plan.spec_source_path));
-          consume("archive", true);
-          const parent = join(c.root, "specs", "archive"); if (!existsSync(parent)) mkdirSync(parent); realDirectory(parent);
-          git(c.root, ["mv", "--", plan.spec_source_path, plan.spec_archive_path]);
-          git(c.root, ["commit", "-m", `archive ${plan.spec_source_path}`]); targetHead = branchOid(c.root, plan.target_branch);
-          if (plan.mode === "post-cleanup-archive") sourceHead = targetHead;
+          if (plan.archive_before_commit === true) {
+            // The ordinary route already moved the whole directory inside the
+            // delivery commit; this action only reads the delivered tree back.
+            const expectation = archiveExpectation ?? actions.find(row => row.operation === "commit" && row.status === "completed")?.archive;
+            const readback = verifyArchiveReadback(c.root, plan, targetHead, expectation);
+            if (readback.status !== "ok") throw failure("ARCHIVE_READBACK", readback.reason ?? "the delivered target tree does not match the archived objects");
+            consume("archive", true);
+          } else {
+            if (!within(c.root, join(c.root, plan.spec_source_path)) || existsSync(join(c.root, plan.spec_archive_path))) throw failure("ARCHIVE_SCOPE", "archive source/target is unsafe");
+            realDirectory(join(c.root, plan.spec_source_path));
+            consume("archive", true);
+            const parent = join(c.root, "specs", "archive"); if (!existsSync(parent)) mkdirSync(parent); realDirectory(parent);
+            git(c.root, ["mv", "--", plan.spec_source_path, plan.spec_archive_path]);
+            git(c.root, ["commit", "-m", `archive ${plan.spec_source_path}`]); targetHead = branchOid(c.root, plan.target_branch);
+            if (plan.mode === "post-cleanup-archive") sourceHead = targetHead;
+          }
         } else if (operation === "push") {
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
           if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
@@ -852,7 +1193,8 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           const remoteTask = remoteOid(c.root, plan.remote, plan.task_branch);
           if (remoteTask.status === "unavailable") throw failure("REMOTE_UNAVAILABLE", remoteTask.reason);
           const pushedTask = records.filter(row => row.operation === "push-task" && row.status === "completed").at(-1);
-          if (remoteTask.oid !== (pushedTask?.source_head ?? plan.remote_task_head) && !(remoteTask.status === "absent" && cleanupRetry)) throw failure("REMOTE_TASK_DRIFT", "remote task branch differs from the actual planned publication");
+          const taskReceipt = pushReceipts(c, planRef).find(row => row.branch === plan.task_branch && row.head === remoteTask.oid);
+          if (remoteTask.oid !== (pushedTask?.source_head ?? plan.remote_task_head) && !taskReceipt && !(remoteTask.status === "absent" && cleanupRetry)) throw failure("REMOTE_TASK_DRIFT", "remote task branch differs from the actual planned publication");
           if (remoteTask.oid && (git(c.root, ["cat-file", "-e", `${remoteTask.oid}^{commit}`], { optional: true }).status !== 0 || git(c.root, ["merge-base", "--is-ancestor", remoteTask.oid, sourceHead], { optional: true }).status !== 0 || git(c.root, ["merge-base", "--is-ancestor", remoteTask.oid, targetHead], { optional: true }).status !== 0)) throw failure("REMOTE_TASK_UNMERGED", "remote task tip is unavailable or contains work not merged into the delivered source/target; refusing deletion");
           consume("cleanup");
           if (sourceExists) {
@@ -868,7 +1210,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
             plan.remote, "--delete", plan.task_branch,
           ]);
         }
-        const record = { operation, status: "completed", source_head: sourceHead, target_head: targetHead, ...(prResult ? { pr: prResult } : {}), recorded_at: new Date().toISOString() };
+        const record = { operation, status: "completed", source_head: sourceHead, target_head: targetHead, ...(archiveExpectation && operation === "commit" ? { archive: archiveExpectation } : {}), ...(prResult ? { pr: prResult } : {}), recorded_at: new Date().toISOString() };
         record.ref = await writeEvidence(c, "close-action", { ...record, plan_ref: planRef }); records.push(record);
         // Synchronous Git/gh calls queue OS signal callbacks. Let the existing
         // controller observe them after recording the effect, before cutoff
@@ -879,11 +1221,30 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         }
         if (operation === until) return { status: "partial", stopped_at: operation, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       } catch (error) {
-        const ref = await writeEvidence(c, "close-action", { operation, status: "failed", plan_ref: planRef, ...(operation === "cleanup" ? { source_head: sourceHead } : {}), error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
-        return { status: "failed", operation, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+        if (currentAction === "commit") {
+          const receipt = graphReceipts(c, planRef).at(-1)?.row;
+          if (receipt?.changed_objects?.length) {
+            try { git(c.worktree, ["reset", "-q", "HEAD", "--", ...receipt.changed_objects.map(row => row.path)]); } catch { /* the failure original stays authoritative */ }
+          }
+          // A failed delivery commit must not leave the archive move staged: the
+          // whole directory goes back to its source path and both index entries
+          // are reset, so the same confirmed plan stays retryable instead of
+          // failing on SOURCE_BYTES_DRIFT or ARCHIVE_TARGET_CONFLICT. A commit
+          // that already landed keeps its archived tree untouched.
+          const archivedInHead = git(c.worktree, ["cat-file", "-e", `HEAD:${plan.spec_archive_path}`], { optional: true }).status === 0;
+          if (plan.archive_before_commit === true && !archivedInHead
+            && existsSync(join(c.worktree, plan.spec_archive_path)) && !existsSync(join(c.worktree, plan.spec_source_path))) {
+            try {
+              git(c.worktree, ["mv", "--", plan.spec_archive_path, plan.spec_source_path]);
+              git(c.worktree, ["reset", "-q", "HEAD", "--", plan.spec_source_path, plan.spec_archive_path]);
+            } catch { /* the failure original stays authoritative */ }
+          }
+        }
+        const ref = await writeEvidence(c, "close-action", { operation: currentAction, plan_action: operation, ...(currentAction !== operation ? { sub_action: currentAction } : {}), status: "failed", plan_ref: planRef, ...(currentAction === "cleanup" ? { source_head: sourceHead } : {}), error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
+        return { status: "failed", operation: currentAction, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       }
     }
-    return { status: plan.mode === "planning" ? "executed" : "completed", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+    return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claimsReadback, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
   });
 }
 // The supplied real user reply covers the displayed action set. Record each

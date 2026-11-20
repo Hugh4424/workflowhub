@@ -6,7 +6,8 @@
  * Old-shape materials stay advisory: malformed or stale chain fields are
  * printed as facts and the process exits 0. A new-shape material that declares
  * answer source_id/modality/来源身份 is checked against the requirement index;
- * its three named answer-source codes make the process exit 1, because a
+ * its four named answer-source codes (unverifiable, modality mismatch,
+ * inference-as-user, self-reference) make the process exit 1, because a
  * citation that cannot be verified must not look like a pass. The function's
  * result.exit_code carries the same distinction for private callers.
  * Only local text structure, the declared index and explicitly authorized
@@ -16,6 +17,7 @@
  */
 
 import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -35,10 +37,14 @@ const SOURCE_FIELDS = ["source_id", "modality", "来源身份"];
 const SOURCE_GRADES = ["自由手写", "明确选项采纳", "保存转录", "作者推断"];
 const SOURCE_IDENTITIES = ["用户答复", "作者推断"];
 const TONE_GRADES = ["permit", "require", "recommend", "reject"];
-const ANSWER_FLAGS = ["ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_MODALITY_MISMATCH", "ANSWER_INFERENCE_AS_USER"];
+const ANSWER_FLAGS = ["ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_MODALITY_MISMATCH", "ANSWER_INFERENCE_AS_USER", "ANSWER_SOURCE_SELF_REFERENCE"];
 const INDEX_COLUMNS = ["编号", "来源分级", "答复原文", "语气", "原件ref与行位", "时点", "所属包"];
 // Accepted original-position spellings: path#L7-L7, path#L7, path:7, path:7-9.
 const SOURCE_REF = /^(.*?)(?:#L|:)(\d+)(?:-(?:L)?(\d+))?$/;
+// A confirmation may bind its original to a frozen Git object:
+// `commit:path#blob` (optionally `#L7-L7`). The blob is authoritative; the
+// working tree can move after the commit, so it is never the fact cited here.
+const BLOB_SOURCE_REF = /^([0-9a-f]{7,64}):([^#\s]+)#([0-9a-f]{40,64})(?:#L(\d+)(?:-(?:L)?(\d+))?)?$/;
 
 function parseList(value) {
   const match = /^\[([^\]]*)\]$/.exec(value.trim().replaceAll("［", "[").replaceAll("］", "]"));
@@ -293,23 +299,27 @@ function quoteMatches(observed, quote) {
 
 // Only declarations made by a decision and a matching index row participate.
 // A log or index without the new fields keeps its old shape (shape note only).
-function answerSourceWarnings(sections, requirement_index_markdown, read_source) {
+function answerSourceWarnings(sections, requirement_index_markdown, read_source, identity = {}) {
   const warnings = [];
-  if (requirement_index_markdown === undefined) return warnings;
+  // A confirmed original may be declared as `commit:path#blob`: the quote is
+  // then read from the frozen Git object, not from whatever the working tree
+  // holds now. Successful bindings are reported as facts.
+  const bindings = [];
+  if (requirement_index_markdown === undefined) return { warnings, bindings };
   if (typeof requirement_index_markdown !== "string") {
     warnings.push(warning("invalid_input", "unknown", "requirement_index_markdown", "requirement index content is not text"));
-    return warnings;
+    return { warnings, bindings };
   }
   const index = parseRequirementIndex(requirement_index_markdown);
   if (!index) {
     warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", "unknown", "requirement_index_markdown",
       `requirement index must declare the ${INDEX_COLUMNS.join("/")} table; source and tone cannot be checked`));
-    return warnings;
+    return { warnings, bindings };
   }
   if (index.legacyShape) {
     warnings.push(warning("legacy_requirement_index_shape", "unknown", "requirement_index_markdown",
       "requirement index uses the old columns; new source/tone columns are absent, so only a shape difference is reported"));
-    return warnings;
+    return { warnings, bindings };
   }
   const rows = index.rows;
   for (const { decision_id, sources, counts } of sections) {
@@ -354,6 +364,50 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source)
     } else if (sources.modality !== row.tone) {
       warnings.push(warning("ANSWER_MODALITY_MISMATCH", decision_id, "modality", `${decision_id} cites ${sourceId} as ${sources.modality}, but the original reply is ${row.tone}`));
     }
+    const blobRef = BLOB_SOURCE_REF.exec(String(row.ref ?? "").trim());
+    if (blobRef) {
+      const [, commit, path, blob, startRaw, endRaw] = blobRef;
+      if (!normalizeQuote(row.quote)) {
+        warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "答复原文", `${decision_id} reply ${sourceId} has an empty quote`));
+        continue;
+      }
+      const boundStart = Number(startRaw);
+      const boundEnd = endRaw === undefined ? boundStart : Number(endRaw);
+      if (startRaw === undefined || !Number.isInteger(boundStart) || boundStart < 1 || !Number.isInteger(boundEnd) || boundEnd < boundStart) {
+        warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "原件ref与行位", `${decision_id} reply ${sourceId} declares a blob but no readable line range ${row.ref}`));
+        continue;
+      }
+      if (typeof identity.read_blob !== "function") {
+        warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "原件ref与行位",
+          `${decision_id} reply ${sourceId} declares ${commit}:${path}#${blob}; the current reader cannot verify a frozen Git object`));
+        continue;
+      }
+      let bound;
+      try { bound = identity.read_blob({ commit, path, blob }); }
+      catch (error) { bound = { ok: false, code: error.code ?? "BLOB_READ_FAILED", message: error.message }; }
+      if (!bound || bound.ok !== true || typeof bound.text !== "string") {
+        warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "原件ref与行位",
+          `${decision_id} reply ${sourceId} blob binding ${commit}:${path}#${blob} is not verifiable: ${bound?.code ?? "NO_RESULT"}: ${bound?.message ?? "no text"}`));
+        continue;
+      }
+      // A frozen object that is the decision log or the derived index is still a
+      // self-reference: the bytes match while nothing independent was read.
+      const self = bound.real_path && identity.log_path && bound.real_path === identity.log_path;
+      const derived = bound.real_path && identity.index_path && bound.real_path === identity.index_path;
+      if (self || derived) {
+        warnings.push(warning("ANSWER_SOURCE_SELF_REFERENCE", decision_id, "原件ref与行位",
+          `${decision_id} reply ${sourceId} cites the frozen blob ${blob} of ${row.ref}, which is ${self ? "the decision log itself" : "the requirement index"}; ${self ? "a log cannot be its own original" : "the index is derived from the original, not the original"}`));
+        continue;
+      }
+      const frozenLine = bound.text.split("\n").slice(boundStart - 1, boundEnd).join("\n");
+      if (!quoteMatches(frozenLine, row.quote)) {
+        warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "答复原文",
+          `${decision_id} reply ${sourceId} is not the complete original sentence on the frozen blob ${blob} at ${row.ref}`));
+        continue;
+      }
+      bindings.push({ source_id: sourceId, commit, path, blob, line_start: boundStart, line_end: boundEnd });
+      continue;
+    }
     const ref = SOURCE_REF.exec(row.ref);
     if (!ref || !row.ref.trim()) {
       warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "原件ref与行位", `${decision_id} reply ${sourceId} has no readable original line reference`));
@@ -368,6 +422,21 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source)
     if (!normalizeQuote(row.quote)) {
       warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "答复原文", `${decision_id} reply ${sourceId} has an empty quote`));
       continue;
+    }
+    // A pointer has to name an original. When the reader can also report the
+    // real path it resolved, a pointer back into the decision log or into the
+    // derived requirement index is a self-reference, not a citation: the bytes
+    // would match while nothing independent was ever read.
+    if (read_source && typeof read_source.resolve === "function" && (identity.log_path || identity.index_path)) {
+      let real = null;
+      try { real = read_source.resolve(ref[1]); } catch { real = null; }
+      const self = real && identity.log_path && real === identity.log_path;
+      const derived = real && identity.index_path && real === identity.index_path;
+      if (self || derived) {
+        warnings.push(warning("ANSWER_SOURCE_SELF_REFERENCE", decision_id, "原件ref与行位",
+          `${decision_id} reply ${sourceId} cites ${row.ref}, which resolves to ${self ? "the decision log itself" : "the requirement index"}; ${self ? "a log cannot be its own original" : "the index is derived from the original, not the original"}`));
+        continue;
+      }
     }
     if (typeof read_source !== "function") {
       warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "read_source", `${decision_id} reply ${sourceId} has no reader to verify the original line`));
@@ -393,24 +462,140 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source)
       warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "答复原文", `${decision_id} reply ${sourceId} is not the complete original sentence on ${row.ref}; cite the full reply with its line position`));
     }
   }
-  return warnings;
+  return { warnings, bindings };
 }
 
-export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source } = {}) {
+/**
+ * Text-only chain warnings for one decision log.
+ *
+ * `log_path` / `index_path` are the real absolute paths of the decision log and
+ * the requirement index being checked. They are optional: a private caller that
+ * omits them still gets every other warning, but the self-reference check cannot
+ * run, because a pointer can only be compared to an identity the caller supplies.
+ * The CLI always passes both (see main), so the unknown-original check is real on
+ * the public entry; a direct in-process call without them is not equivalent.
+ */
+
+// The v2 design record keeps one block per work package and the ten template
+// items as bold labels or numbered headings. This CLI stays self-contained:
+// it reports the current bytes, it does not load the portable plan script.
+const DESIGN_ITEMS = ['原始需求', '最初方案', '发散与被否', '调研', '最终决定', '完整方案', '验收', '风险/回退', '未决/消费者/证据', '配套与影响'];
+function designItemName(value) {
+  return String(value ?? '').trim().replace(/[（(][^）)]*[）)]\s*$/, '').trim();
+}
+// One AC identity has several legal spellings in the materials: the current
+// three-digit form (AC-P3-001) and the older unpadded one (AC-P3-1). Reporting
+// them side by side invents extra ACs, so the reader normalizes to the padded
+// form and de-duplicates before it prints or reconciles anything.
+function normalizeAcId(value) {
+  const match = /^AC-P(\d+)-(\d+)$/.exec(String(value ?? "").trim());
+  return match ? `AC-P${Number(match[1])}-${String(Number(match[2])).padStart(3, "0")}` : null;
+}
+function designAcs(line) {
+  return [...String(line).matchAll(/AC-P\d+-\d+/g)].map((match) => normalizeAcId(match[0])).filter(Boolean);
+}
+function addAcs(target, acs) {
+  for (const ac of acs) if (!target.includes(ac)) target.push(ac);
+}
+function readDesignBlocks(markdown) {
+  const visible = [];
+  let fence = null;
+  const all = String(markdown).split(/\r?\n/);
+  for (let index = 0; index < all.length; index++) {
+    const line = all[index];
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) { if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null; continue; }
+    if (marker) { fence = marker[1]; continue; }
+    visible.push({ text: line, line: index + 1 });
+  }
+  const packages = [];
+  let current = null, sectionDepth = null;
+  for (const { text: line, line: lineNo } of visible) {
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (heading) {
+      const raw = heading[2].trim();
+      const title = raw.replace(/^\d+(?:\.\d+)*[.、]?\s*/, '');
+      if (title === '每包设计') { sectionDepth = heading[1].length; current = null; continue; }
+      if (sectionDepth === null) continue;
+      if (heading[1].length <= sectionDepth) { sectionDepth = null; current = null; continue; }
+      if (heading[1].length === sectionDepth + 1) {
+        // v2 template shape: `### 包 <N>：<name>` with `#### <n>. <item>` below it.
+        const named = /^包\s*`?(\d+)`?\s*[：:]\s*(.+)$/.exec(title);
+        // current log shape: `### 4.1 <name>`; template index shape: `### 1. <name>`.
+        const numbered = /^(\d+)\.(\d+)\s+(.+)$/.exec(raw);
+        const single = /^(\d+)\.\s+(.+)$/.exec(raw);
+        const id = named ? Number(named[1]) : numbered ? Number(numbered[2]) : single ? Number(single[1]) : null;
+        const name = named ? named[2].trim() : numbered ? numbered[3].trim() : single ? single[2].trim() : null;
+        if (name && Number.isSafeInteger(id)) { current = { id, name, line: lineNo, level: heading[1].length, items: new Set(), acs: [] }; packages.push(current); continue; }
+      }
+      if (!current || heading[1].length <= current.level) continue;
+      const itemHeading = /^(\d+)\.\s*(.+)$/.exec(raw);
+      if (itemHeading && DESIGN_ITEMS.includes(designItemName(itemHeading[2]))) current.items.add(designItemName(itemHeading[2]));
+      addAcs(current.acs, designAcs(line));
+      continue;
+    }
+    if (!current) continue;
+    const bold = /^\*\*([^*]+)\*\*\s*[：:]?/.exec(line.trim());
+    if (bold && DESIGN_ITEMS.includes(designItemName(bold[1]))) current.items.add(designItemName(bold[1]));
+    addAcs(current.acs, designAcs(line));
+  }
+  return packages.map(pkg => ({ ...pkg, missing: DESIGN_ITEMS.filter(item => !pkg.items.has(item)) }));
+}
+
+// The spec declares the authoritative AC list. The log cites the same ACs, and
+// the materials use both the current three-digit and the older unpadded
+// spelling. Report-only reconciliation of the current bytes: the spec set, the
+// log set, ACs the log cites that the spec never declares, and spec ACs no log
+// text names. This is a reading, not a new gate; the CLI prints it as facts.
+function reconcileAcs(markdown, spec_markdown) {
+  if (typeof spec_markdown !== "string" || !spec_markdown.trim()) return null;
+  const specAcs = [...new Set(designAcs(spec_markdown))];
+  const logAcs = [...new Set(designAcs(markdown))];
+  return {
+    spec_count: specAcs.length,
+    spec_acs: specAcs,
+    log_acs: logAcs,
+    unresolved: logAcs.filter(ac => !specAcs.includes(ac)),
+    uncovered: specAcs.filter(ac => !logAcs.includes(ac)),
+  };
+}
+
+export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source, log_path, index_path, spec_markdown, read_blob } = {}) {
   if (typeof markdown !== "string") {
     return {
       schema_version: "decision-log-chain-warning.v1",
       source_ref,
       warnings: [warning("invalid_input", "unknown", "markdown", "decision log content is not text")],
       failures: [],
+      design_packages: [],
       exit_code: 0,
     };
   }
 
+  // The v2 record writes one design block per work package with the ten
+  // template items. Report each block and every missing item by name; this is
+  // an advisory reading of the current bytes, not a new gate.
+  const designPackages = readDesignBlocks(markdown).map(pkg => ({ ...pkg, missingItems: pkg.missing }));
   const mappings = decisionIdMappings(markdown);
   const { sections, unmapped, nonCanonical, headings, sourceIds } = decisionSections(markdown, mappings);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = unitWarnings(markdown);
+  for (const pkg of designPackages) {
+    if (!pkg.missingItems.length) continue;
+    warnings.push(warning("package_design_incomplete", `包 ${pkg.id}`, "每包设计", `包 ${pkg.id}（${pkg.name}）缺 ${pkg.missingItems.join("、")}；owner=包 ${pkg.id} 作者`));
+  }
+  // The AC ids above are normalized per package. Reconcile the whole log
+  // against the spec's authoritative list so a missing or invented AC is named
+  // instead of being invisible behind a per-package count.
+  const acReconciliation = reconcileAcs(markdown, spec_markdown);
+  if (acReconciliation) {
+    for (const ac of acReconciliation.unresolved) {
+      warnings.push(warning("design_ac_unresolved", ac, "验收", `${ac} appears in the log but the spec's AC list does not declare it; the id or the range has to be aligned`));
+    }
+    for (const ac of acReconciliation.uncovered) {
+      warnings.push(warning("spec_ac_uncovered", ac, "验收", `the spec declares ${ac}, but no log text cites it; design and acceptance are not reconciled`));
+    }
+  }
   let recognizedFields = 0;
 
   for (const { label, line } of unmapped) {
@@ -566,13 +751,17 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     }
   }
 
-  warnings.push(...answerSourceWarnings(answerSections, requirement_index_markdown, read_source));
+  const answerSources = answerSourceWarnings(answerSections, requirement_index_markdown, read_source, { log_path, index_path, read_blob });
+  warnings.push(...answerSources.warnings);
 
   return {
     schema_version: "decision-log-chain-warning.v1",
     source_ref,
     recognized_blocks: sections.length,
     recognized_fields: recognizedFields,
+    design_packages: designPackages.map(pkg => ({ id: pkg.id, name: pkg.name, line: pkg.line, acs: pkg.acs, missing_items: pkg.missingItems })),
+    ac_reconciliation: acReconciliation,
+    blob_bindings: answerSources.bindings,
     warnings,
     failures: [],
     // Old-shape materials keep the advisory exit. A named new-shape source
@@ -624,6 +813,13 @@ function inputFiles({ file, root }) {
         throw error;
       }
     });
+}
+
+// A missing sibling spec keeps the AC reconciliation unavailable instead of
+// inventing an empty authoritative list.
+function readSpecSibling(file) {
+  try { return readFileSync(join(dirname(resolve(file)), "spec.md"), "utf8"); }
+  catch (error) { if (error.code === "ENOENT") return undefined; throw error; }
 }
 
 function declaredTaskBase(markdown) {
@@ -708,9 +904,11 @@ function worktreeRootOf(file) {
 // input authorizes their root with --source-root. Everything is resolved to its
 // real path before the containment check, so a symlink cannot escape a declared
 // root and a relative `..` segment is refused before touching the filesystem.
+// `.resolve` exposes that same real path so a caller can tell an original from
+// the decision log or the requirement index itself; reading stays text-only.
 function createSourceReader({ base, worktree, sourceRoots }) {
   const roots = [...new Set([base, worktree, ...sourceRoots].filter(Boolean).map((path) => realpathSync(path)))];
-  return (ref) => {
+  const locate = (ref) => {
     if (typeof ref !== "string" || !ref) throw Object.assign(new Error("source reference is not a path"), { code: "INVALID_SOURCE_REF" });
     if (ref.split(/[\\/]/).includes("..")) throw Object.assign(new Error(`source reference ${ref} uses directory traversal`), { code: "TRAVERSAL" });
     const candidates = isAbsolute(ref)
@@ -730,9 +928,41 @@ function createSourceReader({ base, worktree, sourceRoots }) {
         lastError = Object.assign(new Error(`source ${real} is not a regular single-link file`), { code: "INVALID_SOURCE_FILE" });
         continue;
       }
-      return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(real));
+      return real;
     }
     throw lastError;
+  };
+  const read = (ref) => new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(locate(ref)));
+  read.resolve = (ref) => locate(ref);
+  return read;
+}
+
+// A frozen Git object is the only way to cite a line that cannot drift after
+// the commit. `cat-file -e` proves the blob exists, `rev-parse <commit>:<path>`
+// proves the declared commit really carries that blob, and `cat-file blob`
+// returns the bytes the quote is checked against. Nothing here reads the
+// working tree, so a later edit cannot make an old confirmation look current.
+function createGitBlobReader({ worktree }) {
+  if (!worktree) return null;
+  const git = (args, { binary = false } = {}) => execFileSync("git", args, {
+    cwd: worktree, encoding: binary ? undefined : "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024,
+  });
+  return ({ commit, path, blob }) => {
+    if (!/^[0-9a-f]{7,64}$/.test(commit) || !/^[0-9a-f]{40,64}$/.test(blob) || !path) {
+      throw Object.assign(new Error("blob binding is not a commit:path#blob triple"), { code: "INVALID_BLOB_BINDING" });
+    }
+    try { git(["cat-file", "-e", `${blob}^{blob}`]); }
+    catch { throw Object.assign(new Error(`blob ${blob} does not exist in this repository`), { code: "BLOB_MISSING" }); }
+    let actual;
+    try { actual = git(["rev-parse", "--verify", `${commit}:${path}`]).trim(); }
+    catch { throw Object.assign(new Error(`${commit}:${path} is not a readable Git path`), { code: "COMMIT_PATH_UNREADABLE" }); }
+    if (actual !== blob) throw Object.assign(new Error(`${commit}:${path} is blob ${actual}, not the declared ${blob}`), { code: "BLOB_MISMATCH" });
+    const bytes = git(["cat-file", "blob", blob], { binary: true });
+    // The resolved file is returned so the caller can still refuse a frozen
+    // object that is really the decision log or the derived index itself.
+    let real_path = null;
+    try { real_path = realpathSync(isAbsolute(path) ? resolve(path) : resolve(worktree, path)); } catch { real_path = null; }
+    return { ok: true, text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), commit, path, blob, real_path };
   };
 }
 
@@ -769,34 +999,52 @@ export function main(args = process.argv.slice(2)) {
       continue;
     }
     let result;
+    // The spec is the authoritative AC list and sits next to the decision log;
+    // the blob reader is bound to the worktree this input lives in.
+    const side = { spec_markdown: readSpecSibling(input.path), read_blob: createGitBlobReader({ worktree: worktreeRootOf(input.path) }) };
     if (values.file) {
       const declared = declaresAnswerSource(markdown);
       const pointers = declared ? requirementIndexPointers(markdown) : [];
       if (!declared) {
-        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref });
+        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, ...side });
       } else if (pointers.length > 1) {
         console.error(`[check-decision-log-chain] ${input.source_ref} declares ${pointers.length} requirement-index pointers; expected one`);
         hadReadError = true; continue;
       } else if (pointers.length === 1) {
-        let base, indexText, read_source;
+        let base, indexText, read_source, indexPath;
         try {
           base = authenticatedTaskBase(declaredTaskBase(markdown));
           read_source = createSourceReader({ base, worktree: worktreeRootOf(input.path), sourceRoots: values.sourceRoots });
-          indexText = read_source(resolveIndexPointer(pointers[0], base, read_source));
+          const indexRef = resolveIndexPointer(pointers[0], base, read_source);
+          indexText = read_source(indexRef);
+          indexPath = read_source.resolve(indexRef);
         } catch (error) {
           console.error(`[check-decision-log-chain] cannot read declared requirement index in ${input.source_ref}: ${error.code ?? error.message}`);
           hadReadError = true; continue;
         }
-        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, read_source });
+        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, read_source,
+          log_path: realpathSync(input.path), index_path: indexPath, ...side });
       } else {
         console.error(`[check-decision-log-chain] ${input.source_ref} declares source_id but has no requirement-index pointer; source and tone cannot be checked`);
         hadReadError = true; continue;
       }
     } else {
-      result = checkDecisionLogChain({ markdown, source_ref: input.source_ref });
+      result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, ...side });
     }
     checkedInputs += 1;
     console.log(`[check-decision-log-chain] scanned ${JSON.stringify({input_path:resolve(input.path),input_sha256:executionHash(inputBytes),checker_sha256:checkerExecutionHash})}`);
+    for (const pkg of result.design_packages ?? []) {
+      const total = 10;
+      const have = total - pkg.missing_items.length;
+      console.log(`[check-decision-log-chain] design package ${pkg.id} (${pkg.name}) line ${pkg.line}: ${have}/${total} items${pkg.missing_items.length ? `; missing ${pkg.missing_items.join("、")}` : ""}; AC ${pkg.acs.join("、") || "none"}`);
+    }
+    if (result.ac_reconciliation) {
+      const rec = result.ac_reconciliation;
+      console.log(`[check-decision-log-chain] AC reconciliation: spec ${rec.spec_count} distinct, log ${rec.log_acs.length} distinct; unresolved ${rec.unresolved.join("、") || "none"}; uncovered ${rec.uncovered.join("、") || "none"}`);
+    }
+    for (const binding of result.blob_bindings ?? []) {
+      console.log(`[check-decision-log-chain] blob binding ${binding.source_id} ${binding.commit}:${binding.path}#${binding.blob}#L${binding.line_start}-L${binding.line_end} verified`);
+    }
     for (const item of result.warnings) {
       warningCount += 1;
       if (ANSWER_FLAGS.includes(item.code)) answerErrors += 1;

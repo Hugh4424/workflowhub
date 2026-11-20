@@ -70,6 +70,8 @@ S/M 快速反馈不替代最终完整数据与验收；独立测试面按各自 
 
 完成语义（全阶段）：实现就绪只表示开发子代理完成实施、目标测试与自查并明确通知，可启动独立审查与测试；它不等于开发完成。开发完成要求本阶段适用的验收标准已有当前结论：独立审查与测试回报汇合、AC 逐条有当前适用结论或显式缺口、受影响复验完成；只有满足适用验收才称完成。带缺口交付可在 `Done`/契约头列明缺口、条件、具名 owner 与恢复条件，按 spec 记 unavailable/incomplete，不写 pass；它不等于完成，也不阻止同任务安全修复、独立审测与后续工作。审查 provider 取消、不可用或失败保原检测与失败事实，不是继续修复或审测的门。
 
+失败处置的五要素、每两轮回看、唯一停止阈值与同因判据只以 build-code 方法第 9 步为正文，这里不复制；只改行号、只换夹具、改断言三类伪新事实的判词也在那里。
+
 每个 Phase 自带开发、针对性测试、独立审查，按本 Phase 承接 AC 与声明测试面核对，收口时审后提交。判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。末 Phase 完整端到端串演只复核沿途逐条结论、补必要未闭环 case，不新增全量重跑；业务、实现与效果 AC 首判归 spec 指定承接 Phase；仅 AC-BOUND-001/002 因依赖完整最终字节在最终边界独立首判，其余不得拖延。沿用既有授权与三审查点，不增 stage/审查点。
 
 ### 证据只留原始件（同字节即同一事实）
@@ -86,14 +88,16 @@ C05 事件来源与统计方法属 C05 任务材料，由 C05 的原 owner 在�
 
 每个 Phase 只多一份人读执行清单，保存于当前任务 `quality/evidence`，Phase 收口原子写、审后冻结；后续用原 ref，不改历史清单。清单投影现有 facts、native 回执与原件，不能成为续跑读取的第二进度或第二账本。
 
-清单字段固定为 `phase_id`、`task_ids`、`cursor_ref`、`commands`、`failures`、`diffs`、`evidence_refs`、`materials`、`reviews`、`acceptance`、`cost`、`final_chain_ref`。`commands` 列实际 argv、cwd、exit_code、started_at、ended_at、duration_ms；`failures` 列 failure_signature 与 original_output_ref；`diffs` 列真实 git diff --name-only 路径、--numstat 分列增删及原件 ref；`evidence_refs` 列原 ref、bytes、sha256 与保留原因。`materials` 只列实际打开的路径/锚点及用途，缺件写用途与提供者；`reviews` 指向真实独立原件；`acceptance` 逐条回原 AC 档位及缺口。独立审查按实际 diff 和材料读取记录逐项核写集，未取得不猜。
+清单字段固定为 `phase_id`、`task_ids`、`cursor_ref`、`commands`、`failures`、`diffs`、`evidence_refs`、`materials`、`reviews`、`acceptance`、`cost`、`final_chain_ref`。`commands` 列实际 argv、cwd、exit_code、started_at、ended_at、duration_ms；`failures` 列 failure_signature 与 original_output_ref，并按 build-code 方法第 9 步同源写轮次、新事实、严重度、结果与选择，旧行只读追加；`diffs` 列真实 git diff --name-only 路径、--numstat 分列增删及原件 ref；`evidence_refs` 列原 ref、bytes、sha256 与保留原因。`materials` 只列实际打开的路径/锚点及用途，缺件写用途与提供者；`reviews` 指向真实独立原件；`acceptance` 逐条回原 AC 档位及缺口。独立审查按实际 diff 和材料读取记录逐项核写集，未取得不猜。
 
 原始字节沿上文三类例外和证据规则保存。相同调用再次运行且退出事实一致时，用既有 `resolveOutputRef` 实际比较字节，相等才指回首次原件；native immutable receipt 保留正确 output_ref，不能删已引用原件。字节不同或候选不可读则保新件，记 `deduplication: unknown` 与原因。成功且无保留必要的输出不额外放进清单证据指针；不为每个命令再写一份人读清单或复制 native 输出。
 
 `cursor_ref` 只指向 facts.jsonl 现 build-code 行的 phase_progress；五字段及合法原位覆盖沿原 task-store，CLI 同 Phase base_head 继续沿原 caller 规则，不新建历史序列。`cost` 只引用真实 stage 末那笔账本行与窗口，Phase 中尚未发生写 incomplete、原 owner 和恢复条件，不提前 --record。`final_chain_ref` 由最后 Phase 引用一份真实十环报告；尚未产生保未取得，不预填通过。
 
+每段另记一行实际活动分钟与墙钟、token 真实读数或缺报及原因，取自现有 capture 与会话读数，不另建每段账本；`cost` 仍只引 stage 末唯一账本行与窗口。这只是清单注记，stage 末唯一 `--record` 账本不变。
+
 ### stage 结束
 
 主会话复用已有记录接口、安全写入普通 stage facts，不恢复 run:execute 完整官方门。分别读回实施、质量、Git交付、物理清理；局部 GREEN 不冒全任务完成。逐 AC 据实际交付与证据判断、保缺项；唯一新的人读 handoff MD 给绝对 ref 与实际下一阶段，旧原件 immutable。最终 close 依「工作区与任务」及关闭方法第6/7节回读各项实际结果；质量 incomplete 的声明与清理范围授权分别保真。
 
-同一失败反复或一轮没有新事实时，按 `AGENTS.md`「卡住与升级」的四类分诊与三检查先停重复动作，再自动换路径继续；无新事实不是完成，不设次数或时长上限。该节是三类停与外部不可重试零重试的唯一处置来源；只有其中用户独占阻塞才问一次，其余缺资源记 `incomplete` 并继续安全工作。需用户决定时说清阻塞、原因、路线及代价，避免用内部编号作为唯一说明。新事实须改变继续条件，包括新答复/输入、新可取结果、不同失败信号或写集/依赖变化；同失败信号多写一份不算。未取得的答复、provider失败或许可不能靠时间流逝当同意。用户给新答复即复位，按当前材料续跑；时长本身永远不构成停止条件，时间不构成复位条件。审查 provider 各轴仍按该节排除行继续既有审查工作。
+同一失败再次出现或一轮没有新事实时，按 build-code 方法第 9 步的同一阈值处置，并按 `AGENTS.md`「卡住与升级」的四类分诊与三检查恢复；无新事实不是完成，不设次数或时长上限。该节是三类停与外部不可重试零重试的唯一处置来源；只有其中用户独占阻塞才问一次，其余缺资源记 `incomplete` 并继续安全工作。需用户决定时说清阻塞、原因、路线及代价，避免用内部编号作为唯一说明。新事实须改变继续条件，包括新答复/输入、新可取结果、不同失败信号或写集/依赖变化；同失败信号多写一份不算。未取得的答复、provider失败或许可不能靠时间流逝当同意。用户给新答复即复位，按当前材料续跑；时长本身永远不构成停止条件，时间不构成复位条件。审查 provider 各轴仍按该节排除行继续既有审查工作。

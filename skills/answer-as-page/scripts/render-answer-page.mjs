@@ -16,6 +16,8 @@ import { RING_STATES } from '../../../runtime/task/final-chain.mjs';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const templatePath = resolve(dirname(fileURLToPath(import.meta.url)), '../templates/overview-template.html');
 const sameIdentity = (a, b) => a?.dev === b?.dev && a?.ino === b?.ino;
+const EXPIRED_LABEL = '上一版 · 已过期';
+const expiredName = htmlName => htmlName.replace(/\.html$/, '.expired.html');
 
 function observedFile(path) {
   let stat;
@@ -85,8 +87,10 @@ function callerData(pageData, vocabulary, rings) {
 }
 
 // One caller-owned pair under the existing local lock. No new transaction state.
-async function publishPair(directory, htmlName, html, nodesName, nodes, preserveHistory = false, taskOutput, prepareHtml) {
+async function publishPair(directory, htmlName, html, nodesName, nodes, preserveHistory = false, taskOutput, prepareHtml, check) {
   return withLock(directory, `answer-page-${digest(htmlName).slice(0, 16)}`, async () => {
+    // Structure, source, pointer, level and fingerprint gates run before any byte moves.
+    if (check) await check();
     const write = (name, bytes) => taskOutput
       ? taskOutput.writeRecordAtomic(relative(taskOutput.taskPath, join(directory, name)), bytes)
       : writeFileAtomic(directory, name, bytes);
@@ -216,19 +220,112 @@ export async function renderAnswerPage({ taskPath, reportPath, decisionLogPath, 
     data.changedChips=data.initialChanged.map(id=>({id,label:data.objects.find(o=>o.id===id).short}));
     const encoded=JSON.stringify(data).replaceAll('<','\\u003c').replaceAll('\u2028','\\u2028').replaceAll('\u2029','\\u2029');return html.replace(/const DATA = (\{[\s\S]*?\n?\});/,()=>`const DATA = ${encoded};`);
   }:undefined;
-  const publication = await publishPair(directory, htmlName, html, nodesName, `${JSON.stringify(sidecar, null, 2)}\n`, Boolean(derived), taskOutput,prepareHtml);
+  // The three checks run before the pair lock; the lock then re-reads the
+  // accepted sources and refuses a candidate whose fingerprint drifted while
+  // waiting, so a bad page never reaches the published pair.
+  const candidate={pageData:data,html,nodes:sidecar};
+  const rejection=result=>{const error=Error(`页面内容检查未通过，拒绝发布：${result.errors.map(issue=>`${issue.code}：${issue.message}`).join('；')}`);error.code='PAGE_CONTENT_REJECTED';error.errors=result.errors;return error;};
+  if(derived){
+    try {
+      const preCheck=await checkPageContent({taskPath,reportPath,candidate});
+      if(!preCheck.ok) throw rejection(preCheck);
+    } catch (error) { if(!error.code) error.code='PAGE_PUBLISH_REJECTED'; throw error; }
+  } else if(pageData!==undefined){
+    // Caller-supplied models keep their own fingerprint but still pass structure,
+    // source and pointer checks before either publication byte moves.
+    try {
+      const preCheck=await checkPageContent({taskPath,reportPath,candidate,callerFingerprint:fingerprint});
+      if(!preCheck.ok) throw rejection(preCheck);
+    } catch (error) { if(!error.code) error.code='PAGE_PUBLISH_REJECTED'; throw error; }
+  }
+  const check=derived?async()=>{
+    let current;
+    try { current=await buildPageData({taskPath,reportPath}); }
+    catch (error) { error.code??='PAGE_PUBLISH_REJECTED'; throw error; }
+    if(JSON.stringify(current.sourceFingerprint)!==JSON.stringify(derived.sourceFingerprint)) throw rejection({errors:[{code:'SOURCE_DRIFT',message:'发布锁内重读的材料指纹与生成时不一致，拒绝发布'}]});
+  }:undefined;
+  let publication;
+  try {
+    publication = await publishPair(directory, htmlName, html, nodesName, `${JSON.stringify(sidecar, null, 2)}\n`, Boolean(derived), taskOutput,prepareHtml,check);
+  } catch (error) { if(!error.code) error.code='PAGE_PUBLISH_REJECTED'; throw error; }
   const htmlPath = join(directory, htmlName), nodesPath = join(directory, nodesName);
   const contentCheck = reportPath
-    ? await checkPageContent({ taskPath, reportPath, htmlPath, nodesPath }).catch(error => ({ ok: false, errors: [{ code: 'CHECK_FAILED', message: error.message }] }))
+    ? await checkPageContent({ taskPath, reportPath, htmlPath, nodesPath, ...(derived ? {} : { callerFingerprint: fingerprint }) }).catch(error => ({ ok: false, errors: [{ code: 'CHECK_FAILED', message: error.message }] }))
     : { ok: true, errors: [] };
   try {
     if (typeof open !== 'function') throw Error('缺宿主浏览器能力');
     if (await open(htmlPath) !== true) throw Error('宿主未打开');
-    return { htmlPath, nodesPath, opened: true, content_errors: contentCheck.errors, ...publication };
-  } catch (error) { return { htmlPath, nodesPath, opened: false, content_errors: contentCheck.errors, open_reason: `未自动打开: ${error.message}`, ...publication }; }
+    return { htmlPath, nodesPath, opened: true, content_errors: contentCheck.errors, content_check: contentCheck, ...publication };
+  } catch (error) { return { htmlPath, nodesPath, opened: false, content_errors: contentCheck.errors, content_check: contentCheck, open_reason: `未自动打开: ${error.message}`, ...publication }; }
 }
 
 export const EVENTS = Object.freeze(['skeleton-confirmed','package-converged','direction-scope-acceptance-changed','phase-closed','build-code-ended','stage-closed']);
+
+// A previous visible page can only be shown when both files are the task's own
+// regular files and their bytes still agree with each other.
+function readVerifiedPair(directory, htmlName, identity) {
+  const htmlPath = join(directory, htmlName), nodesPath = join(directory, htmlName.replace(/\.html$/, '.nodes.json'));
+  const read = path => {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw Error(`上一版不是本任务普通文件：${path}`);
+    const bytes = readFileSync(path);
+    if (!sameIdentity(stat, lstatSync(path))) throw Error(`上一版读取期间变化：${path}`);
+    return bytes;
+  };
+  let htmlBytes, nodesBytes;
+  try { htmlBytes = read(htmlPath); nodesBytes = read(nodesPath); }
+  catch (error) { return { missing: error.code === 'ENOENT' ? `缺已发布的一对文件：${error.path}` : error.message }; }
+  let data, sidecar;
+  try { data = JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(htmlBytes.toString('utf8'))?.[1]); } catch { data = null; }
+  try { sidecar = JSON.parse(nodesBytes.toString('utf8')); } catch { sidecar = null; }
+  if (!data) return { missing: '上一版 HTML 的 DATA 不可解析' };
+  if (!sidecar || sidecar.schema !== 'answer-page-nodes.v1' || !Array.isArray(sidecar.nodes) || !sidecar.source_fingerprint) return { missing: '上一版侧车结构不成立' };
+  if (JSON.stringify(data.ringNodes) !== JSON.stringify(sidecar.nodes)) return { missing: '上一版 HTML 与侧车节点不一致' };
+  if (JSON.stringify(data.sourceFingerprint) !== JSON.stringify(sidecar.source_fingerprint)) return { missing: '上一版 HTML 与侧车指纹不一致' };
+  if (typeof data.provenance !== 'string' || !data.provenance.includes(`生成=${sidecar.generated_at}`)) return { missing: '上一版 HTML 未承接侧车生成时间' };
+  if (data.taskIdentity !== identity) return { missing: '上一版页面属于另一个任务' };
+  return { html: htmlBytes.toString('utf8'), data, htmlPath, nodesPath };
+}
+
+// The expired view is a derived copy of the verified previous bytes; the old
+// pair and the success conclusion stay untouched.
+function buildExpiredHtml(previousHtml, data, reason) {
+  const previousStatus = data.stageStatus && typeof data.stageStatus === 'object' ? data.stageStatus : {};
+  const expired = {
+    ...data,
+    stageStatus: { label: EXPIRED_LABEL, tone: 'fail', stage: previousStatus.stage, gaps: [reason], sources: previousStatus.sources ?? [], ...(previousStatus.quality ? { quality: previousStatus.quality } : {}) },
+    provenance: `${data.provenance ?? ''}；本次新候选未通过检查：${reason}；本页是上一版字节派生，原页与侧车未改，不进入成功发布结论`,
+  };
+  const encoded = JSON.stringify(expired).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
+  return previousHtml.replace(/const DATA = (\{[\s\S]*?\n?\});/, () => `const DATA = ${encoded};`);
+}
+
+async function publishExpiredView(directory, htmlName, identity, reason, taskOutput) {
+  return withLock(directory, `answer-page-${digest(htmlName).slice(0, 16)}`, async () => {
+    // Reading the previous pair and writing the expired view are one critical section.
+    const pair = readVerifiedPair(directory, htmlName, identity);
+    if (pair.missing) throw Object.assign(Error(`无可验证的上一版：${pair.missing}`), { code: 'PREVIOUS_PAIR_UNVERIFIABLE', missing: pair.missing });
+    const name = expiredName(htmlName), path = join(directory, name);
+    const before = observedFile(path);
+    const bytes = Buffer.from(buildExpiredHtml(pair.html, pair.data, reason), 'utf8');
+    if (taskOutput) await taskOutput.writeRecordAtomic(relative(taskOutput.taskPath, path), bytes);
+    else await writeFileAtomic(directory, name, bytes);
+    const published = observedFile(path);
+    if (!published?.bytes.equals(bytes)) throw Error(`临时过期页回读不一致：${name}`);
+    return { path, replaced: Boolean(before), pair };
+  });
+}
+
+async function clearExpiredView(directory, htmlName) {
+  return withLock(directory, `answer-page-${digest(htmlName).slice(0, 16)}`, async () => {
+    const path = join(directory, expiredName(htmlName));
+    let stat;
+    try { stat = lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return { cleared: false, reason: '无本次临时页' }; throw error; }
+    if (!stat.isFile() || stat.isSymbolicLink()) return { cleared: false, reason: `临时位置不是本任务普通文件，保留原件：${path}` };
+    unlinkSync(path);
+    return { cleared: true };
+  });
+}
 
 export async function refreshAnswerPage({ event, open = openInSystemBrowser, ...options } = {}) {
   if (!EVENTS.includes(event)) throw Error(`未知事件；支持: ${EVENTS.join(', ')}`);
@@ -242,8 +339,39 @@ export async function refreshAnswerPage({ event, open = openInSystemBrowser, ...
   }
   options.outDir??=join(resolve(options.taskPath),'quality/evidence/cockpit');
   options.htmlName??='overview.html';
-  // Rendering owns the pair lock and returns the old observation from that same lock.
-  const result = await renderAnswerPage({ ...options, open: undefined });
+  const manifest=JSON.parse(readFileSync(join(options.taskPath,'task.json'),'utf8'));
+  const identity=manifest.project_name+'/'+manifest.task_id;
+  // A rejected candidate never replaces the published pair: the same entry then
+  // shows the verified previous bytes with an explicit expired label.
+  let result;
+  try {
+    result = await renderAnswerPage({ ...options, open: undefined });
+  } catch (error) {
+    // Any real render failure re-reads the verified previous pair inside one lock;
+    // the failed candidate never reaches the published pair.
+    const directory=resolve(options.outDir);
+    const errors=error.errors??[{code:error.code??'PAGE_RENDER_FAILED',message:error.message}];
+    // The fixed expired position is this task's own evidence tree; anything else
+    // keeps the original bytes and reports the gap instead of writing.
+    const output=openTask(resolve(options.taskPath),{projectName:manifest.project_name,taskId:manifest.task_id});
+    const within=(root,path)=>{const rel=relative(root,resolve(path));return rel===''||rel!=='..'&&!rel.startsWith(`..${sep}`)&&!isAbsolute(rel);};
+    if(!within(join(output.taskPath,'quality/evidence'),directory)||within(join(output.taskPath,'quality/evidence/research'),directory))
+      return {ok:false,failed:true,event,changed:false,opened:false,errors,expired:null,previous_pair:'unverifiable',open_reason:`临时过期页位置不属于任务证据目录：${directory}`};
+    try {
+      const view=await publishExpiredView(directory, options.htmlName, identity, error.message, output);
+      let opened=false, openReason=`已导出上一版（已过期），未自动打开`;
+      try {
+        const confirmation=await open(view.path,{taskIdentity:identity,taskRoot:options.taskPath});
+        const confirmed=open===openInSystemBrowser?confirmation?.opened===true:confirmation===true||confirmation?.opened===true;
+        if (!confirmed) throw Error('宿主未打开');
+        opened=true;openReason='新候选被拒绝；已展示上一版（已过期）';
+      } catch (openError) { openReason=`新候选被拒绝；上一版（已过期）已在固定位置，未自动打开: ${openError.message}`; }
+      return {ok:false,failed:true,event,changed:false,opened,errors,expired:{htmlPath:view.path,opened,replaced:view.replaced},previous_pair:'preserved',htmlPath:view.pair.htmlPath,nodesPath:view.pair.nodesPath,open_reason:openReason};
+    } catch (writeError) {
+      if (writeError.code === 'PREVIOUS_PAIR_UNVERIFIABLE') return {ok:false,failed:true,event,changed:false,opened:false,errors,expired:null,previous_pair:'unverifiable',open_reason:`无可验证的上一版：${writeError.missing??writeError.message}`};
+      return {ok:false,failed:true,event,changed:false,opened:false,errors:[...errors,{code:'EXPIRED_VIEW_FAILED',message:writeError.message}],expired:null,previous_pair:'preserved',open_reason:`上一版已验证，但临时过期视图无法写入：${writeError.message}`};
+    }
+  }
   const current = JSON.parse(readFileSync(result.nodesPath, 'utf8'));
   let previous, baselineMissing = false;
   if (result.hadHtml) {
@@ -256,13 +384,18 @@ export async function refreshAnswerPage({ event, open = openInSystemBrowser, ...
   const changed = !result.hadHtml || baselineMissing || JSON.stringify(previous.source_fingerprint) !== JSON.stringify(current.source_fingerprint)
     || JSON.stringify(previous.nodes) !== JSON.stringify(current.nodes);
   const { previousNodes, hadHtml, baselineConsistent, ...published } = result;
-  const response = { ...published, event, changed, source_fingerprint: current.source_fingerprint };
+  // The current page was confirmed published and read back; drop this task's own
+  // previous expired view under the same lock.
+  let expiredCleared = { cleared: false, reason: '未执行' };
+  try { expiredCleared = await clearExpiredView(resolve(options.outDir), options.htmlName); }
+  catch (error) { expiredCleared = { cleared: false, reason: error.message }; }
+  const response = { ok: true, ...published, event, changed, expired_cleared: expiredCleared, source_fingerprint: current.source_fingerprint };
   if (!changed) return { ...response, opened: false, open_reason: '无实质变化' };
   try {
-    const manifest=open===openInSystemBrowser?JSON.parse(readFileSync(join(options.taskPath,'task.json'),'utf8')):null;
-    const confirmation=manifest?await open(result.htmlPath,{taskIdentity:manifest.project_name+'/'+manifest.task_id,taskRoot:options.taskPath}):await open(result.htmlPath);
-    if (manifest?confirmation?.opened!==true:confirmation!==true) throw Error('宿主未打开');
-    return { ...response, ...(manifest?{open_action:confirmation.action,browser:confirmation.browser}:{}), opened: true, open_reason: baselineMissing ? '比较基准缺失；按首次打开' : result.hadHtml ? '实质变化' : '首次生成' };
+    const confirmation=await open(result.htmlPath,{taskIdentity:identity,taskRoot:options.taskPath});
+    const confirmed=open===openInSystemBrowser?confirmation?.opened===true:confirmation===true||confirmation?.opened===true;
+    if (!confirmed) throw Error('宿主未打开');
+    return { ...response, ...(confirmation.action?{open_action:confirmation.action}:{}), ...(confirmation.browser?{browser:confirmation.browser}:{}), opened: true, open_reason: baselineMissing ? '比较基准缺失；按首次打开' : result.hadHtml ? '实质变化' : '首次生成' };
   } catch (error) { return { ...response, opened: false, open_reason: `未自动打开: ${error.message}` }; }
 }
 
@@ -278,11 +411,14 @@ export async function main(argv = process.argv.slice(2)) {
   const manifest = JSON.parse(readFileSync(join(values['task-path'], 'task.json'), 'utf8'));
   const task = openTask(resolve(values['task-path']), { projectName: manifest.project_name, taskId: manifest.task_id });
   const workspace = await openCurrentTaskWorkspace(task);
-  return (values.event ? refreshAnswerPage : renderAnswerPage)({
+  const result = await (values.event ? refreshAnswerPage : renderAnswerPage)({
     ...(values.event ? { event: values.event } : {}),
     reportPath: values.report, decisionLogPath: join(workspace.worktreeRoot, 'specs', manifest.task_id, 'decision-log.md'),
     taskPath: values['task-path'], ...(values.data ? { pageData: JSON.parse(readFileSync(values.data, 'utf8')) } : {}), outDir: values['out-dir'], htmlName: values.html,
   });
+  // A rejected candidate is a real failure even when the expired view opened.
+  if (result?.ok === false) process.exitCode = 1;
+  return result;
 }
 let directEntry = false;
 if(process.argv[1]){try{directEntry=realpathSync(fileURLToPath(import.meta.url))===realpathSync(resolve(process.argv[1]));}catch(error){if(error.code!=='ENOENT')throw error;}}

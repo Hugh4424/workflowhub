@@ -177,7 +177,20 @@ function start(provider, cwd, prompt) {
   const argv = ["--new-project", "--sandbox", "--disable-slash-commands"];
   if (provider.model) argv.push("--model", provider.model);
   argv.push("--output-format", "stream-json", "-p", prompt);
-  return { ...plan(provider, cwd, argv, null), observeLine, streamProgress: true };
+  let firstToolError = null;
+  const observe = (stream, line) => {
+    try {
+      const event = JSON.parse(line);
+      const message = event?.step_update?.tool_info?.error?.message;
+      if (!firstToolError && typeof message === "string" && message.trim()) firstToolError = message;
+    } catch {}
+    const result = observeLine(stream, line);
+    if (result?.terminal?.error && firstToolError) {
+      result.terminal.error = { ...result.terminal.error, diagnostic: firstToolError };
+    }
+    return result;
+  };
+  return { ...plan(provider, cwd, argv, null), observeLine: observe, streamProgress: true };
 }
 
 export default {

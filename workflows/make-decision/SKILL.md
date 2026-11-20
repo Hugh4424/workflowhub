@@ -110,7 +110,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
    先记录用户原话、痛点、任务类型、事实、假设、非目标和未决问题，含范围分诊：区分用户痛点、完整旅程、页面、数据状态和成功失败边界。任务类型不明或冲突时，只暂停依赖它的问题并澄清；不靠文件名或旧记录猜答案。规划任务只问会改变方向的问题，不问具体实现形式：文件路径与文件面、函数名、字段名、算法、schema 形状、命令形态、入口参数形态、行号、代码片段；可问要求覆盖哪些测试与实测面，具体命令、记录形状与实测记录由后续 build-plan 设计，普通任务可问影响实现的细节。
    **入口评估**：普通/规划是任务性质，交付规模与风险另作入口判断。普通任务有实际执行目标时，实际调用 workflows/make-decision/scripts/entry-evaluation.mjs 的 evaluateEntryRoute，七项输入各带真实依据。返回与判级事实只写当前日志「级别与路线」，字段、两项代价事实与来源及调用命令/返回原 ref 沿入口「唯一写入」原合同；「工作包与决定」的一条既有做什么／不做什么／风险／改动四字段决定只引用该节稳定锚和必要决定含义，不复制返回取值或代价事实。返回未包含项写“未返回”，不补造值；缺来源写 unassessed 与具名 owner，函数不可用、材料不足或取值缺依据记未评估/未决。paused 时在第8步与第14步同批展示至少一条可选拆分路线，不把建议当许可。原 ref 缺失或不可回读时报告原件不可得、具体缺口与 owner，按复杂处理，不以其它节原值兜底，不另存或复制 raw；未答不当用户授权，其余安全工作继续。入口事实及真实选择在第8步/第14步按既有展示读回；规划任务仍做方向规划，不自动转换任务。
    用户中途改变任务类型声明时，停止消费旧类型下的问题与产物，直到逐项按新类型重新处理。当前决策保留旧问题引用、重处理原因、新内容位置；只换 hash 或引用不算重处理。不为此新建 schema、控制面、类型状态或记录绑定。
-   新日志使用 `skills/decision-log/templates/decision-log-template.md`；先实读模板，再按当前真实来源写内容。主文与原件分工按模板 `## 外置事实索引` 的节级消费者定义；逐字原文、需求索引明细、Talk 批次、grill、调研与审查处置明细只沿唯一原 ref，历史日志保持原文。首次写外置完整 U 原件或主文 OI 之前，读取并执行 `skills/decision-log/SKILL.md` 的「来源与未决问题写法」；覆盖收口前读同节 coverage audit，正文和原件各归该 owner。记录实际读取位置与先后，读了但动作未做仍记未执行；缺来源写具体诊断。
+   新日志使用 `skills/decision-log/templates/decision-log-template-v2.md`；旧日志仍按 `decision-log-template.md` 读取；先实读模板，再按当前真实来源写内容。主文与原件分工按模板 `## 外置事实索引` 的节级消费者定义；逐字原文、需求索引明细、Talk 批次、grill、调研与审查处置明细只沿唯一原 ref，历史日志保持原文。首次写外置完整 U 原件或主文 OI 之前，读取并执行 `skills/decision-log/SKILL.md` 的「来源与未决问题写法」；覆盖收口前读同节 coverage audit，正文和原件各归该 owner。记录实际读取位置与先后，读了但动作未做仍记未执行；缺来源写具体诊断。
 
    - U 写入前：用当前 task 绝对基准＋`quality/evidence/decision-log-refs/requirement-change-log.md`（已有原件沿实际唯一 ref）定位真实 U 条目；主文每 U 最小决定、受影响落点与条件 ref 按「来源与未决问题写法」。
    - 答复登记写入前：读取模板「答复登记：原话和语气怎样保留？」与「确认点：三问、可改项与叫停怎样记？」及当前需求索引唯一原件（按外置索引的 `需求索引：<ref>` 行声明）；词表、字段、ref 格式、旧答复四态与确认口径全按这两节，方法不复述。选项采纳的题目、选项含义与真实所选按该节保存；缺原话写具名缺口，不补造、不拿结论冒答复。
@@ -190,7 +190,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
    未确认不得冒写该时点完成。缺自查原件如实补做并重核受影响展示，不倒填确认前已做；自查不代第7步独立方向审查、不替用户选择或新增机器门。
 7. <a id="step-direction-advice"></a>`direction-advice`：
    方向审查时点：在大纲确认后、逐模块收敛前取得并回读独立方向建议；不可用与覆盖限制沿本步原件保真。
-   **本步产物**：wh-review 原 owner 保存的方向建议、provider/失败/覆盖事实与实际原件 ref；审查输入是方向包，含原始需求原文（`raw_requirement`）、调研结论与来源（`research_context`，不得含 proposed_solution）、可核对现状与限制（`objective_facts`）、大纲骨架完整结构（`convergence_outline`：包划分、包分层与逐包服务活动、主干与最小切片、依赖与顺序、每包范围边界、每包验收草案或验收缺口、问题/未知、约束、失败后果、较小可逆选项；分层/主干/切片按模板「包清单怎样分层，主干与最小切片写在哪？」节，此处不重述定义）、已确认决定与当前选择一句（`current_selection`：方向、范围、非目标、已确认骨架）、被否候选及否决理由（`alternatives`＋`selection_rationale`）、关键假设及会推翻它的证据（`key_assumptions`）、被审大纲的可回读 ref＋sha256；用户答复原话不进包。缺当前选择、备选或否决理由任一项时本步不得记完成；包内缺方向或骨架是本步输入未备，不是已审发现的 finding。
+   **本步产物**：wh-review 原 owner 保存的方向建议、provider/失败/覆盖事实与实际原件 ref；审查输入是方向包，含原始需求原文（`raw_requirement`）、调研结论与来源（`research_context`，不得含 proposed_solution）、可核对现状与限制（`objective_facts`）、大纲骨架完整结构（`convergence_outline`：包划分、包分层与逐包服务活动、主干与最小切片、依赖与顺序、每包范围边界、每包验收草案或验收缺口、问题/未知、约束、失败后果、较小可逆选项；分层/主干/切片按模板「包清单怎样分层，主干与最小切片写在哪？」节，此处不重述定义）、已确认决定与当前选择一句（`current_selection`：方向、范围、非目标、已确认骨架）、被否候选及否决理由（`alternatives`＋`selection_rationale`，必含最初方案、谁否、为什么；只写「已决定」不算备选）、关键假设及会推翻它的证据（`key_assumptions`）、被审大纲的可回读 ref＋sha256；用户答复原话不进包。缺当前选择、备选或否决理由任一项时本步不得记完成；包内缺方向或骨架是本步输入未备，不是已审发现的 finding。
    **进下一步前**：到达本步先读 skills/wh-review/SKILL.md 的现有接口，沿真实公共 review 或裸入口字节规则提交完整允许材料。答复/所选处置/结论不进入包；Kill/Recycle 权限与判据缺失不报通过，不可用不冻结同任务讨论，未变范围不追空 findings。
 
    方向审查的输入与回读按 `skills/wh-review/SKILL.md`。
@@ -262,6 +262,8 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
    本步每包除台账行与五类分析外，另写一张十格方案卡；卡写在该包收敛原件行下，不另建文件。
    十格是结果、对应需求、现状缺口、方案与取舍、边界、数据与状态、验收、风险与回退、未决、白话复述。
    五段固定为 调研→发散→收敛→就地讨论→定验收；十格与五段的逐字定义以 `steps.json` 第9步为准，本节只给动作与名单。
+   需要三角色分开做时走 `skills/decision-maker/SKILL.md`：调研、设计、审查三份真实回传，卡用十一格（十格外加配套与影响），
+   冷读六问、对抗九问，卡末钉住四份角色原件与包级答复；主持人仍是唯一 writer，脚本只做机械检查，不代替角色判断。轻量任务仍沿本节十格加一次冷读。
    完整台账（≥3 包）逐包核聊天/批次/先设计；1–2 包受控小样只核批次与括号。
    可推迟不阻断本步，但该包状态记未收敛，收敛前须补齐；「可推迟：无」与「无（…可推迟…）」同义，按无处理。
    先给设计再提问：只有真歧义、真实取舍或材料判不了的点才问；能读文件判定的不问。
@@ -310,7 +312,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
    **本步产物**：整体一次 wh-review 细节建议、全部真实 R/U 全文与条件原件的送达事实、OI 终态及 finding 原处置格；不拆逐模块再整体审。
    **进下一步前**：全部模块收敛；全部真实 R/U 在现工作包与决定/写集或唯一覆盖格各有落点或具名缺口、写集每个路径有定序写主（批内同路径互斥，跨批重叠有真实依赖边及具名先后写者）、同一事实文内只有一个值，三者缺一仍未完成。到达本步读 wh-review 现有接口，保全文/顶层 ref 与多个原件真实 body、实际 delivery 和未证 read-confirmed 边界；下文全部风险/处置/分析义务保持。 五类分析须逐类标「已答／事实可定／待你定」与谁来定；讨论前展示工作包判断，讨论后用 3–5 句大白话复述并取得用户确认；进入细节审查前完成五类收敛并把工作包骨架给用户看一次。
 
-   全部模块收敛后，对整体做一次 wh-review 细节审查，检查模块间一致性，不拆成逐模块审加整体审。先实读当前 decision-log 全文，包括全部真实 R／U，再按模板 `## 外置事实索引` 的取用条件逐件读本次需要的唯一原件全文；全部 R／U 对账沿 `skills/decision-log/SKILL.md#来源与未决问题写法`，不把主文摘要、编号存在或包外指针当全文已读。
+   全部模块收敛后，对整体做一次 wh-review 细节审查，检查模块间一致性，不拆成逐模块审加整体审。逐包核模板十项设计记录，含配套与影响四项（配套调整、配套迁移、配套移除、影响范围）；缺项记具名缺口与 owner，不自行补写。先实读当前 decision-log 全文，包括全部真实 R／U，再按模板 `## 外置事实索引` 的取用条件逐件读本次需要的唯一原件全文；全部 R／U 对账沿 `skills/decision-log/SKILL.md#来源与未决问题写法`，不把主文摘要、编号存在或包外指针当全文已读。
     调用者将当前 decision 顶层 ref／sha256 放 `approved_direction`，触发的 U／coverage 等明确原件 ref／sha256 放 detail 合法的 `context_map`／`evidence_map` 顶层成员；现 `resolveMaterialRefs` 按认证 worktree 或当前 task 双 root 读真实 bytes，现 `runSimpleReview` → `buildReviewMaterials` 将完整正文装入 packet。多个原件逐件复用现读取方法，已读全文连同各自基准与原 ref 放合法成员；嵌套 ref 不被 resolver 递归读取，不能算已送达。按实际 delivery manifest 回读送出的完整成员和来源／脱敏事实；只给摘要或包外 ref 时明确 incomplete，缺原件、越界、跨 task 或 symlink 保原 TASK_FILE_INVALID／读失败，不略过。只取本次条件触发的明确原件，不扫目录、不递归解析 Markdown、不放宽 ArtifactDir writer 根、不把 detail 成员混入 phase profile；送出不证明 provider 已读懂，read-confirmed 未证保 unknown。
 
     每个工作包的四行投影写进 `context_map.proposal_projection`，键为包名，值为 `{scope, plan, acceptance, risk, source_ref}`：`scope` 写承接的需求编号与明确不做；`plan` 写选定做法、放弃的替代与代价；`acceptance` 写 AC 编号、通过／失败信号与至少一处反例；`risk` 写失败后果、恢复回退、外部依赖与未解项；`source_ref` 写该行正文的可回读位置。缺任意一行，该包方案未交审，detail 审查不得记完成。detail 审查按仔细检查设计的深度读：逐包核方案是否成立、接线是否为真（谁调用谁、上游输出是否被下游真读）、验收是否可判且能证伪、风险与依赖是否覆盖；五问（方案成立吗／验收可判吗／范围越界吗／风险覆盖吗／效果谁看）逐包给结论，答不出或答「无法判断」就是 finding，写第几问、缺哪份证据、该谁补；五问都不成问题时不写 finding，把比对范围写进 evidence。不把文件存在、编号或字段齐备当判断。
@@ -340,6 +342,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
    **本步产物**：确认前对最终决策草稿、真实问答、Grill/审查与已产生证据的只读一致性核对结果；日志留必要说明/原件引用及领域写入读回或有源 no-change。
    **进下一步前**：逐项核草稿是否对应用户已见方向、真实问答与审查处置；缺口保持可见，改变决定的修复先准备可审稿再交第14步取得真实确认，不增加日常审批或机器门。 执行 `node tools/cli/run-checks.mjs --task-path <任务根>`，把 `missing_steps` 清单原样写进阶段核对，点名每个缺失 `step_slug`；阶段材料检查另跑 `node tools/cli/run-checks.mjs --material-root <材料目录> --stage=make-decision`，本阶段尚未产出 spec.md/phases 属正常，不据此判红；有留痕阶段清单非空记本阶段核对 incomplete。零留痕时保 `steps_unattested` 与未观测事实，不把退出 0 当成已执行或完整覆盖；这是报告核对，不新增审批或推进 gate。
 
+   本步同时产出 A 表并交最终确认：读任务库 `quality/evidence/decision-log-refs/requirement-index.md` §1 的 14 行，逐条核需求原文 ref、sha256、用户答复位置、包、决定、AC 与缺口 owner，再用 `node skills/spec-plan/scripts/build-decision-baseline.mjs --decision-log <当前日志>` 的「原始需求」段按行位对回正文；缺行、只在合并句出现或仍指旧槽位记具名缺口与 owner。A 表是本轮人工原件，不用它替代最终确认。
    对最终决策草稿和真实问答/审查作只读一致性核对：逐项核草稿是否对应用户已见方向、真实问答与审查处置，确认材料与真实来源一致；逐一核对本次已解决术语及边界变化的所属术语表与实际写入读回，或有来源的 no-change 理由；未解/冲突保原问题及待问来源，核对结果留现 decision-log 的必要说明和引用。缺口保持可见，普通修复在当前任务继续；改变已确认方向、范围或验收时，先准备可审稿再交最终确认，取得该决定真实答复，不新增日常审批或机器门，也不把本步核对当最终确认。
 
    UI 任务时核对引一行「UI 范围与设计基准」；非 UI 跳过。
@@ -359,6 +362,14 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 阶段收口中的成本：执行 `skills/stage-reflection/SKILL.md`「方法」第 3 步的 measure-main-agent-cost 入口及完整来源、窗口、失败和删除前留账边界；本阶段只在整个 stage 末触发一次，同一计量窗口不重复，不每 Phase 触发。
 
    UI 任务时交接引一行「UI 范围与设计基准」；非 UI 跳过。
+
+### 决策日志更新时机
+
+- 每个 make-decision 步骤结束时：更新当前步骤产生的节（入口、需求、包、跨包、证据），不把过程原文贴进日志。
+- 每个工作包完成收敛后：替换该包一节，更新包目录一行；不追加第二份。
+- 用户每次确认后、每次方向/细节审查处置后：更新受影响节，写清来源、日期、影响。
+- 收口前冻结；之后只允许勘误，勘误写日期、原因、影响。
+- 主会话唯一 writer；子代理只回传摘要和指针，不写共享文件。
 
 ## 使用技能与执行分工
 
@@ -450,6 +461,8 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 调用检查器时显式给任务根、材料根、阶段和当前步；跳过使用可核当前 Phase 或真实 HEAD。
 
 `node tools/cli/check-stage-steps.mjs --stage=make-decision --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
+
+本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/make-decision/SKILL.md#<本步 method_anchor>","--stage=make-decision","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=make-decision --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
 
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。

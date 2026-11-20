@@ -11,7 +11,9 @@ description: Convert supplied decision material into a structured downstream rec
 
 post 任务的当前正文必须写入认证 worktree 的 `specs/<task-id>/decision-log.md`，只能通过当前 WorkflowHub 的材料写入路由发布；任务库 `taskPath`／`WORKFLOWHUB_TASK_DIR` 只承载 `task.json`、`facts.jsonl`、`quality/` 与 `evidence/`。当前材料写入路由不可用时记 `unavailable`，不能回退到 task 目录，也不能在 task 目录生成同名副本再把它当当前权威。
 
-用 [decision-log-template.md](templates/decision-log-template.md) 将真实输入整理为 `decision-log.md` 供上述读者消费；模板只安排正文，不认证身份或授权。方向问答及最终确认归主会话，本技能不代答。
+新日志用 [decision-log-template-v2.md](templates/decision-log-template-v2.md)；旧日志仍用 [decision-log-template.md](templates/decision-log-template.md)。将真实输入整理为 `decision-log.md` 供上述读者消费；模板只安排正文，不认证身份或授权。方向问答及最终确认归主会话，本技能不代答。
+
+普通读者按模板分两路：v2 日志给 build-plan/build-code 作者与独立审查者按每包十项记录读，来源与设计历程在正文可回读；旧模板只给读旧任务或做迁移核对的人按旧四材料口径读。当前任务只有 `specs/<task-id>/decision-log.md` 一个日志入口，旧模板与历史日志只读，不改写、不双写，也不另建第二份当前日志。
 
 ## 写作步骤
 
@@ -31,6 +33,13 @@ post 任务的当前正文必须写入认证 worktree 的 `specs/<task-id>/decis
 10. 返回简短人读摘要：决定、来源类型、理由、范围、后果/风险、非目标、未决、领域术语/ADR 结果与下游边界。写了文件就返回实际路径；仅生成正文就如实说明尚未写入。
 
 写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
+
+### 更新写法
+
+- 只改对应节，替换不追加；包目录只改一行；不建第二份日志。
+- 证据只加指针和 sha256；正文只留结论；不复制聊天原文。
+- 旧版不覆盖；需要对比时读旧版。
+- 更新前确认当前节没有别的 writer；有冲突先停，不覆盖。
 
 ## 内容边界
 

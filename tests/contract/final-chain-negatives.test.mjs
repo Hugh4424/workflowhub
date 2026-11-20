@@ -1,14 +1,17 @@
 // ORACLE-P3-NEGATIVES — P3/T006. Independent literal expectations from the approved P3 card.
 // Frozen production, PLAN oracle and real task materials are read-only.
 import {describe,it,expect,afterEach} from 'vitest';
-import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {runFinalChainCheck} from '../../runtime/task/final-chain-runner.mjs';
 import {captureCommand} from '../../runtime/interface/run-command.mjs';
 import {evaluateRing,resolveLevel,evaluateWorkflowSteps} from '../../runtime/task/final-chain.mjs';
+import {environmentFingerprint,workspaceIdentity} from '../../runtime/task/delivery-claims.mjs';
+import {REPLAY_VERDICTS} from '../../tools/cli/check-replay.mjs';
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const owned=[];
 const put=(root,path,value)=>{const p=join(root,path);mkdirSync(dirname(p),{recursive:true});writeFileSync(p,typeof value==='string'?value:JSON.stringify(value));return p;};
@@ -234,5 +237,178 @@ describe('P3 OCR707 independent metric arithmetic',()=>{
  });
  it('trusted pure caller confirmed skip is exactly 1/4; it does not claim any persisted skip producer',()=>{
   const pure=summarizeWorkflow([{source:'owned/source.json',step_slug:'observed',state:'unavailable',basis:[]}],{verified:true,declared:['make-decision','build-plan','build-code','verify-code'],actual:[{stage:'make-decision'},{stage:'build-plan'},{stage:'build-code'}],skipped:[{stage:'verify-code',confirmed:true,rule_ref:'trusted-caller-confirmed-skip'}]});expect(pure.stage_skip_numerator).toBe(1);expect(pure.stage_skip_denominator).toBe(4);expect(pure.stage_skip_rate).toBe(1/4);
+ });
+});
+
+// ORACLE-CLOSE-CLAIMS-REPLAY — P9/T009. Independent expectations from the P9 phase
+// and the live decision log (AC-P7-002). Production, spec, phases and existing
+// fixtures stay read-only; the replay case files are built in an owned temp root.
+describe('ORACLE-CLOSE-CLAIMS-REPLAY target replay',()=>{
+ it('matched target replay: an unmatched environment hash and a swapped fixture are never counted as the named red',()=>{
+  const root=temporary(),casesDir=join(root,'quality','evidence','replay-cases');
+  mkdirSync(casesDir,{recursive:true});
+  const redBytes="console.error('T6 controlled target failure: required original missing');\nprocess.exit(1);\n";
+  const greenBytes="console.log('fixture replaced: the target now behaves green');\n";
+  const red=join(casesDir,'target-red.mjs'),green=join(casesDir,'swapped-green.mjs');
+  writeFileSync(red,redBytes);writeFileSync(green,greenBytes);
+  // Device sanity is asserted apart from the target: the frozen copy is genuinely red,
+  // the swapped copy genuinely green. A broken device cannot stand in for the red.
+  const exitOf=file=>spawnSync(process.execPath,[file],{encoding:'utf8'}).status;
+  expect(exitOf(red)).toBe(1);expect(exitOf(green)).toBe(0);
+  const sha=value=>createHash('sha256').update(value).digest('hex');
+  const expected={exit:1,gap:'required-original-missing'};
+  const cases={schema_version:'1.0.0',cases:[
+   {id:'t6-frozen-red-env-unmatched',source:'T6 controlled copy; the original is unavailable',original:{status:'available'},input:'target-red.mjs',input_sha256:sha(redBytes),target:{argv:[process.execPath,red],expected},environment:{hash:'0'.repeat(64)}},
+   {id:'t6-swapped-fixture',source:'same frozen case after the fixture bytes were replaced',original:{status:'available'},input:'swapped-green.mjs',input_sha256:sha(redBytes),target:{argv:[process.execPath,green],expected},environment:{hash:'0'.repeat(64)}},
+  ]};
+  const casesFile=join(casesDir,'replay-cases.json');writeFileSync(casesFile,JSON.stringify(cases,null,2));
+  // Real read-only entry, never mocked: the CLI must read these cases and judge them.
+  const cli=join(ROOT,'tools/cli/check-replay.mjs');
+  const run=spawnSync(process.execPath,[cli,`--cases=${casesFile}`],{cwd:root,encoding:'utf8'});
+  expect(run.error,`ORACLE-CLOSE-CLAIMS-REPLAY replay entry absent: ${cli} (${run.error?.code??'no error'})`).toBeUndefined();
+  const output=`${run.stdout??''}${run.stderr??''}`;
+  // Both cases must be reported, and neither may end as a replayed pass.
+  expect(output,`ORACLE-CLOSE-CLAIMS-REPLAY: the real replay entry must judge both frozen cases and report their ids; got:\n${output}`).toContain('t6-frozen-red-env-unmatched');expect(output).toContain('t6-swapped-fixture');
+  expect(run.status,`replay must not report these case ids as a passing replay:\n${output}`).not.toBe(0);
+  // Reachable assertions instead of an absence that the tool can never print: the
+  // reported verdicts are the frozen vocabulary, named per case, and the set is
+  // not the replayed status. A pass-shaped token is never emitted because the
+  // real positive token is `target_red` (see the reachable-vocabulary case below).
+  const body=JSON.parse(run.stdout);
+  expect(body.status,'a case set with a non-red case is incomplete, not replayed').toBe('incomplete');
+  expect(body.cases.map(row=>row.verdict),'each case reports its own named verdict').toEqual(['incomparable','fixture_mismatch']);
+  for(const row of body.cases)expect(REPLAY_VERDICTS).toContain(row.verdict);
+  expect(output).toMatch(/不可比|incomparable|mismatch|不匹配|environment/i);
+ });
+});
+
+// ORACLE-CLOSE-CLAIMS-REPLAY gate counterexamples — the six controls that stop a
+// frozen case set from passing without a declared original, without a comparable
+// environment, or without a bound case set. The describe name is selectable, so a
+// gate can run exactly these:
+//   node node_modules/vitest/vitest.mjs run tests/contract/final-chain-negatives.test.mjs \
+//     -t 'ORACLE-CLOSE-CLAIMS-REPLAY gate counterexamples'
+describe('ORACLE-CLOSE-CLAIMS-REPLAY gate counterexamples',()=>{
+ const CLI=join(ROOT,'tools/cli/check-replay.mjs');
+ const sha=value=>createHash('sha256').update(value).digest('hex');
+ // A red controlled copy that records its own execution. An undeclared or lost
+ // original must leave the marker absent, so "not executed" is an observation
+ // rather than an inference from missing fields.
+ function redTarget(dir){
+  const marker=join(dir,'executed.marker'),path=join(dir,'target-red.mjs');
+  writeFileSync(path,`import {writeFileSync} from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'executed');\nconsole.error('T6 controlled target failure: required-original-missing');\nprocess.exit(1);\n`);
+  return {path,marker};
+ }
+ function frozenCase(dir,{id,original,target,environment}){
+  return {id,...(original===undefined?{}:{original}),input:'target-red.mjs',input_sha256:sha(readFileSync(join(dir,'target-red.mjs'))),target:{argv:[process.execPath,target],expected:{exit:1,gap:'required-original-missing'}},environment};
+ }
+ function replay(dir,cases,{cwd=dir}={}){
+  const file=join(dir,'replay-cases.json');
+  writeFileSync(file,JSON.stringify({schema_version:'1.0.0',cases},null,2));
+  const run=spawnSync(process.execPath,[CLI,`--cases=${file}`],{cwd,encoding:'utf8'});
+  return {run,body:JSON.parse(run.stdout)};
+ }
+ function taskDir(id,facts){
+  const dir=temporary();
+  writeFileSync(join(dir,'task.json'),JSON.stringify({task_id:id,project_name:'workflowhub'}));
+  writeFileSync(join(dir,'facts.jsonl'),`${JSON.stringify({record_kind:'stage',task_id:id,stage:'build-code',source:facts})}\n`);
+  return dir;
+ }
+
+ it('undeclared: a case that never declares its original is invalid and its controlled copy is not executed',()=>{
+  const dir=temporary(),{path:target,marker}=redTarget(dir);
+  const {run,body}=replay(dir,[frozenCase(dir,{id:'undeclared-original',target,environment:{hash:environmentFingerprint()}})]);
+  expect(run.status,'an undeclared original can never be a passing replay').toBe(1);
+  expect(body.status,'one invalid case cannot be reported as replayed').toBe('incomplete');
+  expect(body.cases[0],'a missing original is invalid_case, never an implicit not-declared pass').toMatchObject({id:'undeclared-original',verdict:'invalid_case',original:null});
+  expect(body.cases[0].reason).toMatch(/original is not declared/);
+  expect(body.cases[0].observed,'the undeclared case has no observed run').toBeUndefined();
+  expect(existsSync(marker),'an undeclared case must not execute its controlled copy').toBe(false);
+ });
+
+ it('lost: a declared lost original stays unavailable although the same bytes declared available do reach the red',()=>{
+  // Device sanity apart from the target: the marker mechanism works, so the
+  // absence assertions below are meaningful.
+  const controlDir=temporary(),control=redTarget(controlDir);
+  const available=replay(controlDir,[frozenCase(controlDir,{id:'control-available',original:{status:'available'},target:control.path,environment:{hash:environmentFingerprint()}})]);
+  expect(available.body.cases[0].verdict,'control: these frozen bytes and this environment do reach the pre-named red').toBe('target_red');
+  expect(existsSync(control.marker),'control: a replayed target runs and leaves its marker').toBe(true);
+  const lostDir=temporary(),lost=redTarget(lostDir);
+  const declaredLost=replay(lostDir,[frozenCase(lostDir,{id:'lost-original',original:{status:'lost',reason:'T6 原版字节未取得，仅存受控副本',owner:'P9 acceptance owner'},target:lost.path,environment:{hash:environmentFingerprint()}})]);
+  expect(declaredLost.run.status).toBe(1);
+  expect(declaredLost.body.status).toBe('incomplete');
+  expect(declaredLost.body.cases[0]).toMatchObject({id:'lost-original',verdict:'unavailable',original_status:'lost',original:'lost'});
+  expect(declaredLost.body.cases[0].observed,'the controlled copy is never run in place of the lost original').toBeUndefined();
+  expect(existsSync(lost.marker),'a lost original never executes its controlled copy').toBe(false);
+  expect(declaredLost.body.unavailable[0]).toMatchObject({id:'lost-original',status:'unavailable',owner:'P9 acceptance owner'});
+ });
+
+ it('post-commit: a case recorded before the implementation commit still replays its red and reports the workspace drift',()=>{
+  const dir=temporary(),{path:target}=redTarget(dir);
+  const actual=workspaceIdentity({cwd:ROOT});
+  // The recorded identity is self-consistent for a pre-commit HEAD, exactly as it
+  // would have been written before the implementation commit landed.
+  const recorded={worktree_root:actual.worktree_root,branch:actual.branch,head:'f'.repeat(40)};
+  const environment={hash:environmentFingerprint(),workspace:{...recorded,hash:sha(JSON.stringify(recorded))}};
+  const {run,body}=replay(dir,[frozenCase(dir,{id:'post-commit-red',original:{status:'available'},target,environment})],{cwd:ROOT});
+  expect(run.status,'a later commit must not turn a comparable case into an incomparable one').toBe(0);
+  expect(body.status).toBe('replayed');
+  expect(body.cases[0].verdict,'HEAD moves with the implementation commit; the frozen target still replays its red').toBe('target_red');
+  // The movement is reported, not silently dropped: a reader can see the drift.
+  expect(body.cases[0].workspace.drift).toContainEqual({field:'head',recorded:'f'.repeat(40),actual:actual.head});
+  expect(body.cases[0].workspace.actual).toBe(actual.sha256);
+  expect(body.cases[0].workspace.recorded).toBe(environment.workspace.hash);
+ });
+
+ it('unbound: a task without a replay-cases fact still reports every case, and only the status is incomplete',()=>{
+  const dir=taskDir('owned-unbound','phase-progress-cursor'),{path:target}=redTarget(dir);
+  const file=join(dir,'replay-cases.json');
+  writeFileSync(file,JSON.stringify({schema_version:'1.0.0',cases:[
+   frozenCase(dir,{id:'unbound-red',original:{status:'available'},target,environment:{hash:environmentFingerprint()}}),
+   frozenCase(dir,{id:'unbound-lost',original:{status:'lost',reason:'T6 原版字节未取得',owner:'P9 acceptance owner'},target,environment:{hash:environmentFingerprint()}}),
+  ]},null,2));
+  const run=spawnSync(process.execPath,[CLI,`--cases=${file}`,`--task-path=${dir}`],{cwd:dir,encoding:'utf8'});
+  const body=JSON.parse(run.stdout);
+  expect(body.binding.status,'no replay-cases binding exists in the build-code facts row').toBe('unbound');
+  expect(run.status).toBe(1);
+  expect(body.status,'an unbound case set is never a claimable replay').toBe('incomplete');
+  expect(body.cases.map(row=>row.id),'an unbound case set still diagnoses every case, never an empty list').toEqual(['unbound-red','unbound-lost']);
+  expect(body.cases.map(row=>row.verdict),'the per-case verdicts survive the unbound status').toEqual(['target_red','unavailable']);
+  expect(body.reason).toMatch(/not a claimable replay/);
+ });
+
+ it('mismatch: bound cases bytes that differ from the recorded sha256 still judge every case',()=>{
+  const dir=temporary(),casesDir=join(dir,'quality','evidence','replay-cases');
+  mkdirSync(casesDir,{recursive:true});
+  const {path:target}=redTarget(casesDir);
+  const cases=[frozenCase(casesDir,{id:'mismatch-red',original:{status:'available'},target,environment:{hash:environmentFingerprint()}})];
+  const file=join(casesDir,'replay-cases.json');
+  writeFileSync(file,JSON.stringify({schema_version:'1.0.0',cases},null,2));
+  writeFileSync(join(dir,'task.json'),JSON.stringify({task_id:'owned-mismatch',project_name:'workflowhub'}));
+  writeFileSync(join(dir,'facts.jsonl'),`${JSON.stringify({record_kind:'stage',task_id:'owned-mismatch',stage:'build-code',source:`phase-progress-cursor; replay-cases: quality/evidence/replay-cases/replay-cases.json#sha256=${'0'.repeat(64)}`})}\n`);
+  const run=spawnSync(process.execPath,[CLI,`--cases=${file}`,`--task-path=${dir}`],{cwd:dir,encoding:'utf8'});
+  const body=JSON.parse(run.stdout);
+  expect(body.binding.status).toBe('mismatch');
+  expect(body.binding.reason).toMatch(/bytes differ from the recorded sha256/);
+  expect(body.status).toBe('incomplete');
+  expect(body.cases.map(row=>[row.id,row.verdict]),'a byte mismatch still judges every case instead of an empty list').toEqual([['mismatch-red','target_red']]);
+ });
+
+ it('reachable: the real positive tokens target_red and replayed exist, so a pass verdict is not merely absent',()=>{
+  const dir=temporary(),{path:target}=redTarget(dir);
+  const passed=replay(dir,[frozenCase(dir,{id:'vocabulary-red',original:{status:'available'},target,environment:{hash:environmentFingerprint()}})]);
+  expect(passed.run.status).toBe(0);
+  expect(passed.body.status).toBe('replayed');
+  // The replaced assertion could only forbid tokens this entry can never print,
+  // so it could not fail. These are the tokens a passing replay really prints.
+  expect(passed.run.stdout,'a passing replay prints its verdict token').toContain('"verdict": "target_red"');
+  expect(passed.run.stdout,'a passing replay prints its status token').toContain('"status": "replayed"');
+  // A pass-shaped verdict is not just absent from the output: it is not a verdict
+  // this entry can produce, which is why asserting its absence proved nothing.
+  expect(REPLAY_VERDICTS).not.toContain('pass');
+  const negDir=temporary(),neg=redTarget(negDir);
+  const rejected=replay(negDir,[frozenCase(negDir,{id:'vocabulary-unmatched',original:{status:'available'},target:neg.path,environment:{hash:'0'.repeat(64)}})]);
+  expect(rejected.body.cases.every(row=>REPLAY_VERDICTS.includes(row.verdict)),'every verdict comes from the frozen vocabulary').toBe(true);
+  expect(rejected.body.cases.some(row=>row.verdict==='target_red'),'an unmatched environment never reaches the named red').toBe(false);
  });
 });

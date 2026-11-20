@@ -101,6 +101,14 @@ post build-plan 收口前完整执行一次；它是六类中「遗漏」的具�
 核对成本随需求条数与 Phase 卡数线性增长；修复后只复核受影响条目，不重跑全量验证。
 结果并入「结束披露」的 `requirement_coverage`，不另立字段。
 
+## A/B/C 三表的真实回读
+
+三张表都读当前材料，都是静态对号报告，不是新 gate；不一致记 owner，不替代独立审查。
+
+- A 表（make-decision 第 13 步）：读任务库 `quality/evidence/decision-log-refs/requirement-index.md` §1，逐条核需求原文 ref、sha256（未取得写 owner）、用户答复位置、包、决定、AC 与缺口 owner；再用 `node skills/spec-plan/scripts/build-decision-baseline.mjs --decision-log <当前日志>` 的「原始需求」段按行位对回正文。缺行、只在合并句出现或仍指旧槽位记具名缺口。
+- B 表（build-plan 第 6 步末，粗查）：在库根运行 `node skills/spec-plan/scripts/build-decision-baseline.mjs --task <task-id>`，读「B 表」段，只核每包是否有独立 Phase、覆盖 AC、依赖与任务；缺项写 owner。此处不核接口、写集或 AC 细节。
+- C 表（build-plan 第 10 步审查后，细查）：同一命令读「C 表」段，核十项与 spec/phases 落点；加 `--review <审查原件> --dispositions <逐项处置表>` 时核 findings 闭合：每条 finding 一条合法处置，fixed 要有可读修订位置，原断言仍在即具名，needs_human 保持 open 并写 owner。只列被触及行。
+
 ## 结束披露
 
 报告以以下六类说明当前事实，名称只供解释，不新增必填字段或机器绑定：

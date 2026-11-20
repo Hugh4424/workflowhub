@@ -285,6 +285,19 @@ skills:
     local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。
     dependency_closure: ["skills/grill-with-docs","skills/spec-specify","skills/material-writing"]
     update_policy: 随 stage 合同变更审查
+  - name: decision-maker
+    path: skills/decision-maker/SKILL.md
+    local_version: 0.2.0
+    last_reviewed_at: "2026-11-20"
+    status: native
+    metrics_enabled: true
+    purpose: 逐包收敛的三角色技能，保证调研、设计、审查分开，卡片能钉住角色原件与包级答复
+    design_idea: 每包调研+设计+审查；十一格卡按真表格行判；验收要通过与失败分开并带反例；卡末绑角色原件与包级答复；没有三角色回传/冷读/对抗不算收敛
+    used_by_stages: [make-decision]
+    upstream: []
+    local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。
+    dependency_closure: ["skills/decision-log","skills/material-writing","skills/talk-with-zhipeng","skills/wh-review"]
+    update_policy: 随 make-decision 合同变更审查
   - name: deep-research
     path: skills/deep-research/SKILL.md
     local_version: 1.0.0

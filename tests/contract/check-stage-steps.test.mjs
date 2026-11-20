@@ -70,7 +70,9 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       put(task, 'facts.jsonl', JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test observations, not actual user approval', evidence: { value: entries } }) + '\n');
       const producer = () => runFinalChainCheck({ taskPath: task, materialRoot: materials });
       expect(producer().workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual(Array(15).fill('completed'));
-      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已完成', state: 'completed' });
+      const projectionBeforeDelete = JSON.parse(invoke().stdout).stages[0].steps[7];
+      expect(projectionBeforeDelete).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+      expect(projectionBeforeDelete.gap).toContain('当次技能读取');
       const eighthPath = join(task, entries[7].ref), eighthBytes = readFileSync(eighthPath);
       rmSync(eighthPath);
       expect(producer().workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual([...Array(7).fill('completed'), 'unavailable', ...Array(7).fill('completed')]);
@@ -91,7 +93,9 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       expect(readFileSync(join(task, 'facts.jsonl'), 'utf8')).toBe(JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test observations, not actual user approval', evidence: { value: entries } }) + '\n');
       writeFileSync(eighthPath, eighthBytes);
       expect(producer().workflow_steps[7].state).toBe('completed');
-      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已完成', state: 'completed' });
+      const projectionAfterRestore = JSON.parse(invoke().stdout).stages[0].steps[7];
+      expect(projectionAfterRestore).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+      expect(projectionAfterRestore.gap).toContain('当次技能读取');
       const manifest = JSON.parse(readFileSync(join(repo, 'workflows/build-prd/steps.json'), 'utf8'));
       manifest.steps[0].observable_result = 'Controlled missing mapping marker';
       put(repo, 'workflows/build-prd/steps.json', manifest);
@@ -304,7 +308,7 @@ describe('five-column status table names unconverged packages', () => {
       coldFixtureFiles(put, task);
       put(task, ref, rows + (tail === undefined ? validTail() : tail));
       const invoke = json => spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, ...(json ? ['--json'] : [])], { encoding:'utf8' });
-      check({ invoke });
+      check({ invoke, put, task });
     } finally { rmSync(root, { recursive:true }); }
   }
   const header = '| 包 | 状态 | 五段表位置 | 证据 | 未决 |\n| --- | --- | --- | --- | --- |\n';
@@ -329,12 +333,33 @@ describe('five-column status table names unconverged packages', () => {
     expect(text.status).not.toBe(0);
     expect(text.stdout).toContain('未收敛：1 controlled');
   }));
-  it('exits 0 when every five-column package is 已收敛 with its own cold read', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+  // TCR-P2-01: the positive case now reads a real original in the evidence cell;
+  // a label has no bytes and is exercised by the next case instead of passing.
+  it('exits 0 when every five-column package is 已收敛 with a readable original and its own cold read', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | `quality/evidence/decision-log-refs/package-1-evidence.md` | 无 |\n| 2 second | 已收敛 | details§2 | `quality/evidence/decision-log-refs/package-2-evidence.md` | 无 |\n', ({ invoke, put, task }) => {
+    put(task, 'quality/evidence/decision-log-refs/package-1-evidence.md', '包 1 的真实原件字节。\n');
+    put(task, 'quality/evidence/decision-log-refs/package-2-evidence.md', '包 2 的真实原件字节。\n');
     const result = invoke(true);
     expect(result.status).toBe(0);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.gaps).toEqual([]);
     expect(report.convergence.complete).toBe(true);
+    expect(report.modules.map(row => row.evidence.present)).toEqual([true, true]);
+  }));
+  // TCR-P2-01 old → new assertion: the frozen five-column oracle used to accept
+  // `ev-1` with gaps=[] and complete=true. It now names the label and fails.
+  it('names label-shaped and empty evidence cells as gaps and exits non-zero', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 |  | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(1);
+    const report = JSON.parse(result.stdout);
+    expect(report.modules[0].evidence).toMatchObject({ ref: 'ev-1', present: null, label: true });
+    expect(report.convergence.gaps).toEqual(expect.arrayContaining([
+      '证据标签非原件：包 1 ev-1 没有可读字节，不按原件计',
+      '证据缺当前原件：包 2 证据格为空，未读到字节',
+    ]));
+    expect(report.convergence.complete).toBe(false);
+    const text = invoke(false);
+    expect(text.status).toBe(1);
+    expect(text.stdout).toContain('证据标签非原件：包 1 ev-1');
   }));
   it('reports a five-column 已收敛 package without a cold read in gaps and exits 1', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
     const result = invoke(true);
@@ -904,18 +929,20 @@ describe('declared originals are trace only', () => {
       expect(step.gap).toContain('共用目录/文件');
     }
   });
-  it('keeps a producer completed row complete when its declared physical piece is missing', () => {
+  it('does not complete a producer row without its current skill read when its declared physical piece is missing', () => {
     const row = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
-    expect(row).toMatchObject({ judgment: '已完成', state: 'completed' });
-    expect(row.gap).toContain('声明原件未取得');
+    expect(row).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+    expect(row.gap).toContain('当次技能读取');
   });
   it('a historical-looking heading is not the declared section', () => {
     expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线历史\n旧方向\n' })).toMatchObject({ judgment: '未留痕' });
     expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线（历史）\n旧方向\n' })).toMatchObject({ judgment: '未留痕' });
     expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线：走哪条路线？\n真实记录。\n' })).toMatchObject({ judgment: '已留痕' });
   });
-  it('only the existing producer can establish completed', () => {
-    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n', files: [['quality/evidence/case.json', human]], facts: humanFacts })).toMatchObject({ judgment: '已完成', state: 'completed' });
+  it('only the existing producer with the current skill read can establish completion', () => {
+    const row = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(row).toMatchObject({ judgment: '未判定', state: 'unavailable' });
+    expect(row.gap).toContain('当次技能读取');
   });
   it('reads numeric and multiple invalidation lines', () => {
     const numeric = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n- 失效步骤：1；阶段：make-decision\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
@@ -1315,9 +1342,16 @@ describe('ORACLE-P1-CARD TCR-P1-001 current originals and unresolved gaps', () =
     try {
       await gapOriginal(f);
       const ref = completion(f);
-      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', '--card']);
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const read = await task.captureCommand({ cwd: f.repo, slug: 'p1-gap-skill-read', argv: [process.execPath, entry,
+        '--read-step-skill=workflows/make-decision/SKILL.md', '--stage=make-decision', '--step=1',
+        `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+      expect(read.exit_code).toBe(0);
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', '--card', `--current-read-receipt=${read.receipt_ref}`]);
       expect(result.status).toBe(0);
       expect(result.report.stages[0].steps[0]).toMatchObject({ state: 'completed' });
+      expect(result.report.stages[0].steps[0].gap).toContain('声明原件未取得');
       expect(result.report.card.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ ref, present: true })]));
       expect(result.report.closeout.gaps).toEqual([]);
       expect(existsSync(join(f.task, 'quality/evidence/steps/current.json'))).toBe(false);
@@ -1466,12 +1500,40 @@ describe('P7 terminal current-proof regression', () => {
       expect(result.report.stages[0].steps[0].state).not.toBe('completed');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
-  it.each([false, true])('keeps a legitimate current proof usable, Markdown=%s', markdown => {
+  it.each([false, true])('keeps a legitimate current proof usable, Markdown=%s', async markdown => {
     const f = p1CurrentCardFixture({ singleStep: true });
     try {
       original(f, { markdown });
-      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const read = await task.captureCommand({ cwd: f.repo, slug: `p7-skill-read-${markdown ? 'md' : 'json'}`, argv: [process.execPath, entry,
+        '--read-step-skill=workflows/make-decision/SKILL.md', '--stage=make-decision', '--step=1',
+        `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+      expect(read.exit_code).toBe(0);
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${read.receipt_ref}`]);
       expect(result.report.stages[0].steps[0].state).toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('keeps a >512KB capture unresolved instead of treating it as no later read', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { markdown: false });
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const read = await task.captureCommand({ cwd: f.repo, slug: 'p7-skill-read-large', argv: [process.execPath, entry,
+        '--read-step-skill=workflows/make-decision/SKILL.md', '--stage=make-decision', '--step=1',
+        `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+      expect(read.exit_code).toBe(0);
+      const flags = ['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${read.receipt_ref}`];
+      expect(f.invoke(flags).report.stages[0].steps[0].state, '受控前置：正常回执应可完成').toBe('completed');
+      // The marker sits beyond the old 16KB head read, so only a whole-file
+      // (chunked) scan can see that this might be a later read.
+      const padded = '{"padding":"' + 'a'.repeat(700 * 1024) + '","argv":["node","check-stage-steps.mjs",'
+        + '"--read-step-skill=workflows/make-decision/SKILL.md","--stage=make-decision","--step=1"]}\n';
+      writeFileSync(join(f.task, 'quality/tests/2026-11-20-large-possible-later-capture.json'), padded);
+      const blocked = f.invoke(flags);
+      expect(blocked.report.stages[0].steps[0].state, '超大捕获可能更晚时不得完成').not.toBe('completed');
+      expect(JSON.stringify(blocked.report)).toContain('无法核对');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
   it.each([['small', '小改动'], ['normal', '普通任务'], ['planning', '规划任务']])('clears an actual completed gap using the active %s flow source', async (flow, label) => {
@@ -1496,6 +1558,424 @@ describe('P7 terminal current-proof regression', () => {
       const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
       expect(result.report.stages[0].source).toBe(source);
       expect(result.report.closeout.gaps).toEqual([]);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+});
+
+// ORACLE-P1-CURRENT-SKILL-LOAD, frozen before implementation: a step that only has an
+// earlier producer completion, or only an earlier call's skill read receipt, must not be
+// projected as completed for the current step. The real CLI is driven on the existing
+// controlled temporary task; nothing about the checker is mocked. A failure outside the
+// named assertions is reported as 装置失败 so it cannot be read as the target RED.
+describe('ORACLE-P1-CURRENT-SKILL-LOAD current step needs its own skill read receipt', () => {
+  const device = (condition, message) => { if (!condition) throw Error(`装置失败：${message}`); };
+  it('does not complete the current step from a missing or stale skill load', () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const source = 'workflows/make-decision/steps.json';
+      const skill = 'workflows/make-decision/SKILL.md';
+      const ref = 'quality/evidence/2026-11-20-099-current-observation.json';
+      const body = '# Controlled\n## 方法\nOwned observation.\n';
+      f.put(f.repo, skill, body);
+      f.put(f.materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n');
+      f.put(f.materials, 'step-consumer-design.md', `| [controlled](../../${source}#L1) \`current-step\` | observation | human | owner |`);
+      f.put(f.task, ref, { task_id: 'card-case', source, step_slug: 'current-step', phase: 'P1',
+        reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+        criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [],
+        created_at: '2026-02-01T00:00:00.000Z' });
+      f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+        source: 'controlled', evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }]
+        .map(row => JSON.stringify(row)).join('\n') + '\n');
+      // Precondition: the existing producer really reports this step completed from the
+      // earlier original. If not, the fixture (not the oracle) is the failure.
+      const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+      const produced = producer.workflow_steps.find(row => row.source === source && row.step_slug === 'current-step');
+      device(produced?.state === 'completed', `受控任务没有被既有 producer 判为完成：${JSON.stringify(producer.limits)}`);
+
+      // An earlier call's skill read receipt: real event fields, but a past capture time.
+      const oldRef = 'quality/tests/2026-11-20-old-skill-load-receipt.json';
+      f.put(f.task, oldRef, {
+        argv: [process.execPath, entry, `--read-step-skill=${skill}`, '--stage=make-decision', '--step=1',
+          `--task-path=${f.task}`, `--material-root=${f.materials}`, '--commit=0000000000000000000000000000000000000000'],
+        cwd: f.materials, at: '2026-11-01T00:00:00.000Z', exit_code: 0,
+        output: JSON.stringify({ stage: 'make-decision', step: 1, skill_path: skill,
+          sha256: createHash('sha256').update(Buffer.from(body)).digest('hex'), bytes: Buffer.byteLength(body),
+          at: '2026-11-01T00:00:00.000Z' }) + '\n',
+      });
+
+      const missing = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      device(missing.status === 0, `检查模式真实退出 ${missing.status}：${missing.stderr}`);
+      const missingStep = missing.report.stages[0].steps[0];
+      device(missingStep !== undefined, '检查报告没有投影受控任务的第 1 步');
+      expect.soft(missingStep.state, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：缺当次技能读取回执时，当前步骤不得报为完成').not.toBe('completed');
+      expect.soft(missingStep.judgment, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：缺当次技能读取回执时，判定不得为已完成').not.toBe('已完成');
+
+      const stale = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${oldRef}`]);
+      device(stale.status === 0, `检查模式真实退出 ${stale.status}：${stale.stderr}`);
+      const staleStep = stale.report.stages[0].steps[0];
+      device(staleStep !== undefined, '检查报告没有投影受控任务的第 1 步');
+      expect.soft(staleStep.state, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：上一轮技能读取回执不得让当前步骤完成').not.toBe('completed');
+      expect.soft(staleStep.judgment, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：陈旧加载下判定不得为已完成').not.toBe('已完成');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('a task with no skill load record at all cannot complete its step', () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const source = 'workflows/make-decision/steps.json';
+      const ref = 'quality/evidence/2026-11-20-no-load-observation.json';
+      f.put(f.repo, 'workflows/make-decision/SKILL.md', '# Controlled\n## 方法\nOwned observation.\n');
+      f.put(f.materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n');
+      f.put(f.materials, 'step-consumer-design.md', `| [controlled](../../${source}#L1) \`current-step\` | observation | human | owner |`);
+      f.put(f.task, ref, { task_id: 'card-case', source, step_slug: 'current-step', phase: 'P1',
+        reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+        criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [],
+        created_at: '2026-02-01T00:00:00.000Z' });
+      f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+        source: 'controlled', evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }]
+        .map(row => JSON.stringify(row)).join('\n') + '\n');
+      const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+      expect(producer.workflow_steps.find(row => row.source === source && row.step_slug === 'current-step')?.state).toBe('completed');
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.status).toBe(0);
+      const step = result.report.stages[0].steps[0];
+      expect(step.state).not.toBe('completed');
+      expect(step.judgment).toBe('未判定');
+      expect(step.gap).toContain('当次技能读取');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+});
+
+// P2/T002 ORACLE-P2-CURRENT-V2-CHECKLIST
+// Oracle provenance (F3): the named-case shape follows the pre-frozen
+// independent script quality/tests/2026-11-19-020-build-plan-p2-v2-checklist-target-red.mjs
+// (positive: convergence.source + expected_modules=['1'] + module source/line=3
+// + frozen ledger bytes) plus the Phase card's RED/GREEN semantics. This block
+// is stronger than 020: the row names real task originals (not ev-1/details§1)
+// and asserts the digests the checker itself reports, so the read is proven
+// rather than re-hashed by the test.
+describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', () => {
+  const ref = 'quality/evidence/decision-log-refs/convergence-checklist.md';
+  const cardRef = 'quality/evidence/convergence/controlled-cards.md';
+  const coldRef = 'quality/evidence/build-code/P1/controlled-cold-read-1.md';
+  const evidenceRef = 'quality/evidence/convergence/p1-evidence.md';
+  const reader = 'subagent:controlled-reader-1';
+  const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+  const card = '## 工作包 1：受控包 1\n\n一句话结果：受控结果。';
+  const answers = '① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。';
+  const cold = `# 受控冷读 1\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cardRef}#工作包-1\`，节摘要 sha256 \`${sha(card)}\`。\n- 五问原答：\n${answers}\n- 结论：五问全答出；本包收敛。\n`;
+  const evidenceBody = '# 受控证据\n\n包 1 的真实原件内容。\n';
+  // The five-column tail every ledger variant shares: the per-package cold-read
+  // readback that a 已收敛 row must carry. 五段表位置 is a locator label, not an
+  // evidence cell; the 证据 cell is the only one read and hashed.
+  const tail = `\n## 工作包 1：受控包 1\n\n### 收敛格（本轮）\n\n| 项 | 值 |\n| --- | --- |\n| 当前卡节 | \`${cardRef}#工作包-1\`；sha256 \`${sha(card)}\` |\n| 当前冷读 | \`${coldRef}\`；sha256 \`${sha(cold)}\`；读者 ${reader}；context=none |\n| 首轮冷读 | \`${coldRef}\`；sha256 \`${sha(cold)}\`；读者 ${reader} |\n| 修订 | 无 |\n\n### 冷读记录（P1）\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 五问原答：\n${answers}\n- 结论：五问全答出；本包收敛。\n`;
+  const ledgerFor = (evidenceCell, position = 'details§1', state = '已收敛') =>
+    `| 包 | 状态 | 五段表位置 | 证据 | 未决 |\n| --- | --- | --- | --- | --- |\n| 1 受控包 | ${state} | ${position} | ${evidenceCell} | 无 |\n${tail}`;
+  const checklist = ledgerFor(`\`${evidenceRef}\``);
+  const pointer = `\n清单：\`${ref}\`\n`;
+  const level = '# Controlled decision\n\n## 级别与路线\n- 推荐级别：复杂\n\n';
+  // The current v2 material: an ordered package directory and 4.n section headings.
+  const current = `${level}## 3. 包目录\n\n1. **受控包** —— 报告同包原件。\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+  const legacy = `${level}#### WP1 — 受控包\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+  const frozenChecklist = sha(checklist);
+  const runCheck = ({ decision, ledger }) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p2-v2-checklist-')));
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    const put = (base, name, value) => { const file = join(base, name); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, value); };
+    mkdirSync(materials, { recursive: true });
+    put(task, 'task.json', JSON.stringify({ schema_version: '1.0.0', task_id: 'controlled', target_repo_root: resolve('.'), baseline_commit: 'HEAD', activation_cohort: 'post' }));
+    put(task, 'facts.jsonl', '');
+    put(materials, 'decision-log.md', decision);
+    put(materials, 'phases/index.md', '# Index\n');
+    put(task, 'quality/evidence/decision-log-refs/convergence-checklist.md', checklist);
+    put(task, cardRef, card);
+    put(task, coldRef, cold);
+    put(task, evidenceRef, evidenceBody);
+    if (ledger === null) rmSync(join(task, ref));
+    else if (ledger !== undefined) put(task, ref, ledger);
+    const result = spawnSync(process.execPath, [entry, '--stage=make-decision', `--task-path=${task}`, `--material-root=${materials}`, '--json'], { cwd: resolve('.'), encoding: 'utf8' });
+    const report = result.status === null || !result.stdout ? null : JSON.parse(result.stdout);
+    rmSync(root, { recursive: true });
+    return { status: result.status, report, stderr: result.stderr };
+  };
+
+  it('binds a legal current v2 package to the read-back checklist and evidence bytes', () => {
+    const { status, report, stderr } = runCheck({ decision: current });
+    expect(stderr).toBe('');
+    expect(status, stderr).toBe(0);
+    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [] });
+    expect(report.modules).toHaveLength(1);
+    expect(report.modules[0]).toMatchObject({ source: ref, line: 3, state: '已收敛' });
+    // The checker reports the digest of the very bytes it opened; the frozen
+    // ledger and evidence digests must match what it reports.
+    expect(report.modules[0].source_digest).toBe(frozenChecklist);
+    expect(report.modules[0].evidence).toMatchObject({ ref: evidenceRef, present: true });
+    expect(report.modules[0].evidence.digest).toBe(sha(evidenceBody));
+    expect(report.errors).toEqual([]);
+  });
+
+  it('reads an evidence cell that carries an anchor without treating it as a file name', () => {
+    const anchored = `${evidenceRef}#工作包-1`;
+    const { report } = runCheck({ decision: current, ledger: ledgerFor(`\`${anchored}\``) });
+    expect(report.modules[0].evidence).toMatchObject({ ref: anchored, present: true, anchor: '#工作包-1' });
+    expect(report.modules[0].evidence.digest).toBe(sha(evidenceBody));
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.errors).toEqual([]);
+  });
+
+  // A v2 ledger carries no version field; its own derivation sentence is the
+  // only marker. When that sentence names the decision log and a sha256, the
+  // check aligns it with the bytes it just read and an old pointer is a named
+  // gap. This replaces the old "old and current are physically
+  // indistinguishable" limit with an actual refusal.
+  it('names a checklist whose declared derivation digest is an older decision log', () => {
+    const oldDigest = sha('# an older decision log');
+    const derivation = `- 派生来源：工作树 \`${'a'.repeat(40)}\` 的 \`specs/p2-controlled/decision-log.md\`（sha256 \`${oldDigest}\`）。\n`;
+    const { status, report } = runCheck({ decision: current, ledger: derivation + ledgerFor(`\`${evidenceRef}\``) });
+    const gap = report.convergence.gaps.find(value => String(value).startsWith('引用旧清单：'));
+    expect(gap, '旧清单必须具名').toBeDefined();
+    expect(gap).toContain(oldDigest);
+    expect(gap).toContain('与当前 decision-log 字节');
+    expect(report.convergence.complete).toBe(false);
+    expect(status).toBe(1);
+  });
+
+  it('keeps a checklist whose declared derivation digest matches the current decision log', () => {
+    const derivation = `- 派生来源：工作树 \`${'b'.repeat(40)}\` 的 \`specs/p2-controlled/decision-log.md\`（sha256 \`${sha(current)}\`）。\n`;
+    const { status, report } = runCheck({ decision: current, ledger: derivation + ledgerFor(`\`${evidenceRef}\``) });
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+    expect(status).toBe(0);
+  });
+
+  it('publishes the AC-narrowing boundary when the checklist declares no derivation', () => {
+    const { report } = runCheck({ decision: current });
+    expect(report.limits.join('\n')).toContain('清单未自述派生来源');
+    expect(report.limits.join('\n')).toContain('AC 需收窄');
+  });
+
+  it('names a label-shaped evidence cell as a gap instead of a read original', () => {
+    const { status, report } = runCheck({ decision: current, ledger: ledgerFor('ev-1') });
+    // TCR-P2-01: a label carries no bytes. It is reported as label=true /
+    // present=null, becomes a named gap, and the exit fails; it is never a
+    // complete row that only happens to look bound.
+    expect(report.modules[0].evidence).toMatchObject({ ref: 'ev-1', present: null, label: true });
+    expect(report.modules[0].evidence.digest).toBeUndefined();
+    expect(report.convergence.gaps).toContain('证据标签非原件：包 1 ev-1 没有可读字节，不按原件计');
+    expect(report.convergence.complete).toBe(false);
+    expect(status).toBe(1);
+  });
+
+  it('keeps the legacy WPn package control on its previous result', () => {
+    const { status, report } = runCheck({ decision: legacy });
+    expect(status).toBe(0);
+    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [] });
+  });
+
+  it('names a missing pointer, an unreadable ledger and an out-of-range ledger separately', () => {
+    const missing = runCheck({ decision: level + '#### WP1 — 受控包\n- **结果与消费者**：受控结果；消费者是规划作者。\n' }).report;
+    expect(missing.convergence.gaps).toContain('收敛清单指针未取得');
+    expect(missing.convergence.complete).toBe(false);
+    const unreadable = runCheck({ decision: legacy, ledger: null }).report;
+    expect(unreadable.convergence.gaps).toContain('收敛清单不可读');
+    // A ledger that could not be opened must not also claim, per package, that a
+    // row is missing (F6).
+    expect(unreadable.convergence.gaps.join('\n')).not.toContain('缺模块');
+    const outOfRange = runCheck({ decision: legacy.replace(ref, 'quality/evidence/../escape-convergence-checklist.md') });
+    expect(outOfRange.report.convergence.gaps.some(gap => /^收敛清单越界/.test(gap))).toBe(true);
+    expect(outOfRange.report.convergence.gaps).not.toContain('收敛清单不可读');
+    expect(outOfRange.report.convergence.gaps.join('\n')).not.toContain('缺模块');
+    expect(outOfRange.report.convergence.complete).toBe(false);
+    // Two declared checklists is a non-unique pointer. A physically older ledger
+    // carries no version field, so this case pins the pointer rule only; the same
+    // boundary is published in the report's limits.
+    const duplicatePointer = runCheck({ decision: `${legacy}\n清单：\`quality/evidence/another-convergence-checklist.md\`\n` }).report;
+    expect(duplicatePointer.convergence.gaps).toContain('收敛清单指针未取得');
+    // Two declared pointers mean no unique ledger pointer, so no version can be
+    // read here. The old "old and current are physically indistinguishable" limit
+    // is gone; the AC-narrowing boundary is published on the readable-ledger case
+    // by the dedicated test below.
+    expect(duplicatePointer.limits.join('\n')).toContain('未取得唯一清单指针，未判版本');
+  });
+
+  it('names the wrong package instead of reporting the same bytes as converged', () => {
+    const wrong = runCheck({ decision: legacy, ledger: checklist.replace('| 1 受控包 |', '| 3 受控包 |') });
+    expect(wrong.report.convergence.gaps).toEqual(expect.arrayContaining(['未知模块 WP3', '缺模块 WP1']));
+    expect(wrong.report.convergence.complete).toBe(false);
+  });
+
+  it('reports a package directory that contradicts the authoritative package sections', () => {
+    const contradictory = `${level}## 3. 包目录\n\n1. **受控包** —— 报告同包原件。\n2. **幻影包** —— 只有目录没有包节。\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n\n\`\`\`\n### 4.2 幻影包\n\`\`\`\n${pointer}`;
+    const { report } = runCheck({ decision: contradictory });
+    // The fenced 4.2 section is an example, not a package; the directory-only
+    // entry is a named gap instead of a silent add.
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.gaps).toContain('包目录与包节不一致：包 2 只有目录无包节');
+    expect(report.convergence.complete).toBe(false);
+  });
+
+  it('reads a package directory table row as the directory form', () => {
+    const table = `${level}## 3. 包目录\n\n| 包 | 名字 |\n| --- | --- |\n| 1 | 受控包 |\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+    const { report } = runCheck({ decision: table });
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+  });
+
+  it('names an empty package directory instead of silently agreeing', () => {
+    const empty = `${level}## 3. 包目录\n\n（无）\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+    const { report } = runCheck({ decision: empty });
+    expect(report.convergence.gaps).toContain('包目录未列任何包：目录索引为空，不能核对包节');
+    expect(report.convergence.complete).toBe(false);
+  });
+
+  it('does not mint a package from a numbered heading outside 每包设计', () => {
+    const outside = `${level}## 3. 包目录\n\n1. **受控包** —— 报告同包原件。\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n\n## 5. 验收\n\n### 4.2 幻影包\n\n受控。\n${pointer}`;
+    const { report } = runCheck({ decision: outside });
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.gaps).toEqual([]);
+  });
+
+  it('reports the same checklist digest on repeated runs of the same bytes', () => {
+    const first = runCheck({ decision: current });
+    const second = runCheck({ decision: current });
+    expect(first.report.modules[0].source_digest).toBe(frozenChecklist);
+    expect(second.report.modules[0].source_digest).toBe(first.report.modules[0].source_digest);
+  });
+});
+
+// ORACLE-P1-RECEIPT-BYTES / ORACLE-P1-RECEIPT-SWAP: the current read receipt
+// binds the skill bytes plus the task/stage/step identity. The captured
+// --commit is provenance only, so a later code snapshot must not make the read
+// stale while changed skill bytes must. Every counterexample below uses two
+// real `captureCommand` runs, never a hand-written receipt; deleting
+// `laterSkillReadReceipt` turns the later-receipt case red.
+describe('ORACLE-P1-RECEIPT-BYTES receipt binds bytes and identity, not HEAD', () => {
+  const skill = 'workflows/make-decision/SKILL.md';
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const seedCompletedStep = f => {
+    const ref = 'quality/evidence/2026-11-21-001-receipt-observation.json';
+    f.put(f.task, ref, { task_id: 'card-case', source: 'workflows/make-decision/steps.json', step_slug: 'current-step', phase: 'P1',
+      reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+      criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [], created_at: '2026-02-01T00:00:00.000Z' });
+    f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+      source: 'controlled', evidence: { value: [{ ref, source: 'workflows/make-decision/steps.json', step_slug: 'current-step' }] } }]
+      .map(row => JSON.stringify(row)).join('\n') + '\n');
+  };
+  const capture = async (f, slug, argv1 = entry) => {
+    const { openTask } = await import('../../runtime/task/task-handle.mjs');
+    const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+    const read = await task.captureCommand({ cwd: f.repo, slug, argv: [process.execPath, argv1,
+      `--read-step-skill=${skill}`, '--stage=make-decision', '--step=1',
+      `--task-path=${f.task}`, `--material-root=${f.materials}`, `--commit=${f.head}`] });
+    expect(read.exit_code, '受控前置：真实捕获必须成功').toBe(0);
+    return read;
+  };
+  // A declared skill read resolves workflows/<stage>/SKILL.md from the package
+  // root the checker itself lives in. To change those bytes without touching the
+  // real checkout, run a byte copy of the checker from the controlled package
+  // root with the runtime linked in.
+  const fixtureChecker = f => {
+    const tool = join(f.repo, 'tools/cli/check-stage-steps.mjs');
+    mkdirSync(dirnameOf(tool), { recursive: true });
+    writeFileSync(tool, readFileSync(entry));
+    if (!existsSync(join(f.repo, 'runtime'))) symlinkSync(resolve('runtime'), join(f.repo, 'runtime'), 'dir');
+    writeFileSync(join(f.repo, 'runtime-link.txt'), 'runtime is linked from the real checkout\n');
+    return tool;
+  };
+  const invokeWith = (tool, f, args) => {
+    const result = spawnSync(process.execPath, [
+      tool, `--task-path=${f.task}`, `--material-root=${f.materials}`, `--repo-root=${f.repo}`, ...args, '--json',
+    ], { cwd: f.repo, encoding: 'utf8' });
+    return { ...result, report: JSON.parse(result.stdout) };
+  };
+  const flags = receiptRef => ['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${receiptRef}`];
+  const stepOf = result => result.report.stages[0].steps[0];
+
+  it('keeps the receipt valid after the code snapshot advances', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const read = await capture(f, 'receipt-old-head');
+      const before = f.invoke(flags(read.receipt_ref));
+      expect(stepOf(before).state, '受控前置：同一 HEAD 下回执应完成本步').toBe('completed');
+      // A new code snapshot that does not touch the materials: HEAD moves, the
+      // skill bytes do not. The captured commit is not compared, so the receipt
+      // must stay valid.
+      f.put(f.repo, 'later-code-snapshot.txt', 'later code snapshot\n');
+      for (const args of [['add', '.'], ['-c', 'user.name=Controlled fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'later code snapshot']]) {
+        const git = spawnSync('git', args, { cwd: f.repo, encoding: 'utf8' });
+        expect(git.status, git.stderr).toBe(0);
+      }
+      const newHead = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: f.repo, encoding: 'utf8' }).stdout.trim();
+      expect(newHead).not.toBe(f.head);
+      const after = f.invoke(flags(read.receipt_ref));
+      expect(stepOf(after).state, '提交后回执仍有效：代码快照变化本身不使回执 stale').toBe('completed');
+      expect(JSON.stringify(stepOf(after))).not.toContain('不是当前真实 HEAD');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects the receipt when the declared skill bytes change', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const tool = fixtureChecker(f);
+      const read = await capture(f, 'receipt-bytes-change', tool);
+      expect(stepOf(invokeWith(tool, f, flags(read.receipt_ref))).state, '受控前置：同字节下回执应完成本步').toBe('completed');
+      // The declared skill file changes after the read: the receipt is stale.
+      f.put(f.repo, skill, '# Controlled\n## 方法\nChanged skill bytes after the read.\n');
+      const stale = invokeWith(tool, f, flags(read.receipt_ref));
+      expect(stepOf(stale).state, '技能字节变化后回执必须 stale').not.toBe('completed');
+      expect(JSON.stringify(stepOf(stale))).toContain('当前实际技能哈希');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects two real captures whose output originals are swapped', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const first = await capture(f, 'receipt-swap-first');
+      await sleep(50);
+      const second = await capture(f, 'receipt-swap-second');
+      const firstPath = first.receipt_ref, secondPath = second.receipt_ref;
+      const firstRecord = JSON.parse(readFileSync(firstPath, 'utf8'));
+      const secondRecord = JSON.parse(readFileSync(secondPath, 'utf8'));
+      writeFileSync(firstPath, JSON.stringify({ ...firstRecord, output_ref: secondRecord.output_ref }, null, 2) + '\n');
+      const swapped = f.invoke(flags(first.receipt_ref));
+      expect(stepOf(swapped).state, '互换原输出后回执必须被拒').not.toBe('completed');
+      expect(JSON.stringify(stepOf(swapped))).toContain('读取时点不在该捕获区间');
+      // Control: the untouched second receipt still completes the step.
+      expect(stepOf(f.invoke(flags(second.receipt_ref))).state).toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects a real capture made for another task', async () => {
+    const a = p1CurrentCardFixture({ singleStep: true });
+    const b = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(a); seedCompletedStep(b);
+      const read = await capture(a, 'receipt-cross-task');
+      const relativeRef = read.receipt_ref.slice(a.task.length + 1);
+      b.put(b.task, relativeRef, JSON.parse(readFileSync(read.receipt_ref, 'utf8')));
+      const result = b.invoke(flags(relativeRef));
+      expect(stepOf(result).state, '跨任务回执必须被拒').not.toBe('completed');
+      expect(JSON.stringify(stepOf(result))).toContain('捕获任务根不是当前任务');
+    } finally {
+      rmSync(a.root, { recursive: true, force: true });
+      rmSync(b.root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an earlier real capture when a later same-step capture exists', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      seedCompletedStep(f);
+      const earlier = await capture(f, 'receipt-earlier');
+      await sleep(50);
+      const later = await capture(f, 'receipt-later');
+      const blocked = f.invoke(flags(earlier.receipt_ref));
+      expect(stepOf(blocked).state, '存在更晚同步骤回执时,更早件不得完成本步').not.toBe('completed');
+      expect(JSON.stringify(stepOf(blocked))).toContain('存在更晚的同步骤读取回执');
+      expect(stepOf(f.invoke(flags(later.receipt_ref))).state, '最新回执仍是当前读取').toBe('completed');
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });

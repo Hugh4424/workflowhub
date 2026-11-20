@@ -18,7 +18,7 @@ version: 4.2.0
 2. 阶段大纲与 spec（步骤 4–5）：先按 2–7 个阶段交大纲并取得用户答复，再写 spec 与 UI 准备；spec 作者写十组叙事与唯一判据，原型作者处理适用 UI 输入；同文件由一个 writer 写，独立路径才并行。
 3. 拆 Phase 与全局设计（步骤 6）：Phase 作者写九组人读内容、完整任务卡与纯指针 index；全局设计仍写同一 spec，与上一步按共享文件定序。
 4. 测试与验证设计（步骤 7–8）：测试作者给真实输入、oracle、失败与证据计划；可与无共享写入的 Phase 设计并行，不能用环境失败冒目标 RED。
-5. 独立审查与处置（步骤 9–10）：审查者对当前完整材料提出建议，主会话处置；严重未修风险由用户作真实选择，provider 失败保持原限制。
+5. 独立审查与处置（步骤 9–10）：审查者对当前完整材料提出建议，主会话处置；同时核 spec/phases 是否消费每包设计的接口、写集、验收、风险与配套与影响四项，这是下游取用检查，不是逐格齐备门；严重未修风险由用户作真实选择，provider 失败保持原限制。
 6. 回核与收口（步骤 11–12）：独立读者与主会话回核六类语义、实际可读/可执行及缺口，取得用户当前计划确认后交接、记成本；未答不填同意。 开工前读 `skills/spec-plan/references/authoring-contract.md` 并写下五问答案；派发 brief 必须附该契约路径，缺附件回原派发者补齐。
 
 分组只导航下文原步骤，不新增执行节点。每份材料先回答读者的问题，再放必要字段；文档读者能复述做什么/为什么/下一步/失败怎么办，工程师能试写并执行才是效果证据，格式检查只证兼容。
@@ -29,7 +29,7 @@ version: 4.2.0
 再读 `skills/spec-specify/SKILL.md` 的 Q01–Q13 唯一正文，然后调用本流程对应的材料作者。
 缺源如实 `unavailable`，保留原问答、确认、权限和失败边界，不复制规范。
 
-1. <a id="step-read-current-materials"></a>读取当前决策及已有材料，逐项提取需求、成功失败条件、非目标、约束、风险、已接受的不做事项和未决项。按 `skills/decision-log/templates/decision-log-template.md#外置事实索引` 的节级消费者定义，从当前主文取需求、写集、验收面、风险与未决项；到达条件满足时才沿原 ref 读证明或过程原件。保持需求到 FR、AC、Phase/Task、验证方法的双向可追溯；真实来源缺失就写缺口，不用旧审查或绿灯代填。
+1. <a id="step-read-current-materials"></a>读取当前决策及已有材料，逐项提取需求、成功失败条件、非目标、约束、风险、已接受的不做事项和未决项。按 `skills/decision-log/templates/decision-log-template.md#外置事实索引` 的节级消费者定义，从当前主文取需求、写集、验收面、风险与未决项；到达条件满足时才沿原 ref 读证明或过程原件。保持需求到 FR、AC、Phase/Task、验证方法的双向可追溯；真实来源缺失就写缺口，不用旧审查或绿灯代填。首次实际消费交接时，把本次读到的同一对象（`commit:path`、对象 id、相对行位）连同本次真实读取证据（命令、退出码、原件路径）写进当前任务既有质量原件，再把它当设计输入；对象不可读或与交接记录不同版时写具名缺口、回原提供者，不用旧摘要或历史绿灯代填。
    在准备设计依据、作全局设计/测试蓝图选择前，按已确认方向和真实问题读取并执行 `skills/knowledge-graph/references/knowledge-reuse.md`：取得合法全文、比较并作四判，采用项定位到本spec设计/Phase选择及理由，未采用/待补证保范围与反例；不因确认过方向而跳过证据适用性判断。图导航按 `skills/knowledge-graph/SKILL.md` 实际进行本阶段开工调研：输入当前认证项目、已确认方向、原始需求和本次职责/允许写集，独立子代理按职责/source/consumer有界选完整ID与当前契约/历史两通道，再回origin原文核条件。主会话只收少数结论、来源与改变哪处产出或重复补强；图有界导航不自动带来收益。缺工具/坏图/无匹配/歧义保真实诊断并继续普通读源，现图查询不先更新，收费抽取仍先核精确范围/成本等真实答复。关键JSON/schema直接读原文件，不因图未覆盖自动扩图。当前已确认材料按真实范围消费，不为展示知识使用机械重写决策、规格或Phase；缺真实新规划问题就如实限定只读验证/受控草稿，不能冒已批准真实规划。
 2. <a id="step-conditional-light-research"></a>按实现风险研究现有代码、真实消费者、接口和数据边界、权限、取消恢复、测试与回退方式。只调查会改变设计的问题；不必要或不可执行的研究写原因。有明确点状疑问时读取并执行 `skills/deep-research/SKILL.md` 的「轻研究 — 已收敛方向的点状问题」分支，消费它的真实内存结果或 skipped/unavailable 原因；发现母方向需改变交回 make-decision。方向研究仍沿该 owner 的深分支，不为轻问题强开深报告或复制第二研究规范。
    在本步原轻研究内再次按知识方法查模块职责/历史决定/失败教训，按source_file核当前真实消费者、接口与依赖/协作链；过期历史仅作背景，关键JSON契约直接读源。有效结论具体落到同一spec的设计边界或Phase切分及验收，注明相较原输入多知道什么/改变哪项；重复补强与无信号如实记，不另建研究账本，不让图代规格澄清、测试设计、独立审查或真实计划确认。
@@ -57,6 +57,7 @@ version: 4.2.0
    草稿与已定义任务卡的正文边界见作者契约的「发布草稿」；写入成功只说明保存成功。
    成本设计按下节「设计每个 Phase 的验收」逐条核七字段与资源来源，按 Phase 模板验收节汇总活动总账。
    同时核 make-decision 已确认的形状预检、验收→独立测试代理/判定器/数据层级映射；缺项回原阶段。
+   第 6 步末对当前 decision-log 与已写 Phase 做 B 表粗查：在库根运行 `node skills/spec-plan/scripts/build-decision-baseline.mjs --task <task-id>`，读「B 表」段，只核每包是否有独立 Phase、覆盖 AC、依赖与任务，缺项写 owner；不在此核接口、写集或 AC 细节，不新增 gate。
 7. <a id="step-testing-system-blueprint"></a>每条承接 AC 按 spec 模板与 Phase 卡的证据计划落七字段，七项取真实对象与时点，缺一项不得开工；不另建验收计划。为每个任务写清目标、真实输入/消费者、允许路径/符号、禁止范围、步骤、完成条件、失败信号与恢复办法、成本假设。testing-system-blueprint 设计风险、场景、oracle、证据与覆盖限制；项目在任务「测试标准」及每张 Phase/Task 自行声明测试面、逐面测或不测的理由，每个要测的面与覆盖 AC 指向该 Phase 一条可执行命令；浏览器可见面未列浏览器端到端时给具名理由。test-routing-advisor 只作技术路线预判，选择主 concrete testing skill，不替项目定义测试面。验收对象、输入、执行 owner 与时点按 `skills/spec-plan/SKILL.md` 的「Test design and quality」落进现 AC/Task 正文；需要对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 中唯一 `checkAcceptanceObject` 的完整可执行代码块，从当前 spec 的既有验收对象区块取得真实输入，沿模板「验收对象」唯一合同复用第5步三源事实并实际读取其引用材料，核角色、理由与范围冲突，将三源适用性和已读材料作为本次 context 传给同一函数；直接执行验收对象检查并保存对象输入、三源引用/读取范围/hash、返回与执行原件，不在本 workflow 定义或复制另一个 checker。模板 producer 未交付、无法提取或执行失败时，具体记 producer/source/执行失败、影响与原 owner，未运行不宣缺项行为通过；对象检查不证明环境健康或业务运行。可执行产物按同节规划唯一末 Phase 全 AC 验收，纯文档按该处具名豁免。独立 Phase 写完后读取并执行 `skills/spec-plan/SKILL.md` 的「## Pure pointer index」生成纯指针索引；消费它按实际附件存在与 bundle 登记选择模板的条件，不新建薄调用或在此复制索引规范。执行进度留在任务事实而非材料正文。 每条需求与验收在 spec 与 Task 卡整段按六件写（「动作＋命令＋期望」是其中第 2、4、5 件），六件与失败回修见下文「设计每个 Phase 的验收」，缺任一件不得进入 Task 卡、不得开工；命令写成可直接执行的整条命令，期望写退出码或可观察结果。开工前按 `skills/spec-plan/SKILL.md` 的红测归因要求写清每条红测属于目标行为失败、夹具或环境失败、本来就通过哪一种；只写命令与期望退出码不算写完。 临时命令片段与原件保留边界同样写入测试面；独立消费者实跑方法示例并各自留原件，不以方法文字或装配成功代消费。 开工前读 `skills/spec-plan/references/authoring-contract.md` 并写下五问答案；派发 brief 必须附该契约路径，缺附件回原派发者补齐。
    每条验收落 Phase 前先按「设计每个 Phase 的验收」算三笔账；算不清归属与本 Phase 交付的条款不进 Phase 文件。
    UI Phase（碰页面、路由、组件或样式的 Phase）另按六件验收补六项可判 UI 验收，非 UI Phase 不写：
@@ -69,7 +70,7 @@ version: 4.2.0
    按当前材料矩阵投递完整规格、验收、各独立 Phase 与索引；原始需求只取适用短摘录。实际两路沿 `skills/wh-review/contracts/build-plan.md` 分别核需求/验收与方案/可执行性。 组包时另把需求落点与每个 Phase 的交付投影写入 `requirement_index` 与 `phase_risk_index`（也可写在 `context_map` 中的同名段；顶层键与 `context_map` 同名段是同一事实的两种承载位置，提供任一即视为已投影，两处都写时必须一致）：`requirement_index` 逐条给需求编号、原始需求原文的可回读 ref 与 sha256、用户答复原文与位置；`phase_risk_index` 每个 Phase 写失败后果、回退/恢复、外部依赖、不可逆动作、owner 与未覆盖项，并保留每条 AC 的通过／失败信号与反例、依赖、写集与消费者。投影与正文冲突以正文为准并单列矛盾 finding，不新增必填门。
    历史原件已有 `legacy` 或 `request_version` 时才沿原标记保留缺基线警告，不给新请求补标记。CLI 缺源、分组冲突或超限时保原错误，回当前材料作者修复；公开 ref 仍只由原入口解析，不另建 reader。
    三项 UI 事实（原始要求是不是 UI、项目有没有真实页面与路由与组件、已接受计划或实际改动是不是 UI）缺一项、但本阶段碰页面或路由或组件或样式时，仍加设计审查；缺项写未知，不按非 UI 免审。「碰」含读、驱动与观察，只观察不改字节仍算 UI。
-10. <a id="step-main-agent-disposes-findings"></a>消费本次审查对测试面适用性、oracle 与理由的实际 findings；coverage unknown 保持未知，不用 Appendix 编号出现替代自查，也不新增审查轮。主会话逐条处置 fixed、rejected_invalid、accepted_risk 或 needs_human。有效设计问题回原作者修；严重问题若不修，向用户展示具体风险、影响和替代路径，取得真实选择并写负责人。未经实际处理不宣布计划已经完整。 findings 只作问题来源，判据或 AC 的改动仍须用户真实答复原件，不得以「审查同意」代替。 处置时在既有处置格逐 Phase 写四问各一句结论与依据（不是 finding，不新增字段）；任一问无结论该 Phase 不算审过。
+10. <a id="step-main-agent-disposes-findings"></a>消费本次审查对测试面适用性、oracle 与理由的实际 findings；coverage unknown 保持未知，不用 Appendix 编号出现替代自查，也不新增审查轮。主会话逐条处置 fixed、rejected_invalid、accepted_risk 或 needs_human。有效设计问题回原作者修；严重问题若不修，向用户展示具体风险、影响和替代路径，取得真实选择并写负责人。未经实际处理不宣布计划已经完整。 findings 只作问题来源，判据或 AC 的改动仍须用户真实答复原件，不得以「审查同意」代替。 处置时在既有处置格逐 Phase 写四问各一句结论与依据（不是 finding，不新增字段）；任一问无结论该 Phase 不算审过。处置后用 `node skills/spec-plan/scripts/build-decision-baseline.mjs --task <task-id> --review <本次审查原件> --dispositions <逐项处置表>` 的「C 表」与 findings 闭合段细核十项、spec/phases 落点与每条处置：fixed 要有可读修订位置，原断言仍在即具名，needs_human 保持 open 并写 owner；C 表只列被触及行，作本轮 wh-review 输入，不替代审查。
 11. <a id="step-final-spec-analyze"></a>逐项核对原始需求、决策、spec、每个 Phase 与索引的语义、边界与测试充分性，六类（遗漏、矛盾、孤儿任务、越界、消费者、测试充分性）各给落点或排除理由，缺一即本步未完成；用 spec-analyze 执行同一核对。分析是质量事实，不是推进许可证；缺失与失败继续保持可见。 第七类：读者可用，沿 `skills/spec-analyze/SKILL.md` 的对应段观察句长、行宽与术语解释，读数只报告；四条子判据是编号重复率、重复重述比例、模板与材料一致、写集与真实 diff。由未参与写作的独立子代理按当前验收对象读取 `phases/index.md`、相应 Phase 与相关规格原文，范围按真实问题选择，不设字符上限；按七段记录读者身份、范围、五问原答、原始需求对照、真跑命令与退出码、缺口及结论，记录存当前任务 `quality/tests/`。五问沿作者契约给出原答；原需求超出只读范围时明写未读取，不猜对照结论。执行 `node skills/spec-plan/scripts/check-reader-record.mjs <记录路径>`，0只证形态、2点名缺段或空答、1保不可读原错；路径写入阶段交接的“已做与未做”。收口前对当前 spec 与全部 Phase 逐件运行 `node skills/spec-plan/scripts/check-authoring-budget.mjs <材料路径>`，读数不设通过阈值，可读材料退出0，不进持续集成，不以读数代独立复述。
    本次验收要求证明作者方法或模板效果时，执行作者契约的「完整作者消费」。
    交回独立作者的实际产物、原需求对照与相关命令原件；未取得保持缺口，不以样板路径代填。
@@ -153,6 +154,8 @@ version: 4.2.0
 
 一、第 0 阶段：所有阶段共用同一套测试环境与数据时，建议统一准备，不单列 Phase、不称交付；
 不需要就写理由跳过，不把第 0 阶段写进 Phase 文件。
+Phase 卡定稿时写「开工就绪表」五列（命令、期望、证据、机器或人判、负责人）：全局开工项写进 `spec.md`，本 Phase 只写增量；机器项给 argv 形式的只读命令与期望退出码，人判项给负责人。派发前由 build-code 第一步实际执行，材料侧用 `node tools/cli/run-checks.mjs --material-root <材料绝对路径>` 复跑同一检查；失败具名并停相关派发，回原输入负责人修复后重走同一入口。该表是计划产出，不是新 Phase、新门或第二数据 owner。
+共用测试数据按 `skills/testing-system-blueprint/SKILL.md` 的「测试数据准备」写四件事：数据来源与每 Task 上限依据、一条可重复跑的命令、版本/账本落后即失败、清理四问（谁拥有、何时清、清什么、完成信号）；可重复命令用 `node tests/fixtures/execution-quality/prepare-test-data.mjs --data-root <显式隔离根> --sample-version 1.0.0`，缺隔离根或缺版本时命令点名缺项并非零退出，不回退产品库。四件事是规划产出，不是新 Phase、新配额或第二数据 owner。
 二、测试人数：只有一个验收面或一条命令时，建议给 1 个测试。
 三、两个以上独立面时，建议 2–3 人各管一面；有真实外部或小窗时另加 1 个见证。
 四、每阶段建议 1 个开发（唯一写代码），写代码串行。
@@ -231,7 +234,7 @@ confirm 发生在 make-decision、build-plan 和 build-prd 收口，保留用户
 
 ## 收口与安全
 
-执行纪律：缺失即未完成；跨包不合批；确认与推进分开问，分诊、骨架与最终确认分别问；少打扰不等于跳过步骤。步骤证据位置以本阶段 `steps.json` 为指针，研究、审查、确认、测试和问答原件仍放既有位置，不在决策日志新增步骤节；问答原件开头写明批次类型。收口前运行 `node tools/cli/check-stage-steps.mjs --stage=build-plan --task-path=<任务目录>`，逐项消费判定与缺口；检查器只报告、退出 0，不证明完成。入口推荐行使用可解析字面，如 `- 推荐级别：复杂`；既有日志不回改，未命中就报“未读到级别事实”。
+执行纪律：缺失即未完成；跨包不合批；确认与推进分开问，分诊、骨架与最终确认分别问；少打扰不等于跳过步骤。步骤证据位置以本阶段 `steps.json` 为指针，研究、审查、确认、测试和问答原件仍放既有位置，不在决策日志新增步骤节；问答原件开头写明批次类型。收口前运行 `node tools/cli/check-stage-steps.mjs --stage=build-plan --task-path=<任务目录> --material-root=<材料根>`，逐项消费判定与缺口；检查器只报告、退出 0，不证明完成。入口推荐行使用可解析字面，如 `- 推荐级别：复杂`；既有日志不回改，未命中就报“未读到级别事实”。
 
 当前材料决定工作内容，测试、审查和历史不替代材料，也不是继续修复的许可证。写材料前核目标工作区与写集；原子写入失败明确报告，共享写入冲突用记录锁，原始来源与失败保留单份。阶段事实仍由现有公共流程处理，本方法不增加认证包装或永久状态。主会话执行 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径，说明材料现状、已做/未做、证据、风险及 build-code 下一步。handoff 必须实际执行并报告返回路径；缺失写清原因与影响，披露不代替完成，不要求固定机器复盘或逐步发布。
 
@@ -257,6 +260,8 @@ confirm 发生在 make-decision、build-plan 和 build-prd 收口，保留用户
 调用检查器时显式给任务根、材料根、阶段和当前步；跳过使用可核当前 Phase 或真实 HEAD。
 
 `node tools/cli/check-stage-steps.mjs --stage=build-plan --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
+
+本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/build-plan/SKILL.md#<本步 method_anchor>","--stage=build-plan","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-plan --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
 
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。

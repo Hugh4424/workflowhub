@@ -1,0 +1,241 @@
+# Phase P9 — 用原始证据拒绝虚假交付声明
+
+独立验收者能用冻结材料和匹配环境回放，查三种声明，并在签后漂移或下游没有实际读回时留下明确失败。
+
+## 哪些节必须写，哪些可以省？
+
+结果、判据、依据、读集、写主、验证、下游、任务卡和机器字段均已写。
+唯一末验收在第 10 段，本段只定所属交付。
+模板脚手架与可选例子省略。
+
+## 这一 Phase 交出什么？
+
+独立验收者能用冻结材料和匹配环境回放，查三种声明，并在签后漂移或下游没有实际读回时留下明确失败。
+
+- **改动前**：门的 stdout 可见，声明与终末签字读回尚未按包 7 合同绑定真实检查、测试和读原件。
+- **改动后**：回放只认环境可比且命中目标失败。声明各自拿到盖有来源的一份原件；独立验收者签同一批材料。
+- **非目标**：T6/T16 已失的历史原件继续标未取得。本段不批准或执行真实远端、用户清理或质量风险承担。
+- **与相邻 Phase 的边界**：从第 6 段取保真分诊与写集，从第 7 段取真实页面证据，从第 8 段取受控归档入口及回执。把对账、回放和签字供终末消费。
+- **主要风险**：签字引用变了字节、只存副本或回放夹具坏了，可能被误当真结果。用命名目标断言及冻结来源排除这些路径。
+- **下一步**：末阶段拿证据签名、对账或缺口并读回授权后的实际收口。既有失败分开保。
+- **动手前必读**：从现行入口查到待消费的真实证据，见本文件读集。
+- **未决事实**：独立验收的角色已明确。具体可用执行者身份和真实签字原件到终验取得。历史环境及输入不可比时保相应档位。
+- **配套与影响**：配套调整＝`tools/cli/stage-runtime.mjs` 的捕获接线、`core/task-close.mjs` 的声明读回、`skills/stage-close/SKILL.md`；配套迁移＝旧 review 记录只读保留、回放案例按 fixture 重建；配套移除＝六组手工负例、独立 `check-verdict` 入口；影响范围＝收口、三种交付声明、独立签名。
+
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列冻结材料指纹与回放入口的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `shasum -a 256 specs/execution-quality-build-code-hardening-20261119/spec.md` | 0 | quality/tests/p9-readiness-spec-sha.output | 机器 | 计划负责人 |
+| `test -f tools/cli/stage-runtime.mjs` | 0 | quality/tests/p9-readiness-stage-runtime.output | 机器 | 计划负责人 |
+| `test -f core/task-close.mjs` | 0 | quality/tests/p9-readiness-task-close.output | 机器 | 计划负责人 |
+| 独立验收者与实施者不是同一执行单元 | 签字原件来自另一上下文 | quality/evidence/p9-readiness-signer.md | 人 | 验收负责人 |
+
+## 这一 Phase 怎么验收？
+
+先由另一执行单元判本段首验。测试退出值仅证明命令曾到达自身结果。
+前置与下游的原件只供消费，完整任务的终验在第 10 段。
+浏览器不适用。本段只读阶段 7 已交测试原件，不打开页面。
+
+**验收 1 的实施安排｜AC-P7-001**
+
+用真实 `stage-runtime verify --action=execute` 捕获现有检查，再从声明 CLI 和收口入口实际读结果。
+由独立执行者在同一隔离任务启动真实门命令。
+认证任务上的门原件来自这一次执行，测试可读回原 ref。
+第 8 段的隔离仓和当前冻结原件。独立验收者与实施者不同。所有动作均为受控，只读校验当前后置输出。
+按附录 A 分三种声明看条件。在现认证入口提交故意损坏的材料，让已有 `run-checks` 实际失败。
+真实门回执须保非通过退出和具名材料错误。
+继续走既有关闭入口，带将此回执宣称成功的错误声明。应归因实际红门并拒绝。
+断言实际命令已到达、原始字节可读和同一次关档读取。预造回执不能替这一链。
+换签后材料或省下游读取的既有坏对照也须指名拒绝。
+独立者在第 9 段首判，正式质量签字留终末。补源、修材料、或重签后只复验受影响声明，旧签字保留。
+判据唯一来源是 `../spec.md#appendix-a--验收判据唯一权威` 对应编号。来源 R-003 / R-012 / D-008。
+证据计划：判什么与怎么判在本段首四行。证据从实际 声明诊断、真实原件指针、签字/读回结果 取得。
+由独立验收者提供并在本段首判，终末用同材料核实际签字留原件。成本类别为接口与独立读回级。
+独立签字或真实读回不齐时报具名缺口。
+
+**验收 2 的实施安排｜AC-P7-002**
+
+从已登记案例读输入哈希、目标检查器、预期失败锚点及环境身份，走真实已有目标命令。
+本地隔离环境。T6/T16 的复制夹具事先标受控，原版本证据沿历史原件。
+合法例应抵达目标断言并报预期红。环境错时为不可比。故意坏夹具或空断言必须与真实红分开。
+集成运行用下方命令，计划新增 CLI 用真实读取入口。回放启动失败归原夹具 owner，复验同一案例并保原输出。
+判据唯一来源是 `../spec.md#appendix-a--验收判据唯一权威` 对应编号。来源 R-012 / D-008。
+证据计划：判什么与怎么判在本段首四行。证据从实际 案例输入与命令、回放诊断和目标原始输出 取得。
+由独立回放验收者提供并在夹具、工具和旧原件边界冻结后留原件。成本类别为命令级。
+真实原件缺失不可补造，失配环境记录不可比。
+
+**成本、资源和范围**
+
+成本均为预案，来源是实际操作切分和现测试蓝图
+`quality/evidence/build-plan/2026-11-19-009-test-blueprint-inputs.md:45–50`。
+按现条件完成第一条真运行后校准。硬估不上升为执行超时或通过判据。
+
+| 验收 | 执行者 | 活动分钟 | 硬估分钟 | 重验预留 | 证据档位 | 资源 | 观察或活动来源 |
+| --- | --- | ---: | ---: | --- | --- | --- | --- |
+| AC-P7-001 | 独立验收者 | 29 | 43 | 换签字或失败原因修复后复验受影响声明 | 接口与独立读回级 | P8 收口夹具、固定签字样本、门和动作回执 | 冻结签字对象约 7，跑假声明和失配反例约 12，独立对账约 10 |
+| AC-P7-002 | 独立回放验收者 | 21 | 32 | 环境原件或夹具修复后重验具名案例 | 命令级 | 已知失败条目、受控夹具与环境输入 | 核历史身份和可比输入约 6，运行正反例约 9，读归因约 6 |
+
+声明消费本段已可读的回放和同一冻结对象，按串行估算 29 + 21 = 50 活动分钟。
+对应硬估 43 + 32 = 75 分钟。复用 P8 已有准备，各分项含限定复验预留。
+真实签字等待单列。身份、实际环境或来源未取得时保缺证，不按计时自动裁决。
+
+## 为什么现在做，依据是什么？
+
+从第 6 段取保真分诊与写集，从第 7 段取真实页面证据，从第 8 段取受控归档入口及回执。把对账、回放和签字供终末消费。
+`decision-log.md:468–511,645,658`。用户答复 `013-page-preview-and-acceptance-answer.md:14–18`。
+
+## 开始前读什么？
+
+先从真实入口和前段不可变交回读现物，再开工。
+本表是坐标，行号变化时按对应符号定位。
+
+| 来源 | 到达时点与用途 |
+| --- | --- |
+| `core/task-close.mjs:642–652` 与第 8 段共享文件交回 | 开工前。在实际锁和授权范围前后确定声明读回接缝。 |
+| `tools/cli/stage-runtime.mjs:1036,1577–1585,1799–1835` 与 `runtime/task/final-chain-runner.mjs:922–944` | 开工前。核 verify/capture 的实际写入分支、终末引用和 active/archive 读回。 |
+| `runtime/task/task-handle.mjs:81,106–112` | 开工前。真实任务身份和原件保存者。 |
+| `tests/contract/final-chain-negatives.test.mjs:53–91,101–122` | 开工前。复用真实具名失败和受控夹具。 |
+| 任务库 `quality/evidence/build-plan/2026-11-19-009-test-blueprint-inputs.md:27` 与 `013-page-preview-and-acceptance-answer.md:13–18` | 开工前。核历史缺证和签字权限分界。 |
+
+## 每个文件由谁改，先做什么？
+
+实施者独占产品代码写入。独立测试作者独占下列测试文件，在实施前准备并冻结断言。
+实施者的写权限排除判据、夹具与原始证据。
+没有独立观察权限前只记未取得，不凭文件声明认定隔离。
+
+**新增**
+
+- `tools/cli/check-replay.mjs`。计划的人工/CI 只读回放入口。任务验收 owner 消费。退役时由既有终末等价读回接替。
+- `tools/cli/check-delivery-claims.mjs`。计划的只读声明核对入口，调用唯一内部读者。
+- `runtime/task/delivery-claims.mjs`。单一声明证据读者，给收口执行器及只读诊断。证据字段由既有事实指针和只读报告承接。
+
+**修改**
+
+- `tools/cli/stage-runtime.mjs`。本段运行时实施者独占。
+  在现 `capture-tests` / `recordBuildCodeCommandEvidence` 连接当次真实门回执。
+- `core/task-close.mjs`。P8 交回后，已有关闭入口读取当前任务承诺、冻结证据及独立签字。
+- `skills/stage-close/SKILL.md`。说明质量签字引用与单独的实际 Git 范围授权。
+- `workflows/build-code/SKILL.md`。在现有终末材料/报告中供真实声明及回放证据，保后置读取结果。
+- `docs/architecture/move-map.json`。登记新增内部读者及两条只读 CLI 的真实消费者和退役条件。
+
+**测试作者独占的修改**
+
+- `tests/contract/final-chain-negatives.test.mjs`。补匹配环境目标红、环境不符、坏夹具与假成功的定向反例。
+- `tests/integration/vnext-delivery-close.test.mjs`。在已核归档场景旁加签字后材料漂移、缺读回和错误授权的用例。
+
+先读 P8 交回的共享集成测试文件、归档断言和真实回执。
+本段测试作者复用已经独立验收的归档夹具，仅追加声明和签字场景。
+冻结归档判据保持只读，原始回执留唯一来源。
+
+**禁止改动**
+
+- 实施者对上述测试与冻结断言保持只读。
+- `spec.md`、当前 `decision-log.md`、Phase 指针、历史材料、旧失败与已保留原件只读。
+- 未知忽略字节、主仓现有编辑以及真实远端任务范围从属于各自授权。在本段夹具测试中保持只读。
+
+P8 先交 `core/task-close.mjs`、`skills/stage-close/SKILL.md`、`workflows/build-code/SKILL.md` 与职责登记。
+P9 加同一命令捕获的门证据及关闭声明读回，再交 P10。原 owner 处理同路径冲突。
+P4/P5 先交现有隔离命令、实际派发检查与回执边界，本段保持其工作流正常使用。
+接口符号见逐路径说明。测试准备可并行，任何同一源写入按实际依赖串行。
+进度只读现 `facts.jsonl#phase_progress`，该值不能支持质量声明。
+
+## 怎么验证？
+
+独立测试作者先冻结目标断言，再在认证工作树安装现有锁定依赖后跑同一命令。
+本次计划中的目标 RED 尚未执行。邻近已有测试入口只是准备线索。
+真实 runner 不存在时记配置失败，修设置后再取得目标读数。
+
+`node node_modules/vitest/vitest.mjs run tests/contract/final-chain-negatives.test.mjs tests/integration/vnext-delivery-close.test.mjs -t 'bound delivery claims|matched target replay'`
+
+- RED 目标：声明消费者当前可能无从识别签后换字节或无读回。目标断言观察坏样本获不当成功，或观察同一目标红没有与不可比拆开。
+- GREEN 目标：同一入口拒相应假成功，独立身份和同字节原件可读，错环境与夹具错误产生各自诊断。
+- 归因：目标断言已抵达且失败才是 RED。收集、未找到测试、导入、夹具和环境失败另列。
+  已满足的原行为保原本通过。
+- 反例用独立输入和来源期望。不能从当前输出反算预期。
+- 失败处理：不删门原输出或签字。仅撤接线自己的受影响改动，重新定位唯一原指针，权威材料变化时申请按当前版本重新独立签。
+- 覆盖上限：不会重放已失真实原件，样本只证其环境。本段受控签字与账号输入不表示用户批准任何实际 Git 动作。
+
+## 下一消费者拿什么继续？
+
+P9 writer 交 P10 已核的拒绝行为、单份原件指针、环境缺口和尚需真实签字的范围。实际收口继续消费 P8 的同批归档及两路授权回执。
+
+
+## 每张任务卡怎么写？
+
+下面一张卡从真实输入走到相同消费者的完整可判结果。
+
+### 任务 9：用原始证据拒绝虚假交付声明
+
+为什么做：独立验收者能用冻结材料和匹配环境回放，查三种声明，并在签后漂移或下游没有实际读回时留下明确失败。
+交付什么：回放只认环境可比且命中目标失败。声明各自拿到盖有来源的一份原件；独立验收者签同一批材料。
+不做什么：T6/T16 已失的历史原件继续标未取得。本段不批准或执行真实远端、用户清理或质量风险承担；不建六组手工负例清单，也不建独立 `check-verdict` 入口，两者随决策日志退役。
+前置：先读取冻结输入及前段真实供件，见本文件读集。
+怎么做：按共享写主先后，接现有入口并以独立反例固定失败。
+怎么验收：跑上方受影响命令，按附录 A 的预期及命名目标断言回读。
+证据：分别留 RED 原失败、GREEN 与其真实条件。
+下游（含何时停）：末阶段拿证据签名、对账或缺口并读回授权后的实际收口。既有失败分开保。 缺一个具名原件时转原负责人处理。
+
+<!-- markdownlint-disable-next-line MD036 -->
+**校验器用，人可跳过**
+
+- **任务编号**：T009
+- **来源 / FR / AC**: R-003 / R-012 / D-008，FR-WH-007，AC-P7-001, AC-P7-002。独立验收者能用冻结材料和匹配环境回放，查三种声明，并在签后漂移或下游没有实际读回时留下明确失败。
+- **输入**: 当前日志、规格和前段实际原件。从第 6 段取保真分诊与写集，从第 7 段取真实页面证据，从第 8 段取受控归档入口及回执。把对账、回放和签字供终末消费。
+- **文件 / 符号**: `tools/cli/check-replay.mjs`；`tools/cli/check-delivery-claims.mjs`；`runtime/task/delivery-claims.mjs`；`core/task-close.mjs`；`tools/cli/stage-runtime.mjs`；`skills/stage-close/SKILL.md`；`workflows/build-code/SKILL.md`；`docs/architecture/move-map.json`；`tests/contract/final-chain-negatives.test.mjs`；`tests/integration/vnext-delivery-close.test.mjs`。
+  逐路径说明点名实际符号与读者。未知入口须回相同 owner 核查。
+- **动作**: 现场检查人或独立验收人经实际 `verify --action=execute` 运行已声明命令。
+  现 `run-checks` 材料检查、派发前客观检查及验收命令走该认证捕获入口。
+  用现 task handle 先写该次原输出和命令回执。
+  在 `recordBuildCodeCommandEvidence` 同一调用内从真实回执生成普通 `gate-results` 引用件。
+  绑定实际 argv、退出或取消、输出 ref 及其字节 SHA-256、材料与环境指纹、开始/结束时点、回执 ref。
+  材料与环境取同次认证工作树、锁定输入与实际环境。缺绑定或证据保存失败保错误。
+  不跨阶段补造通过，不在 facts 另建门状态对象。
+  现有终末报告以实际生成的门原件 ref 供 `executeClosePlan` 消费。
+  关闭从原件重新读退出与指纹，缺失或不符应拒绝对应声明。
+  先写独立声明读者并接只读 CLI。依附录 A 核实施、验证、接受的各自源。校验签字人与实施身份、材料指纹及下游真实消费。使用现有终末证据 ref，不从同名文件猜最新。
+  把消费接到 P8 之后的既有收口验证。当前任务要求独立质量确认，质量读回不代 Git 授权。普通未要求本合同的现有路线维持原可披露的质量语义。
+  回放 CLI 读具名同任务案例，只允许已冻结、已核可执行入口的原 argv 和隔离夹具。不执行案例自由文本或生产路径。区分环境不符、夹具失败、目标红和目标本来通过。
+  快照漂移拒绝使用旧签字。归档后能用原不可变 Git 对象或同内容的认证 archive 读回，没有合法对象则留缺口。
+- **输出 / 失败**: 回放只认环境可比且命中目标失败。声明各自拿到盖有来源的一份原件；独立验收者签同一批材料。 不删门原输出或签字。仅撤接线自己的受影响改动，重新定位唯一原指针，权威材料变化时申请按当前版本重新独立签。
+- **边界 / 禁止改动**: 冻结测试与原始证据不可写。T6/T16 已失的历史原件继续标未取得。本段不批准或执行真实远端、用户清理或质量风险承担。
+- **依赖**: P6, P7, P8
+- **测试层级 / 技能**: fullstack / `fullstack-slice-testing`。从真实捕获和独立签字证据走到认证关闭拒绝。
+  精确命令见成对门禁命令，页面与生产外部权限的覆盖边界见正文。
+- **场景 / 夹具或服务**: 同进程用已有 final-chain 受控场景和 P8 归档夹具。生成非业务输入及假签字用于反例。退出清理只触本次拥有路径。
+  超时或 SIGINT/TERM 按现有流程关闭拥有的子进程并保初错。
+  SIGKILL 后下次只对已验证 owner、路径及节点身份的可再生残留做受控回收。
+  仍活进程、符号链接、节点身份变化或未知目录保留并具名报告。
+- **RED/GREEN 门禁命令**: `node node_modules/vitest/vitest.mjs run tests/contract/final-chain-negatives.test.mjs tests/integration/vnext-delivery-close.test.mjs -t 'bound delivery claims|matched target replay'`
+- **预期退出码**: RED nonzero; GREEN 0。
+  目标未收集、无依赖或夹具无效只算环境/准备失败。
+- **RED 目标失败**: ORACLE-CLOSE-CLAIMS-REPLAY。真实认证 verify 捕获已抵达具名失败的 run-checks 材料检查。
+  目标断言检查同次门结果及坏声明经实际关闭拒绝，缺真实链或让红门变通过应命中该断言。
+  命令、夹具或工作树认证本身失败不能冒目标红。签后换字节、无读回和回放不可比分开判。
+- **RED 证据**: unavailable — 目标断言未预写、未运行。待测试作者留 `quality/tests/claims-replay-red.output` 的实际原件。
+- **GREEN 判定器**: ORACLE-CLOSE-CLAIMS-REPLAY。同次捕获保当前原件并在实际关闭中拒绝相应假成功。
+  独立身份、真实命令、退出和同字节原件可读，错环境与夹具错误产生各自诊断。
+- **证据**: `quality/tests/claims-replay-red.output`、`quality/tests/claims-replay-green.output` 及 `quality/tests/claims-replay-effects.output` 是计划逻辑原件指针。
+  实际执行记录从任务库原件读，不补造当前状态。
+- **覆盖上限**: 不会重放已失真实原件，样本只证其环境。本段受控签字与账号输入不表示用户批准任何实际 Git 动作。
+- **停止 / 恢复**: 不删门原输出或签字。仅撤接线自己的受影响改动，重新定位唯一原指针，权威材料变化时申请按当前版本重新独立签。 连接、权限或身份不符时停对应动作，不做无依据重试。
+- **完成**: 前置（不作完成条件）：状态、精确命令和冻结判据可读。
+  完成条件（只写效果）：独立验收者能用冻结材料和匹配环境回放，查三种声明，并在签后漂移或下游没有实际读回时留下明确失败。
+  独立者按相同附录 A 判原件、坏对照和审查处置，缺口报告实际名称。
+
+## 机器字段（校验器用，人可跳过）
+
+- **全局规格**: `spec.md#实现设计全局权威`
+- **写入集**: `tools/cli/check-replay.mjs`；`tools/cli/check-delivery-claims.mjs`；`runtime/task/delivery-claims.mjs`；`core/task-close.mjs`；`tools/cli/stage-runtime.mjs`；`skills/stage-close/SKILL.md`；`workflows/build-code/SKILL.md`；`docs/architecture/move-map.json`；`tests/contract/final-chain-negatives.test.mjs`；`tests/integration/vnext-delivery-close.test.mjs`
+- **依赖**: P6, P7, P8
+- **消费者**: P10 与 stage-close
+- **gate_cmd**: `node node_modules/vitest/vitest.mjs run tests/contract/final-chain-negatives.test.mjs tests/integration/vnext-delivery-close.test.mjs -t 'bound delivery claims|matched target replay'`
+- **oracle**: ORACLE-CLOSE-CLAIMS-REPLAY
+- **evidence_path**: planned: `quality/tests/claims-replay-effects.output`
+- **STOP**: 不删门原输出或签字。仅撤接线自己的受影响改动，重新定位唯一原指针，权威材料变化时申请按当前版本重新独立签。 缺外部权限或绑定失配停该动作。
+- **覆盖 AC**: AC-P7-001, AC-P7-002
+- **Done**: 前置（不作完成条件）：命令与冻结原件可读；档位据 `quality/reviews/2026-11-20-final-ac-reconciliation.md` §10.2（sha256 `e93d6741…`）。
+  完成条件（只写效果）：AC-P7-001：partial——implemented/verified 机器链与独立签字（`quality/evidence/verdict.json`，sha256 `31a6c5c0…`）真实，但 accepted 因无下游 close 读回仍 fail；证据 `quality/evidence/2026-11-20-002-p9b-signer-check.json`（`no downstream close readback exists`）；缺口 owner=验收/收口，恢复=真实 close 写出读回使 accepted 转 pass，补独立测试作者或具名记录。
+  AC-P7-002：partial——受控 T6 + 匹配环境成立，错环境/夹具失配/目标本通过/非法 argv 四态捕获、案例集来源绑定与 T16 具名记录仍缺，T6/T16 原版 unavailable（`quality/tests/p9-unavailable-t6.output`）；证据 `quality/reviews/2026-11-20-p9-spec-axis.md:14`；缺口 owner=验收负责人，恢复=补四态捕获与案例集绑定后复审。

@@ -5096,6 +5096,78 @@
       "retention_basis": "MT-2-023 / NARROW"
     },
     {
+      "source": "runtime/task/delivery-claims.mjs",
+      "destination": "runtime/task/delivery-claims.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "P9/T009 单一只读声明证据读者：从单一 facts build-code source 的 gate 指针、gate-results 原件输出/回执哈希、实施提交 diff、当前材料指纹与独立 verdict 读出 implemented/verified/accepted 三声明；收口只在本读者拒绝时留失败原件并写一次 close-claims-readback，让 accepted 声明有真实下游读回；不签、不写第二账本、不重跑门、不从同名文件猜最新。",
+      "owner": "P9/T009 实施者；声明证据读取职责退役时随入口移除",
+      "consumer": "core/task-close.mjs 的 executeClosePlan 在已批准计划执行前消费并在 close 证据区写读回；tools/cli/check-delivery-claims.mjs 与 inspectDeliveryCloseState/check-specs-archive 只读诊断；skills/stage-close/SKILL.md 与 P10 终末按本读者结果对账。",
+      "module_consumers": [
+        "core/task-close.mjs",
+        "tools/cli/check-delivery-claims.mjs",
+        "tools/cli/check-replay.mjs",
+        "tests/integration/vnext-delivery-close.test.mjs"
+      ],
+      "named_data_readers": [
+        "specs/execution-quality-build-code-hardening-20261119/phases/P9-evidence-signoff.md"
+      ],
+      "delete_condition": "当三声明读取与 close 读回职责由经独立验证的现有终末等价入口完整承接、且 stage-close/P10 消费者迁移后，由原 owner 删除；gate-results、verdict 与读回原件保留。",
+      "retention_basis": "P9/T009 写集与 AC-P7-001；只读声明与原件，真实签字身份和实际 Git 动作仍由独立验收与用户授权。"
+    },
+    {
+      "source": "tools/cli/check-delivery-claims.mjs",
+      "destination": "tools/cli/check-delivery-claims.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "P9/T009 只读声明核对入口：调用唯一 runtime/task/delivery-claims.mjs 读者，输出三声明各自状态、绑定的 gate/verdict/读回 ref 与 sha256、当前材料指纹与拒绝原因；缺证据、签后漂移、签字人为作者或无读回时 exit 1；不签名、不写状态、不重跑门。",
+      "owner": "P9/T009 实施者；声明核对职责退役时随入口移除",
+      "consumer": "node tools/cli/check-delivery-claims.mjs --task-path=<任务>（或 --project/--task）的独立验收与 P10 终末对账；skills/stage-close/SKILL.md 第 6 节按此入口读回声明。",
+      "module_consumers": [
+        "tests/integration/vnext-delivery-close.test.mjs"
+      ],
+      "named_data_readers": [
+        "specs/execution-quality-build-code-hardening-20261119/phases/P9-evidence-signoff.md"
+      ],
+      "delete_condition": "当声明核对由经独立验证的现有终末等价入口完整承接、且 stage-close/P10 消费者迁移后，由原 owner 删除该只读入口；原 RED/GREEN/effects 原件保留。",
+      "retention_basis": "P9/T009 写集与 AC-P7-001；只读核对，不产生第二个质量通过或许可证。"
+    },
+    {
+      "source": "tools/cli/check-replay.mjs",
+      "destination": "tools/cli/check-replay.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "P9/T009 只读回放入口：读具名冻结案例的输入 sha256、目标 argv、预先命名的失败锚点与环境 hash，先判夹具字节，再判环境可比性，最后只执行隔离夹具目录内的冻结 argv；把不可比、夹具失配、夹具失败、目标红、本来通过分开命名，只有环境可比且命中预命名目标失败才 exit 0。",
+      "owner": "P9/T009 实施者；回放职责退役时随入口移除",
+      "consumer": "node tools/cli/check-replay.mjs --cases=<冻结案例.json>（调用方显式给出案例文件路径）的独立回放验收；tests/contract/final-chain-negatives.test.mjs 与 tests/integration/vnext-delivery-close.test.mjs 按同一入口读回。",
+      "module_consumers": [
+        "tests/contract/final-chain-negatives.test.mjs",
+        "tests/integration/vnext-delivery-close.test.mjs"
+      ],
+      "named_data_readers": [
+        "specs/execution-quality-build-code-hardening-20261119/phases/P9-evidence-signoff.md"
+      ],
+      "delete_condition": "当环境可比回放由经独立验证的现有等价入口完整承接、且独立回放验收与 P10 迁移后，由原 owner 删除；历史案例与失败输出保留。",
+      "retention_basis": "P9/T009 写集与 AC-P7-002；只证受控夹具与其环境，不重放已失 T6/T16 原件、不执行案例自由文本或生产路径。"
+    },
+    {
+      "source": "tools/cli/check-specs-archive.mjs",
+      "destination": "tools/cli/check-specs-archive.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "P8/T008 私有只读薄入口：调用现有 archiveReadback 回读已交付归档、两路推送回执与代码图回执，供收口者材料对账；不写计划、授权、状态或第二套收口。",
+      "owner": "P8/T008 收口实施者；归档能力退役时随入口移除",
+      "consumer": "node tools/cli/check-specs-archive.mjs --task-path=<任务>（缺省取最近 close plan，可追加 --plan-ref）的收口对账；skills/stage-close/SKILL.md 第6节与 P9 声明读回按此入口消费。",
+      "module_consumers": [
+        "tests/integration/vnext-delivery-close.test.mjs"
+      ],
+      "named_data_readers": [
+        "tools/cli/task-close.mjs"
+      ],
+      "delete_condition": "当归档回读职责由经独立验证的现有入口完整承接、skills/stage-close 与 P9 消费者改接后，由原 owner 删除该薄入口；原 RED/GREEN/effects 原件保留。",
+      "retention_basis": "P8/T008 写集与 AC-P9-001/AC-P9-002；只证隔离仓与本地裸远端动作，真实远端与物理收口留终末确认。"
+    },
+    {
       "source": "tools/cli/task-close.mjs",
       "destination": "tools/cli/task-close.mjs",
       "status": "retain",
@@ -10565,6 +10637,38 @@
       ],
       "delete_condition": "当该驱动的门禁由经独立验证的替代测试承接后由原 owner 删除；真实业务缺口随就绪件补齐另行执行，不靠删除断言求绿。",
       "retention_basis": "C10 P6/T006–T008 的 add；固定替身与真实运行分层，不以 fixture 冒业务。"
+    },
+    {
+      "source": "tests/fixtures/execution-quality/prepare-test-data.mjs",
+      "destination": "tests/fixtures/execution-quality/prepare-test-data.mjs",
+      "status": "add",
+      "role": "test_only",
+      "responsibility": "P4/T004 受控测试数据夹具：只接受显式 --data-root 与样本版本，按同一合成 seed 生成最小样本并读回；缺隔离根、缺版本、落后或未登记版本具名失败，不回退 cwd、TMPDIR 或产品库；拒绝符号链接组件与仓内/cwd/符号链接根，写删前重核路径；同目录临时文件加 rename 原子写、根内锁用 rename-claim 原子接管陈旧锁并拒绝并发、崩溃临时文件/claim 按前缀回收、坏或缺失清单走显式恢复清理；--clean 只删清单内自有对象并报 owner 与 complete 完成信号。不设第二数据 owner、不写固定配额，不代表真实测试入口已证。",
+      "owner": "testing-system-blueprint 测试数据约定 owner（唯一测试数据 owner）；本文件由 P4/T004 实施者新增，冻结后变更遵既有 TCR",
+      "consumer": "tests/contract/temp-dir.test.mjs 的 ORACLE-P4-ISOLATED-TEST-DATA 用受控 PATH/TMPDIR 子进程入口消费（缺根、缺版本、落后版本三案），同文件追加的 P4 fixture lifecycle 用例消费合法准备、复跑同字节、清理残留、根/版本拒绝、坏清单恢复与并发锁；P5 开工检查按同一命令读准备、版本诊断与清理回执。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "当同一受控夹具职责由经独立验证的替代命令承接、ORACLE-P4-ISOLATED-TEST-DATA 与 P5 消费者完整改接后，由测试数据约定 owner 删除；原 RED/GREEN 原件保留。",
+      "retention_basis": "P4/T004 写集与 AC-P8-001/AC-P8-002；只证 fixture 级隔离，真实测试入口解析者仍是具名缺口。"
+    },
+    {
+      "source": "tests/contract/build-code-readiness.test.mjs",
+      "destination": "tests/contract/build-code-readiness.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5/T005 开工就绪目标门禁：合法 spec/index/phases 与五列表通过共享契约并给出可派发事实；缺 Phase/Task/AC、写集不一致具名拒绝；合法表配失败或缺失探针时真实 build-code 入口非零拒绝、facts 无新派发行且声明写集字节不变；恢复后同一入口回到可派发并新增一行真实派发记录。",
+      "owner": "P5/T005 独立测试作者；断言冻结后变更遵既有 TCR，开发只读消费",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/build-code-readiness.test.mjs 的 P5 定向门禁；阶段 5 实施与独立测试/末验收读回，观察原件归任务 quality/tests 与 quality/evidence。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tools/cli/stage-runtime.mjs",
+        "runtime/stage/stage-content-contracts.mjs"
+      ],
+      "tests": [
+        "tests/contract/stage-runtime-reflect-entry.test.mjs"
+      ],
+      "delete_condition": "当开工就绪职责由经独立验证的替代门禁完整承接、且 P5 的 RED/GREEN 与就绪观察原件保留后，由原测试 owner 删除；不因实现变化删弱断言。",
+      "retention_basis": "P5/T005 写集与 AC-P4-001/AC-P4-002；只证受控入口的具名拒绝与恢复，真实外部服务、真实权限与数据代表性未覆盖。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

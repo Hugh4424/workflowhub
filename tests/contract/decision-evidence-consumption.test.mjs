@@ -1,10 +1,11 @@
 // P1 ORACLE-MD-001: answer source class and four-grade tone stay bound to the
 // original reply. The checker is advisory for old shapes; a new-shape log that
 // declares source_id/modality/来源身份 must report the named code and exit
-// non-zero only for those three semantic failures.
+// non-zero only for its named semantic failures (the P1 three plus the P2
+// self-reference code).
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,7 @@ import { checkDecisionLogChain, stripLeadingMarker, fenceStep } from "../../tool
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI = join(ROOT, "tools/cli/check-decision-log-chain.mjs");
-const FLAGS = ["ANSWER_MODALITY_MISMATCH", "ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_INFERENCE_AS_USER"];
+const FLAGS = ["ANSWER_MODALITY_MISMATCH", "ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_INFERENCE_AS_USER", "ANSWER_SOURCE_SELF_REFERENCE"];
 const temporary = [];
 afterEach(() => { for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const temp = (prefix) => { const root = mkdtempSync(join(tmpdir(), prefix)); temporary.push(root); return root; };
@@ -415,6 +416,8 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
     const cold = `# 受控冷读 ${id}\n\n- 读者：subagent:reader-${id}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cards}#工作包-${id}\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
     put(task, cards, `${card}${cardsExtra}`);
     put(task, coldRef, cold);
+    const packageEvidence = `quality/evidence/convergence/package-evidence-${id}.md`;
+    put(task, packageEvidence, `包 ${id} 的真实原件字节。\n`);
     const batch = batchFor(id);
     const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n用户原话：可以。\n批次：${batch}\n`;
     const discussionRef = `quality/evidence/talk/discussion-p${id}.md`;
@@ -432,7 +435,7 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
     if (deferValue !== undefined) marks.push(`可推迟：${deferValue}`);
     rows.push(format === 'ten'
       ? `| ${id} | D-00${id} | D-00${id} | D-00${id} | AC-01 | D-00${id} | 无 | consumer | ${pendingFor(id)} | 已收敛 | 已答 | 已答 | 已答 | 已答 | 已答 |`
-      : `| ${id} | 已收敛 | 本文件“工作包 ${id}” | evidence-${id} | ${pendingFor(id)} |`);
+      : `| ${id} | 已收敛 | 本文件“工作包 ${id}” | \`${packageEvidence}\` | ${pendingFor(id)} |`);
     sections.push([
       `## 工作包 ${id}：受控包 ${id}`, "",
       "### 五段过程", "", "| 段 | 结论 | 原件指针 | 批次 |", "| --- | --- | --- | --- |",
@@ -554,6 +557,7 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
     ].join("\n"));
     const card = "## 工作包 1：受控包 1\n\n一句话结果：受控结果。";
     put(task, "quality/evidence/convergence/cards.md", card);
+    put(task, "quality/evidence/convergence/package-evidence-1.md", "包 1 的真实原件字节。\n");
     const cold = `# 受控冷读 1\n\n- 读者：subagent:reader-1，未参与本包写作，只读本包卡。\n- 读的卡：\`quality/evidence/convergence/cards.md#工作包-1\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：改。\n② 为什么：因。\n③ 边界：界。\n④ 怎么验：验。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
     if (withCold) put(task, "quality/evidence/cold-read-p1.md", cold);
     const coldRef = withCold ? "quality/evidence/cold-read-p1.md" : "quality/evidence/missing-cold-read-p1.md";
@@ -563,7 +567,7 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
     put(task, "quality/evidence/decision-log-refs/convergence-checklist.md", [
       "# 收敛清单", "",
       "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |",
-      "| 1 | 已收敛 | 本文件“工作包 1” | evidence-1 | 无 |", "",
+      "| 1 | 已收敛 | 本文件“工作包 1” | `quality/evidence/convergence/package-evidence-1.md` | 无 |", "",
       "## 工作包 1：受控包 1", "", "### 收敛格（本轮）", "", "| 项 | 值 |", "| --- | --- |",
       `| 当前卡节 | \`quality/evidence/convergence/cards.md#工作包-1\`；sha256 \`${p5Sha(card)}\` |`,
       ...(coldLine ? [coldLine] : []),
@@ -740,5 +744,598 @@ describe("P11 run-checks material convergence gaps", () => {
     const dir = temp("p11-rc0-");
     writeFileSync(join(dir, "decision-log.md"), "# T\n## 级别与路线\n- 推荐级别：复杂\n");
     expect(runMaterial(dir).status).toBe(0);
+  });
+});
+
+// P2/T002 ORACLE-P2-BOUND-HANDOFF
+// Oracle provenance (corrected): there is NO pre-frozen independent script for
+// this oracle. The 020/021 originals under the task library belong to the
+// checklist oracle (ORACLE-P2-CURRENT-V2-CHECKLIST), not to this one; they must
+// not be cited as this case's author. What this block encodes is the Phase card's
+// RED/GREEN semantics for AC-P2-001, written by the implementer against the
+// existing checker surface. That absence of an independent frozen author is
+// recorded as a gap, not papered over. No pre-existing assertion in this file
+// changed.
+// Content: the source pointer and the confirmation must
+// land on one original. A pointer that resolves back into the decision log is a
+// self-reference rather than an original; a one-line offset is drift and must
+// name the cited position; a declared file with no reader is a static receipt,
+// not evidence. The frozen Git object is replayed by an independent reader and
+// the decision-log bytes stay identical across the check.
+describe("ORACLE-P2-BOUND-HANDOFF bound original and named failures", () => {
+  const QUOTE = "允许升一次数据库结构";
+
+  it("names a source pointer that resolves to the decision log itself", () => {
+    const { log, index } = fixture({});
+    const before = `${readFileSync(log, "utf8")}${QUOTE}\n`;
+    writeFileSync(log, before);
+    const position = before.split("\n").length - 1;
+    writeFileSync(index, [
+      "# Controlled index; U-901 is a replay label",
+      INDEX_HEADER, INDEX_RULE,
+      `| U-901 | 保存转录 | ${QUOTE} | permit | specs/p1-fixture/decision-log.md#L${position}-L${position} | 2026-11-12（原件） | 1 |`,
+      "",
+    ].join("\n"));
+    const result = run(log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_SELF_REFERENCE");
+    expect(result.output).toContain("D-901");
+    expect(readFileSync(log, "utf8")).toBe(before);
+  });
+
+  it("names the cited position when the original drifts by one line", () => {
+    const { log } = fixture({ line: 7, ref: "#L8-L8" });
+    const before = readFileSync(log, "utf8");
+    const result = run(log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    expect(result.output).toContain("#L8-L8");
+    expect(readFileSync(log, "utf8")).toBe(before);
+  });
+
+  it("keeps a static receipt distinguishable from a real read", () => {
+    const { log, index } = fixture({});
+    const markdown = readFileSync(log, "utf8");
+    const requirementIndex = readFileSync(index, "utf8");
+    const receiptOnly = checkDecisionLogChain({ markdown, source_ref: "decision-log.md", requirement_index_markdown: requirementIndex });
+    expect(receiptOnly.warnings.map(item => item.code)).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    const read = checkDecisionLogChain({
+      markdown, source_ref: "decision-log.md", requirement_index_markdown: requirementIndex,
+      read_source: ref => readFileSync(String(ref).split("#")[0], "utf8"),
+    });
+    expect(read.warnings.map(item => item.code)).not.toContain("ANSWER_SOURCE_UNVERIFIABLE");
+  });
+
+  it("replays a frozen Git object and keeps the log bytes unchanged", () => {
+    const dir = temp("p2-bound-object-");
+    const git = args => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+    expect(git(["init", "-q"]).status).toBe(0);
+    const path = join(dir, "reply.md");
+    const lines = Array.from({ length: 9 }, (_, number) => `${number + 1}. filler line`);
+    lines[6] = `3. ${QUOTE}`;
+    writeFileSync(path, `${lines.join("\n")}\n`);
+    expect(git(["add", "reply.md"]).status).toBe(0);
+    expect(git(["-c", "user.name=p2", "-c", "user.email=p2@example.invalid", "commit", "-qm", "controlled original"]).status).toBe(0);
+    const blob = git(["rev-parse", "HEAD:reply.md"]).stdout.trim();
+    expect(blob).toMatch(/^[0-9a-f]{40}$/);
+    expect(git(["cat-file", "-e", blob]).status).toBe(0);
+    const shown = spawnSync("git", ["show", blob], { cwd: dir });
+    expect(shown.status).toBe(0);
+    const frozen = shown.stdout;
+    expect(createHash("sha256").update(frozen).digest("hex")).toBe(createHash("sha256").update(readFileSync(path)).digest("hex"));
+    const frozenLines = frozen.toString("utf8").split("\n");
+    expect(frozenLines[6]).toContain(QUOTE);
+    expect(frozenLines[7]).not.toContain(QUOTE);
+    writeFileSync(path, `inserted line\n${lines.join("\n")}\n`);
+    expect(spawnSync("git", ["show", blob], { cwd: dir }).stdout.equals(frozen)).toBe(true);
+    expect(readFileSync(path).equals(frozen)).toBe(false);
+  });
+});
+// P2/T002 ORACLE-P2-BLOB-BINDING: a confirmation may bind its original to a
+// frozen Git object (`commit:path#blob`). The checker has to prove the blob
+// exists, that the declared commit really carries it, and that the quoted line
+// lives in the blob bytes. Reading the current working tree is not the same
+// fact: it can move after the commit, so the frozen object is authoritative.
+describe("ORACLE-P2-BLOB-BINDING frozen Git object binding", () => {
+  const QUOTE = "允许升一次数据库结构";
+  function blobFixture(options = {}) {
+    const f = fixture(options);
+    const git = args => spawnSync("git", args, { cwd: f.base, encoding: "utf8" });
+    expect(git(["init", "-q"]).status).toBe(0);
+    expect(git(["add", "."]).status).toBe(0);
+    expect(git(["-c", "user.name=p2", "-c", "user.email=p2@example.invalid", "commit", "-qm", "controlled original"]).status).toBe(0);
+    const commit = git(["rev-parse", "HEAD"]).stdout.trim();
+    const relative = f.source.slice(f.base.length + 1);
+    const blob = git(["rev-parse", `HEAD:${relative}`]).stdout.trim();
+    const indexRow = ref => ["# Controlled index", INDEX_HEADER, INDEX_RULE,
+      `| U-901 | 保存转录 | ${QUOTE} | permit | ${ref} | 2026-11-12（原件） | 1 |`, ""].join("\n");
+    writeFileSync(f.index, indexRow(`${commit}:${relative}#${blob}#L7-L7`));
+    return { ...f, git, commit, relative, blob, indexRow };
+  }
+  it("verifies the declared commit:path#blob and reports the binding", () => {
+    const f = blobFixture();
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).toContain("blob binding U-901");
+    expect(result.output).toContain(`${f.commit}:${f.relative}#${f.blob}`);
+    expect(result.output).not.toMatch(new RegExp(FLAGS.join("|")));
+  });
+  it("reads the quoted line from the frozen blob, not from changed working-tree bytes", () => {
+    const f = blobFixture();
+    // The working tree no longer holds the quote; only the frozen blob does.
+    writeFileSync(f.source, `${Array.from({ length: 9 }, (_, number) => `${number + 1}. filler line`).join("\n")}\n`);
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).toContain("blob binding U-901");
+    expect(result.output).not.toMatch(new RegExp(FLAGS.join("|")));
+  });
+  it("rejects a blob that the declared commit path does not carry", () => {
+    const f = blobFixture();
+    const otherBlob = f.git(["rev-parse", `HEAD:quality/evidence/decision-log-refs/requirement-index.md`]).stdout.trim();
+    expect(otherBlob).toMatch(/^[0-9a-f]{40}$/);
+    writeFileSync(f.index, f.indexRow(`${f.commit}:${f.relative}#${otherBlob}#L7-L7`));
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    expect(result.output).toContain("BLOB_MISMATCH");
+  });
+  it("rejects a frozen blob of the decision log itself", () => {
+    const f = blobFixture({ extraLines: ["- 受控标记：`允许升一次数据库结构`（本日志行）"] });
+    const logText = readFileSync(f.log, "utf8");
+    const line = logText.split("\n").findIndex(value => value.includes("受控标记")) + 1;
+    expect(line).toBeGreaterThan(0);
+    const relative = f.log.slice(f.base.length + 1);
+    const logBlob = f.git(["rev-parse", `HEAD:${relative}`]).stdout.trim();
+    expect(logBlob).toMatch(/^[0-9a-f]{40}$/);
+    writeFileSync(f.index, f.indexRow(`${f.commit}:${relative}#${logBlob}#L${line}-L${line}`));
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_SELF_REFERENCE");
+  });
+  it("rejects a blob that does not exist in the repository", () => {
+    const f = blobFixture();
+    writeFileSync(f.index, f.indexRow(`${f.commit}:${f.relative}#${"0".repeat(40)}#L7-L7`));
+    const result = run(f.log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    expect(result.output).toContain("BLOB_MISSING");
+  });
+});
+
+// P3 ORACLE-P3-ROLE-SOURCES: a package card must be bound to the role originals
+// that really produced it and to a real package-level user reply. The machine
+// only judges shape and binding; whether the review was good enough is a human
+// read. This controlled fixture proves the checks can fail; it does not stand in
+// for the real three roles, the real reply or the real card version.
+const P3_VALIDATOR = join(ROOT, "skills/decision-maker/scripts/validate-card.mjs");
+const P3_STATUS = join(ROOT, "skills/decision-maker/scripts/status.mjs");
+const P3_QUOTE = "行为看实际页面，排版验收要求截图（推荐）";
+const P3_CALL = "call_controlled_p3_0001";
+
+function p3CardBody({ header = "| 格 | 内容 |\n| --- | --- |\n" } = {}) {
+  const template = readFileSync(join(ROOT, "skills/decision-maker/templates/card.md"), "utf8");
+  const table = template.slice(template.indexOf("| 格 |"), template.indexOf("## 卡末"));
+  const rows = table
+    .split("\n")
+    .slice(2)
+    .join("\n")
+    .replace(/\x60<[^>]+>\x60/g, "受控卡片输入：读取已存在的回执。")
+    .replace(/^\| 验收 \|.*$/m, "| 验收 | 通过条件：本地回执可读且退出 0；失败条件：回执缺失或退出非零；反例：删掉回执应失败；证据：验证器原始输出。 |");
+  return `# 受控卡\n\n${header}${rows}`;
+}
+
+function p3sha(file) {
+  return createHash("sha256").update(readFileSync(file)).digest("hex");
+}
+
+function p3Package({ header } = {}) {
+  const dir = temp("p3-roles-");
+  const roles = join(dir, "roles");
+  mkdirSync(roles);
+  const body = p3CardBody({ header });
+  const card = join(dir, "card.md");
+  writeFileSync(card, body);
+  const version = spawnSync(process.execPath, [P3_VALIDATOR, card, "--version"], { encoding: "utf8" }).stdout.trim();
+  expect(version).toMatch(/^[0-9a-f]{64}$/);
+  const files = {
+    research: join(roles, "research.md"),
+    design: join(roles, "design.md"),
+    cold: join(roles, "cold-read.md"),
+    adversarial: join(roles, "adversarial.md"),
+    answer: join(roles, "answer.md"),
+  };
+  const calls = {
+    research: "p3-researcher@2026-11-20T04:18:00+08:00",
+    design: "p3-designer@2026-11-20T04:31:00+08:00",
+    cold: "p3-reviewer@2026-11-20T05:02:00+08:00",
+    adversarial: "p3-reviewer@2026-11-20T05:02:00+08:00",
+  };
+  const spec = {
+    research: { agent: "p3-researcher", at: "2026-11-20T04:18:00+08:00" },
+    design: { agent: "p3-designer", at: "2026-11-20T04:31:00+08:00" },
+    cold: { agent: "p3-reviewer", at: "2026-11-20T05:02:00+08:00" },
+    adversarial: { agent: "p3-reviewer", at: "2026-11-20T05:02:00+08:00" },
+  };
+  const questions = (count) => Array.from({ length: count }, (_, index) => `${index + 1}. 受控答复 ${index + 1}`).join("\n");
+  writeFileSync(files.research, `agent: ${spec.research.agent}\ndispatched_at: ${spec.research.at}\n\n# 调研原件\n\n1. 受控事实；来源 cont/rors:1\n`);
+  writeFileSync(files.design, `agent: ${spec.design.agent}\ndispatched_at: ${spec.design.at}\ndesigner: p3-designer\n\n# 设计原件\n\n1. 受控方案。\n`);
+  writeFileSync(files.cold, `agent: ${spec.cold.agent}\ndispatched_at: ${spec.cold.at}\nreviewer: p3-reviewer\ndesigner: p3-designer\nreviewed_card_sha256: ${version}\n\n# 冷读原件\n\n## 六问原文\n\n${questions(6)}\n\n- 结论：过\n`);
+  writeFileSync(files.adversarial, `agent: ${spec.adversarial.agent}\ndispatched_at: ${spec.adversarial.at}\nreviewer: p3-reviewer\ndesigner: p3-designer\nreviewed_card_sha256: ${version}\n- 结论：通过\n\n## 九问原文\n\n${questions(9)}\n\n## 阻塞项\n\n- 无\n`);
+  writeFileSync(files.answer, `# 受控包级答复\n\n- 答复来源：受控问答 ${P3_CALL}。\n- 所属包：包 6\n\n1. 用户原文：${P3_QUOTE}\n`);
+  const machine = [
+    "## 卡末（校验器用，人可跳过）",
+    "",
+    "- 包号：包 6",
+    "- 设计者：p3-designer",
+    "- 审查者：p3-reviewer",
+    "- source_id：未分配",
+    "- modality：允许",
+    "- 来源身份：用户答复",
+    `- 答复原件：roles/answer.md；sha256=${p3sha(files.answer)}；调用=${P3_CALL}；包=包 6`,
+    `- 答复原文：「${P3_QUOTE}」`,
+    "- 选项与风险：推荐按示例范围写入计划；代价是范围被示例限定。",
+    `- 调研原件：roles/research.md；sha256=${p3sha(files.research)}；调用=${calls.research}`,
+    `- 设计原件：roles/design.md；sha256=${p3sha(files.design)}；调用=${calls.design}`,
+    `- 冷读原件：roles/cold-read.md；sha256=${p3sha(files.cold)}；调用=${calls.cold}`,
+    `- 对抗原件：roles/adversarial.md；sha256=${p3sha(files.adversarial)}；调用=${calls.adversarial}`,
+    "",
+  ].join("\n");
+  writeFileSync(card, `${body}${machine}`);
+  return { dir, card, files, version, body, calls };
+}
+
+function p3Run(script, args) {
+  const result = spawnSync(process.execPath, [script, ...args], { cwd: ROOT, encoding: "utf8", timeout: 30_000 });
+  return { ...result, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+}
+
+describe("ORACLE-P3-ROLE-SOURCES bound card, wrong source and wrong bytes", () => {
+  it("accepts a card whose role originals and package reply are bound to its own version", () => {
+    const pkg = p3Package();
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(finding.ok).toBe(true);
+    expect(run.status).toBe(0);
+    expect(finding.cardVersion).toBe(pkg.version);
+    const status = p3Run(P3_STATUS, [pkg.dir, "--json", "--require-complete"]);
+    const payload = JSON.parse(status.stdout);
+    expect(payload.evaluated).toBe(1);
+    expect(payload.rows.find((row) => row.file === "card.md")).toMatchObject({ complete: true });
+    expect(status.status).toBe(0);
+  });
+
+  it("accepts a card-shaped file that has no `| 格 |` header row", () => {
+    const pkg = p3Package({ header: "" });
+    expect(readFileSync(pkg.card, "utf8")).not.toMatch(/^\|\s*格\s*\|/m);
+    const status = p3Run(P3_STATUS, [pkg.dir, "--json", "--require-complete"]);
+    const payload = JSON.parse(status.stdout);
+    expect(payload.evaluated).toBe(1);
+    expect(payload.rows.find((row) => row.file === "card.md")).toMatchObject({ complete: true });
+    expect(status.status).toBe(0);
+  });
+
+  it("rejects an acceptance cell that writes 无 for every part", () => {
+    const pkg = p3Package();
+    const card = readFileSync(pkg.card, "utf8").replace(/^\| 验收 \|.*$/m, "| 验收 | 通过：无；失败：无；反例：无；证据：无 |");
+    writeFileSync(pkg.card, card);
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.acceptEmpty).toEqual(["通过", "失败", "反例", "证据"]);
+    expect(finding.reasons.join("\n")).toContain("验收写空：反例");
+  });
+
+  it("ORACLE-P3-ROLE-SOURCES rejects a card whose eight rows are present but empty", () => {
+    // 只判「有没有这一行」会让 11 格留空 8 格仍 exit 0。空行必须在基础检查里具名失败，
+    // 不依赖 --bind；这里是 AC-P3-001 登记命令选中本用例句的同一机器判据。
+    const rows = ["一句话结果", "对应需求", "现状缺口", "方案与取舍", "边界", "数据与状态", "风险与回退", "未决"];
+    let card = p3CardBody();
+    for (const name of rows) card = card.replace(new RegExp(`^\\| ${name} \\|.*$`, "m"), `| ${name} |  |`);
+    const dir = temp("p3-empty-cells-");
+    const path = join(dir, "card.md");
+    writeFileSync(path, card);
+    const run = p3Run(P3_VALIDATOR, [path, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.missing).toEqual([]);
+    expect(finding.empty).toEqual(rows);
+    expect(finding.reasons.join("\n")).toContain("格写空：一句话结果");
+  });
+
+  it("rejects one file standing in for several role originals", () => {
+    const pkg = p3Package();
+    const card = readFileSync(pkg.card, "utf8").replace(/(对抗原件：roles\/adversarial\.md)/, "$1；调用="+pkg.calls.adversarial).replace("roles/adversarial.md", "roles/cold-read.md");
+    writeFileSync(pkg.card, card);
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.gaps.join("\n")).toContain("角色原件重复");
+  });
+
+  it("rejects a role original with no dispatch identity", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.files.research, "# 调研原件（手写，无派发来源）\n\n1. 受控事实\n");
+    const card = readFileSync(pkg.card, "utf8").replace(/(调研原件：roles\/research\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.research)}`);
+    writeFileSync(pkg.card, card);
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(run.status).toBe(1);
+    expect(JSON.parse(run.stdout).gaps.join("\n")).toContain("原件没写派发来源：调研原件");
+  });
+
+  it("rejects a reviewer who is the card author", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.files.cold, readFileSync(pkg.files.cold, "utf8").replace("reviewer: p3-reviewer", "reviewer: p3-designer"));
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8")
+      .replace(/^- 审查者：.*$/m, "- 审查者：p3-designer")
+      .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.reasons.join("\n")).toContain("审查者与卡作者同一身份");
+    expect(p3Run(P3_STATUS, [pkg.dir, "--require-complete"]).status).toBe(1);
+  });
+
+  it("rejects role originals that reviewed different card bytes", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace("| 边界 | 受控卡片输入", "| 边界 | 受控卡片输入（审查后改过的字节）"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.gaps.join("\n")).toContain("卡版本不匹配");
+    expect(finding.cardVersion).not.toBe(pkg.version);
+  });
+
+  it("rejects a reply quote or call that is not in the answer original", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(`「${P3_QUOTE}」`, "「这是旧九包的整体确认原话」"));
+    const quoteRun = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(quoteRun.status).toBe(1);
+    expect(JSON.parse(quoteRun.stdout).gaps.join("\n")).toContain("答复原文不在原件中");
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(`调用=${P3_CALL}`, "调用=call_not_here_0000"));
+    const callRun = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(callRun.status).toBe(1);
+    expect(JSON.parse(callRun.stdout).gaps.join("\n")).toContain("调用来源不在答复原件中");
+  });
+
+  it("rejects a reply modality outside the legal enum", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace("- modality：允许", "- modality：同意"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    expect(run.status).toBe(1);
+    expect(JSON.parse(run.stdout).gaps.join("\n")).toContain("答复语气不合法");
+  });
+
+  it("rejects a labeled acceptance cell that never states its own failure condition", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(/^\| 验收 \|.*$/m, "| 验收 | 通过条件：本地回执可读。反例：删掉回执应失败。证据：验证器原始输出。 |"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.acceptMissing).toContain("失败");
+    expect(finding.reasons.join("\n")).toContain("验收缺项：失败");
+  });
+
+  it("rejects a dispatch time in the future", () => {
+    const pkg = p3Package();
+    const future = "2099-01-01T00:00:00+08:00";
+    writeFileSync(pkg.files.cold, readFileSync(pkg.files.cold, "utf8").replace(/^dispatched_at: .*$/m, `dispatched_at: ${future}`));
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8")
+      .replace(/^- 冷读原件：.*$/m, (line) => line.replace(/调用=.*$/, `调用=p3-reviewer@${future}`))
+      .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.reasons.join("\n")).toContain("派发时间在未来");
+  });
+
+  it("rejects a placeholder failure condition such as 待补", () => {
+    const pkg = p3Package();
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8").replace(/^\| 验收 \|.*$/m, "| 验收 | 通过条件：本地回执可读；失败条件：待补；反例：删掉回执应失败；证据：验证器原始输出。 |"));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--json"]);
+    const finding = JSON.parse(run.stdout);
+    expect(run.status).toBe(1);
+    expect(finding.acceptEmpty).toContain("失败");
+  });
+
+  it("reports a dispatch time after the original mtime as advisory, not a failure", () => {
+    const pkg = p3Package();
+    const saved = new Date(Date.now() - 3600_000);
+    const dispatched = new Date(Date.now() - 1800_000).toISOString();
+    writeFileSync(pkg.files.cold, readFileSync(pkg.files.cold, "utf8").replace(/^dispatched_at: .*$/m, `dispatched_at: ${dispatched}`));
+    utimesSync(pkg.files.cold, saved, saved);
+    writeFileSync(pkg.card, readFileSync(pkg.card, "utf8")
+      .replace(/^- 冷读原件：.*$/m, (line) => line.replace(/调用=.*$/, `调用=p3-reviewer@${dispatched}`))
+      .replace(/(冷读原件：roles\/cold-read\.md；sha256=)[0-9a-f]{64}/, `$1${p3sha(pkg.files.cold)}`));
+    const run = p3Run(P3_VALIDATOR, [pkg.card, "--bind", "--json"]);
+    const finding = JSON.parse(run.stdout);
+    // mtime 不是证据：恢复备份/拷贝/git checkout 都会刷新它，因此只作 warning。
+    expect(run.status).toBe(0);
+    expect(finding.ok).toBe(true);
+    expect(finding.warnings.join("\n")).toContain("派发时间晚于原件 mtime");
+    expect(finding.warnings.join("\n")).toContain("mtime 不是证据");
+    expect(finding.reasons.join("\n")).not.toContain("派发时间晚于");
+  });
+
+  it("keeps a named gap in status when a role original is missing", () => {
+    const pkg = p3Package();
+    rmSync(pkg.files.adversarial);
+    const status = p3Run(P3_STATUS, [pkg.dir, "--json"]);
+    const payload = JSON.parse(status.stdout);
+    const row = payload.rows.find((entry) => entry.file === "card.md");
+    expect(row.complete).toBe(false);
+    expect(row.gaps.join("\n")).toContain("缺原件：对抗原件");
+    expect(p3Run(P3_STATUS, [pkg.dir, "--require-complete"]).status).toBe(1);
+  });
+
+  it("fails status on a directory with no evaluable card", () => {
+    const dir = temp("p3-empty-");
+    expect(p3Run(P3_STATUS, [dir, "--json"]).status).toBe(1);
+    expect(JSON.parse(p3Run(P3_STATUS, [dir, "--json"]).stdout).evaluated).toBe(0);
+    writeFileSync(join(dir, "notes.md"), "# 说明\n\n这里没有卡。\n");
+    const onlyNotes = p3Run(P3_STATUS, [dir, "--require-complete"]);
+    expect(onlyNotes.status).toBe(1);
+    expect(onlyNotes.stdout).toContain("没有可评估的卡");
+  });
+});
+
+// P3 ORACLE-P3-PORTABLE-TEMPLATE: the release closure must carry both the v1 and
+// the v2 decision-log template, byte for byte, and refuse a release that lost the
+// v2 file. The controlled isolation root is the only thing touched.
+describe("ORACLE-P3-PORTABLE-TEMPLATE v2 template travels with the old one", () => {
+  it("ships both decision-log templates and rejects a release that dropped v2", async () => {
+    const { buildSkillBundleRelease, validateSkillBundleRelease } = await import("../../runtime/distribution/skill-bundle-release.mjs");
+    const dir = temp("p3-portable-");
+    const bundle = join(dir, "skill-bundle");
+    await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: bundle });
+    const v2 = "skills/decision-log/templates/decision-log-template-v2.md";
+    const v1 = "skills/decision-log/templates/decision-log-template.md";
+    const manifest = JSON.parse(readFileSync(join(bundle, "skill-bundle.json"), "utf8"));
+    expect(manifest.files.map((row) => row.path)).toEqual(expect.arrayContaining([v1, v2]));
+    expect(readFileSync(join(bundle, v2))).toEqual(readFileSync(join(ROOT, v2)));
+    expect(readFileSync(join(bundle, v1))).toEqual(readFileSync(join(ROOT, v1)));
+    expect(validateSkillBundleRelease({ releaseRoot: bundle }).skill).toBe("workflowhub");
+    const stripped = join(dir, "stripped");
+    cpSync(bundle, stripped, { recursive: true });
+    rmSync(join(stripped, v2));
+    expect(() => validateSkillBundleRelease({ releaseRoot: stripped })).toThrow();
+    expect(readFileSync(join(ROOT, v2))).toEqual(readFileSync(join(bundle, v2)));
+  });
+});
+
+// P10: the current v2 log's ten-item design record is read by the real chain
+// checker. Missing items are named and stay advisory; the old-shape exit
+// behavior is not widened into a new blocking gate.
+describe("ORACLE-LOG-V2-TERMINAL ten-item design report", () => {
+  const logPath = "specs/execution-quality-build-code-hardening-20261119/decision-log.md";
+  it("reports all ten real design packages with every template item", () => {
+    const result = checkDecisionLogChain({ markdown: readFileSync(logPath, "utf8") });
+    expect(result.design_packages).toHaveLength(10);
+    for (const pkg of result.design_packages) expect(pkg.missing_items, `package ${pkg.id}`).toEqual([]);
+    expect(result.warnings.filter(item => item.code === "package_design_incomplete")).toEqual([]);
+    expect(result.exit_code).toBe(0);
+  });
+  it("names a missing item and keeps the advisory exit", () => {
+    const broken = readFileSync(logPath, "utf8").replace("**风险/回退**：", "**回退**：");
+    const result = checkDecisionLogChain({ markdown: broken });
+    const gap = result.warnings.find(item => item.code === "package_design_incomplete");
+    expect(gap?.message).toContain("风险/回退");
+    expect(gap?.message).toContain("owner=包");
+    expect(result.exit_code).toBe(0);
+  });
+});
+
+// P10 ORACLE-AC-NUMBER-NORMALIZATION: one AC identity has two legal spellings in
+// the materials (AC-P3-001 and AC-P3-1). The reader normalizes to three digits
+// and de-duplicates before printing, then reconciles the whole log against the
+// spec's AC list so a missing or invented AC is named instead of hiding behind
+// a per-package count. Report-only facts; the old-shape advisory exit is kept.
+describe("ORACLE-AC-NUMBER-NORMALIZATION normalized ids and spec reconciliation", () => {
+  const markdown = ["# Controlled", "", "## 4. 每包设计", "",
+    "### 4.3 decision-maker", "", "- **验收**：AC-P3-001、AC-P3-1、AC-P3-2。", "",
+    "### 4.5 修复循环", "", "- **验收**：AC-P5-002、AC-P5-1、AC-P5-2。", "", ""].join("\n");
+  const spec = ["# Controlled specification", "",
+    "- **AC-P3-001** 甲。", "- **AC-P3-002** 乙。", "- **AC-P3-003** 丙。",
+    "- **AC-P5-001** 丁。", "- **AC-P5-002** 戊。", ""].join("\n");
+  it("normalizes AC-P3-1 and AC-P3-001 to one padded identity", () => {
+    const result = checkDecisionLogChain({ markdown, spec_markdown: spec });
+    expect(result.design_packages.map(pkg => pkg.acs)).toEqual([
+      ["AC-P3-001", "AC-P3-002"],
+      ["AC-P5-002", "AC-P5-001"],
+    ]);
+    expect(result.exit_code).toBe(0);
+  });
+  it("reconciles the log against the spec and names uncovered and unresolved ACs", () => {
+    const result = checkDecisionLogChain({ markdown, spec_markdown: spec });
+    expect(result.ac_reconciliation).toMatchObject({ spec_count: 5, uncovered: ["AC-P3-003"], unresolved: [] });
+    expect(result.ac_reconciliation.log_acs).toEqual(["AC-P3-001", "AC-P3-002", "AC-P5-002", "AC-P5-001"]);
+    expect(result.warnings.find(item => item.code === "spec_ac_uncovered")?.message).toContain("AC-P3-003");
+    const invented = checkDecisionLogChain({ markdown: markdown.replace("AC-P3-2", "AC-P3-9"), spec_markdown: spec });
+    expect(invented.ac_reconciliation.unresolved).toEqual(["AC-P3-009"]);
+    expect(invented.warnings.find(item => item.code === "design_ac_unresolved")?.message).toContain("AC-P3-009");
+  });
+  it("prints the reconciliation through the real CLI next to spec.md", () => {
+    const dir = temp("ac-reconcile-");
+    const log = join(dir, "specs/p2-fixture/decision-log.md");
+    mkdirSync(dirname(log), { recursive: true });
+    writeFileSync(join(dirname(log), "spec.md"), spec);
+    writeFileSync(log, markdown);
+    const result = run(log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).toContain("AC reconciliation: spec 5 distinct, log 4 distinct");
+    expect(result.output).toContain("uncovered AC-P3-003");
+  });
+});
+
+// P10 independent cases: the v2 template's numbered-heading shape is read by the
+// real chain checker, the real 28 findings stay open until evidence exists, and
+// the ten-ring report after the P10 evidence registration names ring 2 as
+// incomplete (missing title groups), ring 8 as completed and ring 9 as
+// unavailable. The task materials live outside the repo; WORKFLOWHUB_TASK_ROOT
+// overrides the default task-library location.
+import { existsSync, realpathSync } from "node:fs";
+const P10_TASK = "execution-quality-build-code-hardening-20261119";
+const P10_ITEMS = ["原始需求", "最初方案", "发散与被否", "调研", "最终决定", "完整方案", "验收", "风险/回退", "未决/消费者/证据", "配套与影响"];
+const p10TaskRoot = () => process.env.WORKFLOWHUB_TASK_ROOT ?? "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/" + P10_TASK;
+function p10TemplateShape(items = P10_ITEMS) {
+  return ["# 决策日志（模板 v2 受控样例）", "", "## 4. 每包设计", "", "### 包 1：受控包", "",
+    ...items.map((name, index) => `#### ${index + 1}. ${name}\n- 受控内容：${name}。\n`),
+    "## 5. 跨包共享", "", "- 受控。", ""].join("\n");
+}
+
+describe("P10 ORACLE-LOG-V2-TERMINAL template shape, real dispositions and ten rings", () => {
+  it("reads the v2 template numbered-heading shape and the current log as ten of ten", () => {
+    const shaped = checkDecisionLogChain({ markdown: p10TemplateShape() });
+    expect(shaped.design_packages, "the v2 numbered-heading shape yields one package").toHaveLength(1);
+    expect(shaped.design_packages[0].missing_items).toEqual([]);
+    expect(shaped.warnings.filter((item) => item.code === "package_design_incomplete")).toEqual([]);
+    expect(shaped.exit_code).toBe(0);
+    const current = checkDecisionLogChain({ markdown: readFileSync(join(ROOT, "specs", P10_TASK, "decision-log.md"), "utf8") });
+    expect(current.design_packages).toHaveLength(10);
+    for (const pkg of current.design_packages) expect(pkg.missing_items, `package ${pkg.id}`).toEqual([]);
+    expect(current.exit_code).toBe(0);
+  });
+  it("names a deleted numbered item and keeps the advisory exit", () => {
+    const result = checkDecisionLogChain({ markdown: p10TemplateShape().replace("#### 8. 风险/回退\n", "") });
+    const gap = result.warnings.find((item) => item.code === "package_design_incomplete");
+    expect(gap, "the deleted item is named by package_design_incomplete").toBeDefined();
+    expect(gap.message).toContain("风险/回退");
+    expect(gap.decision_id).toBe("包 1");
+    expect(result.exit_code).toBe(0);
+  });
+  it("keeps the real 28 dispositions open until evidence exists", () => {
+    const review = join(p10TaskRoot(), "quality/reviews/2026-11-19-018-build-plan-document.json");
+    const dispositions = join(p10TaskRoot(), "quality/evidence/build-plan/2026-11-19-015-merged-review-dispositions-c.md");
+    expect(existsSync(review), `real review file at ${review}`).toBe(true);
+    expect(existsSync(dispositions), `real dispositions file at ${dispositions}`).toBe(true);
+    const result = spawnSync(process.execPath, ["skills/spec-plan/scripts/build-decision-baseline.mjs", "--task", P10_TASK, "--review", review, "--dispositions", dispositions], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("findings 28 条；处置 28 条；fixed 0/22 有可读修复证据；缺口 28 条");
+    for (const id of ["/10", "/11", "/12", "/13", "/17", "/25"]) expect(result.stdout).toContain(`finding ${id} 待人工处置`);
+    expect((result.stdout.match(/待人工处置/g) ?? [])).toHaveLength(6);
+    expect(result.stdout).not.toContain("fixed 22/22");
+  });
+  it("reports ring 2 incomplete with the missing title groups, ring 8 completed and ring 9 unavailable", async () => {
+    const api = await import("../../runtime/task/final-chain-runner.mjs");
+    const materialRoot = join(ROOT, "specs", P10_TASK);
+    const state = api.runFinalChainCheck({ taskPath: p10TaskRoot(), materialRoot });
+    const ring = (number) => state.rings.find((row) => row.ring === number);
+    expect(ring(2).state, "registered chain/index scans make ring 2 incomplete, not unavailable").toBe("incomplete");
+    expect(ring(8).state, "the P10 gate command completes ring 8").toBe("completed");
+    expect(ring(9).state, "no canonical review result keeps ring 9 unavailable").toBe("unavailable");
+    const log = readFileSync(join(materialRoot, "decision-log.md"), "utf8");
+    for (const titles of [["任务身份"], ["工作包与决定", "每个包定了哪些决定？"], ["未决项", "还有什么没定，谁来定？"]])
+      expect(titles.some((title) => log.includes(title)), `title group ${titles.join("/")}`).toBe(false);
+    expect((ring(2).basis ?? []).flatMap((item) => item.notes ?? []).join("\n")).toContain("必要段缺失");
+    // Controlled counterexample: with the two registrations removed, the same
+    // reader reports ring 2 unavailable instead of incomplete.
+    // /var is a symlink to /private/var on macOS; the reader rejects alias paths.
+    const copy = realpathSync(temp("p10-rings-"));
+    cpSync(join(p10TaskRoot(), "task.json"), join(copy, "task.json"));
+    const rows = readFileSync(join(p10TaskRoot(), "facts.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    const stage = rows.at(-1);
+    stage.evidence.value = stage.evidence.value.filter((entry) => !String(entry.command).includes("check-decision-log-chain"));
+    writeFileSync(join(copy, "facts.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
+    const without = api.runFinalChainCheck({ taskPath: copy, materialRoot });
+    expect(without.rings.find((row) => row.ring === 2).state).toBe("unavailable");
   });
 });

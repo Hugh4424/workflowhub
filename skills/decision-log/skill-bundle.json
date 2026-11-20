@@ -3,6 +3,7 @@
   "skill": "decision-log",
   "files": [
     "SKILL.md",
-    "templates/decision-log-template.md"
+    "templates/decision-log-template.md",
+    "templates/decision-log-template-v2.md"
   ]
 }

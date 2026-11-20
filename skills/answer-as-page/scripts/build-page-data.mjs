@@ -22,35 +22,54 @@ function sections(text, level) {
  rows.forEach((line,index)=>{if(/^\s*```/.test(line)){fenced=!fenced;if(active)active.lines.push(line);return;}if(fenced){if(active)active.lines.push(line);return;}const h=/^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);if(h&&h[1].length<=level)active=null;if(h&&h[1].length===level){active={heading:h[2],line:index+1,lines:[]};result.push(active);}else if(active)active.lines.push(line);});
  return result.map(({lines,...section})=>({...section,body:lines.join('\n')}));
 }
-// New-shape materials keep legacy ids in a reader-visible mapping section.
-// Only that named section can establish a mapping; a missing row stays a gap.
-const MAPPING_HEADING = /旧编号对照|编号对照/;
-function legacyIdMappings(markdown) {
- const mappings=new Map();let inSection=false,level=0,fence=false;
- const labelSource=/^(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*\d+$/;
- const legacySource=/^(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)$/;
+// One numbering map for every legacy id the current materials still write.
+// Sources: a reader-visible 编号对照 section (label -> legacy id) and, in the
+// same rows, the confirmed "原日志 <id>" crosswalk that resolves a retired id.
+// Both shapes are read once here; a missing row stays a gap at the call site and
+// no reader guesses an id from a numeric prefix.
+const NUMBERING_HEADING = /旧编号对照|编号对照/;
+const NUMBERING_LABEL_SOURCE = /^(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*\d+$/;
+const NUMBERING_ID_SOURCE = /^(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)$/;
+const NUMBERING_LABEL = /(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*(\d+)/;
+const NUMBERING_ID = /(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)/;
+const CURRENT_AC_ID = /^AC-[A-Z]+\d*-\d{3}$/;
+function numberingMappings(markdown, currentAcIds = new Set()) {
+ // A retired short acceptance id is the same number written without zero
+ // padding; it resolves only when the spec declares that exact current id.
+ const canonicalId = value => {
+  const match = /^(AC-[A-Z]+\d*-)(\d+)$/.exec(value ?? '');
+  if (!match) return value ?? null;
+  if (match[2].length >= 3) return value;
+  const padded = `${match[1]}${match[2].padStart(3, '0')}`;
+  return currentAcIds.has(padded) ? padded : null;
+ };
+ const labels=new Map(),confirmed=new Map();let inSection=false,level=0,fence=false;
  for(const line of (markdown??'').split('\n')){
   const marker=/^\s*(`{3,}|~{3,})/.exec(line);
   if(marker){if(!fence)fence=marker[1];else if(marker[1][0]===fence[0]&&marker[1].length>=fence.length)fence=null;continue;}
   if(fence)continue;
   const heading=/^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
-  if(heading){if(inSection&&heading[1].length<=level)inSection=false;if(!inSection&&MAPPING_HEADING.test(heading[2])){inSection=true;level=heading[1].length;}continue;}
+  if(heading){if(inSection&&heading[1].length<=level)inSection=false;if(!inSection&&NUMBERING_HEADING.test(heading[2])){inSection=true;level=heading[1].length;}continue;}
   if(!inSection)continue;
-  let label=null,legacy=null;
-  if(/^\s*\|/.test(line)){
-   const row=line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.replace(/\*\*|`/g,'').trim());
-   label=row.find(value=>labelSource.test(value))??null;legacy=row.find(value=>legacySource.test(value))??null;
+  let row=[];
+  if(/^\s*\|/.test(line))row=line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.replace(/\*\*|`/g,'').trim());
+  let label=row.find(value=>NUMBERING_LABEL_SOURCE.test(value))??null,id=row.find(value=>NUMBERING_ID_SOURCE.test(value))??null;
+  if(!label||!id){
+   const l=NUMBERING_LABEL.exec(line),g=NUMBERING_ID.exec(line);
+   if(l&&g){label=l[0].replace(/\s+/g,' ');id=g[0];}
   }
-  if(!label||!legacy){
-   const l=/(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*(\d+)/.exec(line);
-   const g=/(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)/.exec(line);
-   if(l&&g){label=l[0].replace(/\s+/g,' ');legacy=g[0];}
-  }
-  if(label&&legacy)mappings.set(label.replace(/\s+/g,' '),legacy);
+  if(label&&id)labels.set(label.replace(/\s+/g,' '),canonicalId(id)??id);
+  // The confirmed crosswalk is the same table: 验收 N | current id | 原日志 old id | …
+  const legacy=/原日志\s*(AC-[A-Z0-9-]+)/.exec(row.slice(2).join(' '))?.[1],current=row.find(value=>CURRENT_AC_ID.test(value));
+  if(legacy&&current&&legacy!==current)confirmed.set(legacy,current);
  }
- return mappings;
+ return {labels,confirmed,canonicalId};
 }
-function fields(body){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*-\s*\*\*([^*]+)\*\*[:：]\s*(.*)$/.exec(line);if(m){key=m[1];result[key]=m[2];}else if(/^#/.test(line)){key=undefined;}else if(key){if(key==='动作'||key==='Action')result[key]+='\n'+line;else if(line.trim())result[key]+=' '+line.trim();}}return result;}
+// One bold-field reader for every card body; continuation lines belong to the
+// field above them and keep their own line breaks for display. Task-card
+// actions may keep blank lines between numbered steps, so a blank line only
+// ends a field where the declared shape separates fields by blank lines.
+function boldFields(body,{blankEndsField=false}={}){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*(?:[-*]\s*)?\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/.exec(line);if(m){key=m[1].trim();result[key]=m[2];}else if(/^#/.test(line)||(blankEndsField&&/^\s*$/.test(line))){key=undefined;}else if(key&&(line.trim()||key==='动作'||key==='Action'))result[key]+='\n'+line;}return result;}
 const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.trim().replace(/`/g,''));
 const ids=(text,pattern)=>[...new Set((text??'').match(pattern)??[])];
 const explicitPackageIds=value=>/^\s*WP\d+(?:\s*[,、，/]\s*WP\d+)*\s*$/.test(value??'')?ids(value,/WP\d+/g):[];
@@ -71,6 +90,31 @@ function bullets(text){
  return steps;
 }
 
+// The current package tables declare acceptance ids in the short AC-Pn-x form;
+// they resolve only through the single numbering map above.
+const AC_ID=/AC-[A-Z]+\d*-\d+/g;
+// The package table is structured input: 包 | 名称 | 依赖 | 覆盖需求 | 主 AC | 来源.
+function packageTable(text){
+ const rows=[];let header=null;
+ for(const [index,line] of (text??'').split('\n').entries()){
+  if(!/^\s*\|/.test(line)){header=null;continue;}
+  const row=cells(line);
+  if(row[0]==='包'&&row.includes('名称')){header=row;continue;}
+  if(!header)continue;
+  const number=/^\d+$/.test(row[0])?Number(row[0]):null;if(!number)continue;
+  const name=row[header.indexOf('名称')]??'',ac=row[header.indexOf('主 AC')]??'',landing=row[header.indexOf('来源')]??'';
+  rows.push({number,name,ac_ids:ids(ac,AC_ID),landing,line:index+1});
+ }
+ return rows;
+}
+// One declaration per AC: the evidence tier is a sourced attribute, never a guess.
+function declaredTiers(body){
+ const tierPattern=/evidence_tier\s*[:：=]\s*`?([^\s`；;。，,）)]+)/gu;
+ const tiers=[...new Set([...(body??'').matchAll(tierPattern)].map(match=>match[1]))];
+ if(!tiers.length)return {value:'unknown',reason:'缺证据级别声明',tiers};
+ if(tiers.length>1)return {value:'unknown',reason:'证据级别声明冲突：'+tiers.join('、'),tiers};
+ return {value:tiers[0],reason:'',tiers};
+}
 function externalPointers(text, supplementOnly=false) {
  const pointers=[];let active=!supplementOnly,sectionDepth=0,fenced=false;
  for(const line of (text??'').split('\n')) {
@@ -134,13 +178,22 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  read(join(task.taskPath,'task.json'));
  const decisionPath=join(material,'decision-log.md'),specPath=join(material,'spec.md'),indexPath=join(material,'phases/index.md');
  const decision=read(decisionPath,true),spec=read(specPath,true),index=read(indexPath,true),facts=read(join(task.taskPath,'facts.jsonl'),true);
+ // Every legacy id resolves through the one numbering map: the confirmed
+ // crosswalk first, then its single zero-padding normalization. An id it cannot
+ // resolve stays an explicit gap, never a numeric same-family guess.
+ const specAcIds=new Set((spec??'').match(/AC-[A-Z]+\d*-\d{3}/g)??[]);
+ const decisionNumbering=numberingMappings(decision,specAcIds),specNumbering=numberingMappings(spec,specAcIds);
+ const resolveAcId=id=>{
+  if(/-\d{3}$/.test(id))return id;
+  return specNumbering.confirmed.get(id)??specNumbering.canonicalId(id);
+ };
  // JSONL corruption is a real input error; the cursor is displayed, never changed here.
- const decisionMappings=legacyIdMappings(decision),specMappings=legacyIdMappings(spec);
+ const decisionMappings=decisionNumbering.labels,specMappings=specNumbering.labels;
  const rows=facts===null?[]:readTaskFacts(task.taskPath);
  const factsPath=join(task.taskPath,'facts.jsonl'),factsHash=fingerprints[factsPath]??'missing';
  delete fingerprints[factsPath];
  const cursorRow=rows.find(row=>row.stage==='build-code'&&/^P[1-9][0-9]*$/.test(row.phase_progress?.phase_id??'')&&/^T[0-9]{3,}$/.test(row.phase_progress?.task_id??''));
- const positionRow=cursorRow??rows.findLast(row=>row.handoff?.value||row.close_action?.value),cursor=cursorRow?.phase_progress;
+ const lastStageRow=rows.filter(row=>typeof row.stage==='string').at(-1),bareBuild=lastStageRow?.stage==='build-code'&&!lastStageRow.phase_progress&&!lastStageRow.evidence?.value?lastStageRow:null,positionRow=cursorRow??bareBuild??rows.findLast(row=>row.handoff?.value||row.close_action?.value),cursor=cursorRow?.phase_progress;
  // These are the only fact fields consumed by the task-node display below.
  fingerprints.facts_cursor_sha256=hash(JSON.stringify({phase_id:cursor?.phase_id??null,task_id:cursor?.task_id??null,stage:positionRow?.stage??null}));
  const objects=[],phaseTasks={};
@@ -159,7 +212,9 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const rawRefs=new Set(initialRefs.filter(ref=>ref.startsWith('quality/evidence/raw-requirements/')));
  for(const ref of initialRefs.filter(ref=>/(?:^|\/)[^/]*index[^/]*\.(?:md|json)$/i.test(ref))) {
   const path=task.recordPath(ref),text=read(path,true);delete fingerprints[path];
-  if(text!==null){routingOrigins.push(path);for(const raw of qualityRefs(text).filter(value=>value.startsWith('quality/evidence/raw-requirements/')))rawRefs.add(raw);}
+  if(text!==null){routingOrigins.push(path);for(const raw of qualityRefs(text).filter(value=>value.startsWith('quality/evidence/raw-requirements/')))rawRefs.add(raw);
+   // The current index maps its ORIG prefix to the readable original request.
+   if(/original-request\.md|`ORIG`/.test(text))rawRefs.add('quality/evidence/original-request.md');}
  }
  const rawSources=[],rawGaps=[];
  for(const ref of rawRefs){const path=task.recordPath(ref),text=read(path,true);if(text===null||!text.trim()){rawGaps.push(`缺：${ref}`);continue;}rawSources.push({path,text});}
@@ -168,7 +223,11 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const requirementIndex=routingTexts.find(entry=>/后建索引编号/.test(entry.text));
  const rawReference=locator=>{
   const refs=qualityRefs(locator).filter(ref=>ref.startsWith('quality/evidence/raw-requirements/'));
-  const raw=refs.length===1?rawSources.find(entry=>entry.path===task.recordPath(refs[0])):refs.length===0&&rawSources.length===1?rawSources[0]:undefined;
+  // The requirement index's confirmed ORIG prefix resolves to the readable original.
+  const orig=/`?ORIG:(\d+)/.exec(locator ?? '');
+  const raw=refs.length===1?rawSources.find(entry=>entry.path===task.recordPath(refs[0]))
+   :refs.length===0&&orig?rawSources.find(entry=>entry.path===task.recordPath('quality/evidence/original-request.md'))
+   :refs.length===0&&rawSources.length===1?rawSources[0]:undefined;
   const lineNumber=Number(/(?:原件[:：]|#L|:)(\d+)/.exec(locator)?.[1]);
   const quote=raw&&lineNumber?raw.text.split('\n')[lineNumber-1]:undefined;
   return {raw,lineNumber,quote};
@@ -200,8 +259,12 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   }
  }
  if(!objects.some(o=>o.kind==='req')){
-  const raw=rawSources.length===1?rawSources[0]:undefined,title=raw?.text.split('\n').find(line=>line.trim()&&!/^\s*[#>]/.test(line));
-  const req=node('req',title??decisionRequirement??'原始需求未取得',raw?.path??(decisionRequirement?decisionPath:metadata),raw?'原始逐字需求':'原始需求来源缺口',{missing:!raw,id:'req-1',summary:raw?title:'缺 quality/evidence/raw-requirements 原件'});
+  const raw=rawSources.length===1?rawSources[0]:undefined;
+  const routingText=routingTexts.map(entry=>entry.text).join('\n');
+  const originalLine=Number(/`?ORIG:(\d+)/.exec(routingText)?.[1] ?? NaN);
+  const quoteLine=Number.isInteger(originalLine)?raw?.text.split('\n')[originalLine-1]?.trim().replace(/^\s*>\s?/,''):undefined;
+  const title=raw?quoteLine??raw.text.split('\n').find(line=>line.trim()&&!/^\s*[#>]/.test(line))?.replace(/^\s*>\s?/,''):undefined;
+  const req=node('req',title??decisionRequirement??'原始需求未取得',raw?.path??(decisionRequirement?decisionPath:metadata),raw?(Number.isInteger(originalLine)?`line:${originalLine}；原始逐字需求`:'原始逐字需求'):'原始需求来源缺口',{missing:!raw,id:'req-1',summary:raw?title:'缺 quality/evidence/raw-requirements 原件'});
   Object.assign(req,{quote:title??'',source:raw?'用户原始需求':'原件未取得'});req.src.push(...routingOrigins.map(path=>source(path,'既有需求索引指针')));
  }
  const packages=[],packageBlocks=[];
@@ -219,7 +282,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  }
  for(const {block,sourceId,title,shape} of packageBlocks){
   if(packages.some(o=>o.source_id===sourceId))throw Error('duplicate work package: '+sourceId);
-  const f=fields(block.body);
+  const f=boldFields(block.body);
   const goalText=shape==='new'?f['目标']??f['要交付什么']??'':f['目标'];
   const boundaryText=shape==='new'?f['边界']??f['不做什么']??'':f['边界'];
   const planText=shape==='new'?f['已定做法']??'':f['已定做法'];
@@ -235,7 +298,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    missing.source_id=`决定 ${n}`;continue;
   }
   if(objects.some(o=>o.kind==='dec'&&o.id==='dec-'+mapped))continue;
-  const f=fields(block.body),dec=node('dec',block.heading.replace(/^决定\s*\d+\s*[:：]\s*/,''),decisionPath,`line:${block.line}；${mapped}`,{id:'dec-'+mapped,summary:f['做什么']??''});
+  const f=boldFields(block.body),dec=node('dec',block.heading.replace(/^决定\s*\d+\s*[:：]\s*/,''),decisionPath,`line:${block.line}；${mapped}`,{id:'dec-'+mapped,summary:f['做什么']??''});
   Object.assign(dec,{source_id:mapped,detail:f['做什么']??'',why:f['为什么']??'',items:[f['不做什么']].filter(Boolean),owners:[]});
  }
  // Only explicit selected-decision originals supply named decisions and their affected packages.
@@ -272,6 +335,55 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    Object.assign(dec,{source_id:mapped,detail:item.body.trim(),items:[],owners:[]});
   }
  }
+ // Current decision-log shape: a package directory table plus ## 每包设计 → ### n.m 包.
+ // Both are structured inputs; a disagreement is a named reconciliation error,
+ // not a silently chosen side.
+ let packageReconciliation=null;
+ // The decision-log 5.0 G table names the owning package for each acceptance id.
+ // Ownership is read row by row; conflicts are named, never overwritten.
+ const acIndex=new Map();
+ for(const line of (decision??'').split('\n')){const row=cells(line);if(!/^AC-[A-Z]+\d+-\d+$/.test(row[0]??''))continue;if(!/^\d+$/.test(row[1]??''))continue;const resolved=resolveAcId(row[0]);if(!resolved)continue;const set=acIndex.get(resolved)??new Set();set.add(Number(row[1]));acIndex.set(resolved,set);}
+ const acOwnerIssues=[];
+ for(const [id,set] of acIndex)if(set.size>1)acOwnerIssues.push(`AC ${id} 在 5.0 AC 索引中归属冲突：包 ${[...set].sort((a,b)=>a-b).join('、')}`);
+ if(!packages.length){
+  const design=sections(decision,2).find(block=>/每包设计/.test(block.heading));
+  const declaredTable=[...routingTexts,...(requirementIndex?[{path:requirementIndex.path,text:requirementIndex.text}]:[])].map(entry=>({path:entry.path,rows:packageTable(entry.text)})).find(entry=>entry.rows.length);
+  const declared=declaredTable?.rows??[];
+  const cards=design?[...sections(design.body,3)].map(block=>{
+   const match=/^(\d+)\.(\d+)\s+(\S.+?)\s*$/.exec(block.heading);if(!match)return null;
+   return {number:Number(match[2]),title:match[3].trim(),block,line:design.line+block.line};
+  }).filter(Boolean):[];
+  if(cards.length){
+   const issues=[];
+   if(declared.length&&declared.length!==cards.length)issues.push(`包目录 ${declared.length} 个，正文 ${cards.length} 个`);
+   // Unmapped short ids are a named reconciliation gap, never a silent guess.
+   const resolveAll=(values,label)=>values.flatMap(value=>{const resolved=resolveAcId(value);if(resolved)return [resolved];issues.push(`${label} ${value} 未在已确认编号对照中`);return [];});
+   let projected=0;
+   for(const card of cards){
+    const row=declared.find(entry=>entry.number===card.number);
+    if(declared.length&&!row){issues.push(`包 ${card.number} 未在包目录声明`);continue;}
+    if(row&&row.name!==card.title)issues.push(`包 ${card.number} 标题不一致：${row.name} ≠ ${card.title}`);
+    const fieldsBody=boldFields(card.block.body,{blankEndsField:true});
+    const acIds=[...new Set([...resolveAll(row?.ac_ids??[],`包 ${card.number} 的声明验收`),...resolveAll(ids(fieldsBody['验收']??'',AC_ID),`包 ${card.number} 的验收正文`)])];
+    if(!acIds.length)issues.push(`包 ${card.number} 缺验收编号`);
+    for(const ac of acIds){
+     const owners=acIndex.get(ac);
+     if(!owners){issues.push(`验收 ${ac} 未在 5.0 AC 索引中声明归属包（owner：spec/日志作者）`);continue;}
+     if(owners.size>1)continue;
+     const declaredOwner=[...owners][0];
+     if(declaredOwner!==card.number)issues.push(`AC ${ac} 属于包 ${declaredOwner}，页面绑到包 ${card.number}`);
+    }
+    const wp=node('wp',card.title,decisionPath,`line:${card.line}；包 ${card.number}`,{id:'wp-pkg-'+card.number,summary:fieldsBody['最终决定']??card.title});
+    Object.assign(wp,{package_number:card.number,source_id:'包 '+card.number,goal:fieldsBody['最终决定']??fieldsBody['原始需求']??'',boundary:fieldsBody['范围']??'',planSummary:fieldsBody['完整方案']??'',items:[fieldsBody['配套与影响'],fieldsBody['风险/回退'],acIds.length?'验收：'+acIds.join('、'):null].filter(Boolean),ac_ids:acIds,adopted_refs:qualityRefs(card.block.body)});
+    packages.push(wp);projected++;
+    if(wp.goal){const goal=node('goal',wp.goal,decisionPath,`line:${card.line}；包 ${card.number} 最终决定`,{id:'goal-pkg-'+card.number,summary:card.title});goal.owner=wp.id;}
+    if(wp.planSummary){const dec=node('dec','包 '+card.number+' 完整方案',decisionPath,`line:${card.line}；包 ${card.number} 完整方案`,{id:'dec-pkg-'+card.number,summary:wp.planSummary});Object.assign(dec,{owner:wp.id,detail:wp.planSummary,why:fieldsBody['最终决定']??''});}
+   }
+   // An acceptance id that no package card claims is a displayed gap, not a
+   // misbinding; only a package claiming another package's id is an error.
+   packageReconciliation={declared:declared.length,projected,issues:[...issues,...acOwnerIssues]};
+  }
+ }
  if(!packages.length){const wp=section('wp',decision,decisionPath,/^#{1,3}\s+WP\d+\b/);packages.push(wp);section('goal',decision,decisionPath,/^#{1,3}\s+目标/);section('dec',decision,decisionPath,/U-\d+|ADR-|决定|决策/);}
  if(!objects.some(o=>o.kind==='goal'))node('goal','目标未取得',decision===null?metadata:decisionPath,'缺工作包目标正文',{missing:true});
  if(!objects.some(o=>o.kind==='dec'))node('dec','决定未取得',decision===null?metadata:decisionPath,'缺工作包决定正文',{missing:true});
@@ -280,23 +392,45 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  }
  // FR definitions in this repository are list items, not table references.
  for(const [i,line]of (spec??'').split('\n').entries()){
-  const m=/^\s*-\s*(?:\[.\]\s*)?\*\*(FR-[A-Z0-9-]+)\*\*[:：]\s*(.+)/.exec(line);
+  const m=/^\s*-\s*(?:\[.\]\s*)?\*\*(FR-[A-Z0-9-]+)\*\*\s*(?:[:：]\s*)?(.+)/.exec(line);
   if(m&&!objects.some(o=>o.source_id===m[1])){const o=node('spec',m[2],specPath,`line:${i+1}；${m[1]}`,{id:'spec-'+m[1]});o.source_id=m[1];}
  }
  const appendix=sections(spec,2).filter(block=>/Appendix A|验收标准|验收判据/.test(block.heading));
- for(const block of appendix)for(const [i,line]of block.body.split('\n').entries()){
-  const m=/^\s*-\s*\[([ xX])\]\s*\*\*(AC-[A-Z0-9-]+)\*\*[:：]\s*(.+)/.exec(line);if(!m||objects.some(o=>o.source_id===m[2]))continue;
-  const acc=node('acc',m[3],specPath,`line:${block.line+i+1}；${m[2]}`,{id:'acc-'+m[2],summary:'判定见原验收记录'});acc.source_id=m[2];acc.status.text=m[1].toLowerCase()==='x'?'材料勾选；待核证据':'未取得判定';
+ for(const block of appendix){
+  const lines=block.body.split('\n');
+  for(let i=0;i<lines.length;i++){
+   const m=/^\s*-\s*\[([ xX])\]\s*\*\*(AC-[A-Z0-9-]+)\*\*\s*(?:[:：]\s*)?(.+)/.exec(lines[i]);if(!m||objects.some(o=>o.source_id===m[2]))continue;
+   // The declared evidence tier belongs to the whole AC entry, not just its first line.
+   let end=i+1;while(end<lines.length&&!/^\s*-\s*\[[ xX]\]\s*\*\*AC-/.test(lines[end])&&!/^#{1,6}\s+/.test(lines[end]))end++;
+   const body=lines.slice(i+1,end).join('\n'),tier=declaredTiers(body),tierSource=body.split('\n').find(line=>/evidence_tier\s*=/u.test(line));
+   const acc=node('acc',m[3],specPath,`line:${block.line+i+1}；${m[2]}`,{id:'acc-'+m[2],summary:'判定见原验收记录'});acc.source_id=m[2];
+   Object.assign(acc,{level:{value:tier.value,text:'级别 '+tier.value,reason:tier.reason,sources:[source(specPath,`line:${block.line+i+1}；${m[2]}${tierSource?'；'+tierSource.trim():''}`)]},declared_tier:tier.value});
+   acc.status.text=`级别 ${tier.value} · ${m[1].toLowerCase()==='x'?'材料勾选；待核证据':'未取得判定'}`;
+   i=end-1;
+  }
  }
  if(!objects.some(o=>o.kind==='spec'))node('spec','规格未取得',spec===null?metadata:specPath,'缺功能需求权威正文',{missing:true});
  if(!objects.some(o=>o.kind==='acc'))node('acc','验收条目未取得',spec===null?metadata:specPath,'缺Appendix A验收正文',{missing:true});
+ // F2: every acceptance in Appendix A must reach a package. The AC index supplies
+ // the owner; an unowned acceptance is a named reconciliation error, not a silent 4/8.
+ if(packageReconciliation){
+  for(const acc of objects.filter(o=>o.kind==='acc')){
+   if(packages.some(wp=>wp.ac_ids?.includes(acc.source_id)))continue;
+   const owners=acIndex.get(acc.source_id);
+   if(!owners||owners.size!==1){packageReconciliation.issues.push(`验收 ${acc.source_id} ${owners?'在 5.0 AC 索引中归属冲突':'未在 5.0 AC 索引中声明归属包'}（owner：spec/日志作者）`);continue;}
+   const owner=[...owners][0],wp=packages.find(candidate=>candidate.package_number===owner);
+   if(!wp){packageReconciliation.issues.push(`验收 ${acc.source_id} 归属包 ${owner} 不在包目录中（owner：spec/日志作者）`);continue;}
+   wp.ac_ids=[...(wp.ac_ids??[]),acc.source_id];
+   wp.src.push(source(decisionPath,`${acc.source_id} 归属包 ${owner}（AC 索引 5.0）`));
+  }
+ }
  const riskSection=sections(spec,2).find(block=>/风险、未决|风险与未决|有什么风险和未决/.test(block.heading));
  const riskLines=(riskSection?.body??'').split('\n');
  for(let i=0;i<riskLines.length;i++){
   const m=/^-\s*\*\*((?:RISK|OPEN)-\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);
   if(m){
    let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN)-/.test(riskLines[end]))end++;
-   const f=fields(riskLines.slice(i+1,end).join('\n')),o=node('risk',m[2],specPath,`line:${riskSection.line+i+1}；${m[1]}`,{id:'risk-'+m[1],summary:f['触发条件']??f['影响']??'触发条件未取得'});Object.assign(o,{source_id:m[1],ac_ids:ids(f['受影响 ID'],/AC-[A-Z0-9-]+/g),details:f});continue;
+   const f=boldFields(riskLines.slice(i+1,end).join('\n')),o=node('risk',m[2],specPath,`line:${riskSection.line+i+1}；${m[1]}`,{id:'risk-'+m[1],summary:f['触发条件']??f['影响']??'触发条件未取得'});Object.assign(o,{source_id:m[1],ac_ids:ids(f['受影响 ID'],/AC-[A-Z0-9-]+/g),details:f});continue;
   }
   const n=/^-\s*\*\*(风险|未决)\s*(\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);if(!n)continue;
   let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN|风险|未决)(?=\s|\d|[:：])/.test(riskLines[end]))end++;
@@ -305,7 +439,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    const missing=node('risk',`缺：${n[1]} ${n[2]} 的 RISK/OPEN 编号映射`,specPath,`line:${riskSection.line+i+1}；${n[1]} ${n[2]}`,{missing:true,id:'risk-missing-spec-'+hash(`${n[1]} ${n[2]}`).slice(0,16),summary:`${n[1]} ${n[2]} 未取得 RISK/OPEN 旧编号映射`});missing.source_id=`${n[1]} ${n[2]}`;i=end-1;continue;
   }
   const o=node('risk',n[3],specPath,`line:${riskSection.line+i+1}；${mapped}`,{id:'risk-'+mapped,summary:n[3]});
-  Object.assign(o,{source_id:mapped,ac_ids:[],details:fields(riskLines.slice(i+1,end).join('\n'))});i=end-1;
+  Object.assign(o,{source_id:mapped,ac_ids:[],details:boldFields(riskLines.slice(i+1,end).join('\n'))});i=end-1;
  }
  const issues=sections(decision,2).find(block=>/^(?:未决项|还有什么没定)/.test(block.heading));
  for(const line of (issues?.body??'').split('\n')){
@@ -346,7 +480,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   const evidenceRef=/^\s*-\s*\*\*evidence_path\*\*[:：]\s*`([^`]+)`/m.exec(text)?.[1];
   if(evidenceRef?.startsWith('quality/')&&evidenceRef.endsWith('.json')){const evidencePath=task.recordPath(evidenceRef),raw=read(evidencePath,true);delete fingerprints[evidencePath];if(raw!==null){const record=JSON.parse(raw);if((record.phase_id??record.phase)===row.id){phaseRecords.set(row.id,{record,path:evidencePath});for(const claim of Array.isArray(record.acceptance)?record.acceptance:Array.isArray(record.ac_results)?record.ac_results:[]){const ac=claim.ac??claim.id,tier=claim.tier??claim.result;if(ac&&typeof tier==='string'){const list=acceptanceClaims.get(ac)??[];list.push({tier,path:evidencePath});acceptanceClaims.set(ac,list);}}}}}
   const header=text.split('\n').find(line=>/^# /.test(line))??row.id,p=node('phase',header,path,'Phase '+row.id,{id:'phase-'+row.id,summary:'契约原件'});p.source_id=row.id;p.label=row.id;phaseTasks[p.id]=[];
-  const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading)),phaseMappings=legacyIdMappings(text),taskBlocks=[];
+  const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading)),phaseMappings=numberingMappings(text).labels,taskBlocks=[];
   for(const block of sections(l1?.body??text,3)){
    const old=/^T(\d{3,})\s+[—–-]\s+\S/.exec(block.heading);
    if(old){taskBlocks.push({block,taskId:`T${old[1]}`,title:block.heading.replace(/^T\d{3,}\s+[—–-]\s+/,''),shape:'old'});continue;}
@@ -356,7 +490,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const entry of taskBlocks){
    const {block,title,shape}=entry;let taskId=entry.taskId;
    if(shape==='new'){
-    const idField=fields(block.body)['任务编号'];
+    const idField=boldFields(block.body)['任务编号'];
     taskId=/^T\d{3,}$/.test(idField??'')?idField:phaseMappings.get(`任务 ${entry.n}`);
    }
    if(!taskId||!/^T\d{3,}$/.test(taskId)){
@@ -365,7 +499,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    }
    if(row.task_ids&&!row.task_ids.includes(taskId))continue;
    if(objects.some(o=>o.kind==='task'&&o.source_id===taskId))throw Error('duplicate strict Task identity: '+taskId);
-   const f=fields(block.body),action=f['动作']??f.Action??'',t=node('task',title,path,'### '+block.heading,{id:'task-'+taskId,phase:p.id,summary:action||'任务正文未取得'});
+   const f=boldFields(block.body),action=f['动作']??f.Action??'',t=node('task',title,path,'### '+block.heading,{id:'task-'+taskId,phase:p.id,summary:action||'任务正文未取得'});
    Object.assign(t,{source_id:taskId,label:taskId,goal:f['目标']??f.Goal??'',items:bullets(action),plan:ids(f['文件 / 符号']??f['Files / symbols'],/[\p{L}\p{N}_.-]+(?:\/[\p{L}\p{N}_.-]+)*\.[A-Za-z0-9]+/gu),fr_ids:ids(f['来源 / FR / AC']??f['Source / FR / AC'],/FR-[A-Z0-9-]+/g),ac_ids:ids(f['来源 / FR / AC']??f['Source / FR / AC'],/AC-[A-Z0-9-]+/g),gate_commands:[...block.body.matchAll(/\*\*(?:RED\/GREEN 门禁命令|RED\/GREEN gate_cmd)\*\*[:：]\s*`([^`]+)`/g)].map(m=>m[1])});
    t.status.text=cursor?.task_id===taskId&&cursor?.phase_id===row.id?'当前游标':'结果未取得';phaseTasks[p.id].push(t.id);if(facts!==null)t.src.push(source(join(task.taskPath,'facts.jsonl'),'当前游标；不证明完成'));
   }
@@ -376,11 +510,11 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const env={...process.env,GIT_OPTIONAL_LOCKS:'0'};for(const key of Object.keys(env))if(key.startsWith('GIT_')&&key!=='GIT_OPTIONAL_LOCKS')delete env[key];
  const diff=execFileSync('git',['diff','--name-only','-z',`${manifest.baseline_commit}..HEAD`],{cwd:root,env,maxBuffer:16*1024*1024});fingerprints['git diff baseline..HEAD']=hash(diff);
  const changed=diff.toString('utf8').split('\0').filter(Boolean);for(const path of changed)node('file',path,existsSync(join(root,path))?join(root,path):metadata,`git diff --name-only -z ${manifest.baseline_commit}..HEAD；路径 ${path}${existsSync(join(root,path))?'':' 已删除，来源为真实 diff'}`);if(!changed.length)node('file','缺真实改动',metadata,'git diff baseline..HEAD 为空',{missing:true});
- const excludedCommandRefs=[];
+ const excludedCommandRefs=[],testRuns=[];
  for(const [kind,dir] of [['test','quality/tests'],['review','quality/reviews']]) {
   const directory=join(task.taskPath,dir),candidates=files(directory).filter(path=>path.endsWith('.json'));let count=0;
   for(const path of candidates){
-   const record=JSON.parse(read(path));
+   const raw=read(path),record=JSON.parse(raw);
    if(kind==='test'&&record.exit_code===0&&!record.truncated&&typeof record.cwd==='string'&&resolve(record.cwd)===root&&Array.isArray(record.argv)&&/^(?:.*\/)?git$/.test(record.argv[0])){
     let commit=record.argv.includes('diff-tree')?record.argv.find(arg=>/^[a-f0-9]{40}$/i.test(arg)):undefined;
     if(record.argv[1]==='commit'&&record.output_ref){const ref=isAbsolute(record.output_ref)?relative(task.taskPath,record.output_ref).split(sep).join('/'):record.output_ref,output=task.readRecordBytes(ref).toString('utf8'),abbreviated=/^\[[^\n]* ([a-f0-9]{7,40})\]/m.exec(output)?.[1];if(abbreviated){try{commit=execFileSync('git',['rev-parse','--verify',abbreviated+'^{commit}'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}}}
@@ -405,16 +539,52 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    }
    if(kind==='test'&&!isTestReceipt(record,declaredGates)){delete fingerprints[path];excludedCommandRefs.push(path);continue;}count++;
    if(kind==='test'){
-    const command=record.argv.join(' '),o=node('test',command,path,'原始执行回执',{id:'test-'+hash(path).slice(0,16),summary:`退出 ${record.exit_code}；${record.timed_out?'超时；':''}${record.cancelled?'已取消；':''}原始执行记录；未分类原件另存`});
-    o.src.push(source(directory,'普通/未分类命令原件目录；不计作上述测试结果'));
-    Object.assign(o,{exit:record.exit_code,explain:`退出 ${record.exit_code}`,command,record_ref:path});o.status={text:'退出 '+record.exit_code,tone:record.exit_code===0?'ok':'fail'};
-    if(record.output_ref){const ref=isAbsolute(record.output_ref)?relative(task.taskPath,record.output_ref):record.output_ref;if(ref!==''&&ref!=='..'&&!ref.startsWith(`..${sep}`)&&!isAbsolute(ref)){const outputPath=task.recordPath(ref.split(sep).join('/'));try{task.readRecordBytes(ref.split(sep).join('/'));o.src.push(source(outputPath,'原始命令输出'));}catch(error){if(error.code!=='ENOENT')throw error;o.summary+='；原输出未取得';}}}
-   }else{
+    // A declared output is readable only inside this task; an unreadable source
+    // never fills the pass count.
+    const declared=typeof record.output_ref==='string'&&record.output_ref!=='';
+    const outputRef=declared?(isAbsolute(record.output_ref)?relative(task.taskPath,record.output_ref):record.output_ref):null;
+    const localRef=outputRef!==null&&outputRef!==''&&outputRef!=='..'&&!outputRef.startsWith(`..${sep}`)&&!isAbsolute(outputRef)?outputRef.split(sep).join('/'):null;
+    const outputPath=localRef===null?null:task.recordPath(localRef);
+    let outputBytes=null;
+    if(localRef!==null){try{outputBytes=task.readRecordBytes(localRef);}catch(error){if(error.code!=='ENOENT')throw error;}}
+    testRuns.push({path,raw,record,outputPath,outputBytes,readable:!declared||outputBytes!==null});
+    continue;
+   }
+   {
     const providerRows=Array.isArray(record.provider_results)?record.provider_results:[],summary=providerRows.length?providerRows.map(p=>`${p.provider??p.id??'provider'}：${p.status??'状态未取得'}`).join('；'):`原始记录：${record.status??'状态未取得'}`;
     const o=node('review',`${record.phase_id??''} ${record.review_kind??'审查'} · ${basename(path)}`.trim(),path,'原始审查记录',{id:'review-'+hash(path).slice(0,16),summary});o.record_ref=path;o.status.text=record.status??'状态未取得';if(record.phase_id)o.context_phase='phase-'+record.phase_id;
    }
   }
   if(!count)node(kind,kind==='test'?'测试执行未取得':'审查记录未取得',metadata,`缺 ${dir} 可识别原件`,{missing:true});
+ }
+ // Same executed command = one traceable node: task identity + actual cwd + the
+ // full argument sequence. Two real runs stay two results; an identical original
+ // byte copy counts once. Failures, timeouts and cancels never count as pass.
+ if(testRuns.length){
+  const groups=new Map();
+  const normalize=argv=>argv.join(' ');
+  for(const run of testRuns){
+   const command=normalize(run.record.argv),key=JSON.stringify([manifest.task_id,typeof run.record.cwd==='string'?resolve(run.record.cwd):'cwd未取得',command]);
+   const group=groups.get(key)??{key,command,seen:new Set(),runs:[]};
+   const original=hash(run.raw+'\0'+(run.outputBytes?run.outputBytes.toString('utf8'):''));
+   if(!group.seen.has(original)){group.seen.add(original);group.runs.push(run);}
+   groups.set(key,group);
+  }
+  for(const group of groups.values()){
+   const runs=group.runs;
+   const successful=runs.filter(run=>run.record.exit_code===0&&!run.record.timed_out&&!run.record.cancelled);
+   const failed=runs.filter(run=>run.record.exit_code!==0||run.record.timed_out||run.record.cancelled);
+   const unreadable=successful.filter(run=>!run.readable),passed=successful.length-unreadable.length;
+   const exits=[...new Set(runs.map(run=>run.record.exit_code))],first=runs[0];
+   const explain=`同命令 ${runs.length} 次真实执行：成功 ${passed} 次；失败 ${failed.length} 次${unreadable.length?`；${unreadable.length} 次成功但原输出不可回读，不计通过`:''}。按任务、实际工作目录与完整参数序列归并；重复引用同一原件只计一次；失败、超时与取消不计通过；普通未分类命令及不可回读的来源不计入通过数；逐次回执与输出见来源。`;
+   const o=node('test',group.command,first.path,'原始执行回执',{id:'test-'+hash(group.key).slice(0,16),summary:explain});
+   o.src=[source(first.path,`原始执行回执；${group.command}`)];
+   const seenSources=new Set([first.path]);
+   for(const run of runs.slice(1))if(!seenSources.has(run.path)){seenSources.add(run.path);o.src.push(source(run.path,'同命令另一次真实执行回执'));}
+   for(const run of runs)if(run.outputPath&&run.outputBytes&&!seenSources.has(run.outputPath)){seenSources.add(run.outputPath);o.src.push(source(run.outputPath,'原始命令输出'));}
+   Object.assign(o,{pass:passed,fail:failed.length,exit:exits.length===1?exits[0]:undefined,explain,command:group.command,record_ref:first.path});
+   o.status={text:`同命令 ${runs.length} 次：通过 ${passed} · 失败 ${failed.length}${unreadable.length?` · 不可回读 ${unreadable.length}`:''}${exits.length===1?` · 退出 ${exits[0]}`:' · 退出不一致'}`,tone:failed.length?'fail':unreadable.length?'unk':passed?'ok':'unk'};
+  }
  }
  const ring10=report.rings.find(r=>r.ring===10);const pr=node('pr',ring10?`提交 PR：${ring10.state??'未取得'}`:'缺：报告第 10 环',resolve(reportPath),'rings[ring=10]',{missing:!ring10,summary:ring10?'报告原件第10环':'缺第 10 环'});if(ring10)pr.status.text=ring10.state==='skipped'?'尚未产生；到 stage-close 后补':`报告：${ring10.state??'未取得'}`;
  const edges=[],sideEdges=[];
@@ -462,6 +632,13 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const wpMappings=sections(spec,3).filter(block=>/^\s*\|\s*WP\d+\b.*AC-[A-Z]+-\d{3}/m.test(block.body));
  for(const req of objects.filter(o=>o.kind==='req'))for(const wpId of req.declared_wp_ids??[]){const wp=packages.find(o=>o.source_id===wpId);if(wp)edge(edges,req.id,wp.id);else{req.status.text=req.status.text==='缺'?'缺':'归属未取得';req.unresolved_refs=[...(req.unresolved_refs??[]),wpId];}}
  for(const line of wpMappings.flatMap(block=>block.body.split('\n'))){if(!/^\s*\|\s*WP\d+\b/.test(line))continue;const row=cells(line),wp=packages.find(o=>o.source_id===/^WP\d+/.exec(row[0])?.[0]);if(!wp)continue;const acs=criterionIds(row[1]);wp.ac_ids=acs;wp.src.push(source(specPath,`${wp.source_id} → ${acs.join('、')} 显式映射`));for(const t of objects.filter(o=>o.kind==='task'&&o.ac_ids?.some(id=>acs.includes(id))))edge(edges,wp.id,t.id);for(const a of objects.filter(o=>o.kind==='acc'&&acs.includes(o.source_id))){a.owners=[...(a.owners??[]),wp.id];}}
+ // A package reaches its acceptance and the tasks that declare that acceptance.
+ for(const wp of packages.filter(candidate=>candidate.ac_ids?.length)){
+  for(const ac of wp.ac_ids){
+   for(const acc of objects.filter(o=>o.kind==='acc'&&o.source_id===ac)){acc.owners=[...new Set([...(acc.owners??[]),wp.id])];edge(edges,wp.id,acc.id);}
+   for(const t of objects.filter(o=>o.kind==='task'&&o.ac_ids?.includes(ac)))edge(edges,wp.id,t.id);
+  }
+ }
  for(const o of objects.filter(o=>['goal','dec'].includes(o.kind)))for(const owner of o.owners??(o.owner?[o.owner]:[]))edge(sideEdges,o.id,owner);
  for(const line of (decision??'').split('\n')){if(!/^\s*\|\s*v1主文 R-\d{3}[a-z]*\b/.test(line))continue;const row=cells(line),alias=/R-\d{3}[a-z]*\b/.exec(row[0])?.[0],reqs=objects.filter(o=>o.kind==='req'&&o.aliases?.includes('v1主文 '+alias));for(const req of reqs){req.src.push(source(decisionPath,`v1主文 ${alias} → ${row.at(-1)} 来源对照`));const landing=row.at(-1),collection=declaresPackageSet(landing,packages.length)?packages.map(wp=>wp.source_id):[];for(const wpId of [...ids(landing,/WP\d+/g),...collection])edge(edges,req.id,packages.find(o=>o.source_id===wpId)?.id);}}
  for(const t of objects.filter(o=>o.kind==='task')){
@@ -533,7 +710,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const o of objects.filter(o=>['req','wp','task'].includes(o.kind)))for(const claim of o.acceptance?.results??[])for(const ref of claim.refs??[])o.src.push(source(join(task.taskPath,ref.ref),'public status 已核AC原件 '+claim.id));
   fingerprints.terminal_status_sha256=hash(JSON.stringify(stageStatus));
  }
- const pageData={task:businessTitle,generatedAt:new Date().toISOString(),taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel:stageStatus?stageStatus.stage+' · '+stageNames[stageStatus.stage]:stageLabel,...(stageStatus?{stageStatus}:{}),sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
+ const pageData={task:businessTitle,generatedAt:new Date().toISOString(),taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel:stageStatus?stageStatus.stage+' · '+stageNames[stageStatus.stage]:stageLabel,...(stageStatus?{stageStatus}:{}),...(packageReconciliation?{packageReconciliation}:{}),sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
  return {pageData,report,decisionLogPath:decisionPath,decisionMissing:decision===null,workspaceRoot:root,taskIdentity:task.identity,sourceFingerprint:fingerprints,factsProvenance:{ref:factsPath,sha256:factsHash},excludedCommandRefs,gaps:objects.filter(o=>o.status.text==='缺').map(o=>({kind:o.kind,reason:o.summary||o.title})),factsRows:rows.length,contractFacts:contract.facts,contractErrors:contract.errors};
 }
 export async function main(argv=process.argv.slice(2)){if(argv.length!==4||argv[0]!=='--task-path'||argv[2]!=='--report')throw Error('usage: --task-path <absolute root> --report <report>');return buildPageData({taskPath:argv[1],reportPath:argv[3]});}

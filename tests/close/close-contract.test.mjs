@@ -126,7 +126,9 @@ it("retains the remote task branch when unknown ignored bytes block worktree cle
  mkdirSync(dirname(path),{recursive:true});writeFileSync(path,"unique private note\n");
  const remoteHead=git(s.bare,["rev-parse",remoteRef]),result=await execute(s,plan,confirmation);
  expect(result).toMatchObject({status:"failed",operation:"cleanup",error:{code:"CLEANUP_UNSAFE"}});
- expect(git(s.bare,["rev-parse",remoteRef])).toBe(remoteHead);
+ const delivered=result.records.find(row=>row.operation==="commit").source_head;
+ expect(git(s.bare,["rev-parse",remoteRef])).toBe(delivered);
+ expect(delivered).not.toBe(remoteHead);
  expect(readFileSync(path,"utf8")).toBe("unique private note\n");
  expect(existsSync(s.worktree)).toBe(true);
  expect(git(s.repo,["worktree","list","--porcelain"])).toContain(`worktree ${s.worktree}`);
@@ -251,8 +253,12 @@ it.each(["assume-unchanged", "skip-worktree"])("preserves a tracked edit injecte
  expect(readFileSync(path,"utf8")).toBe(bytes);
  expect(existsSync(s.worktree)).toBe(true);
  expect(git(s.repo,["worktree","list","--porcelain"])).toContain("worktree "+s.worktree);
- expect(git(s.repo,["rev-parse","refs/heads/"+s.branch])).toBe(plan.plan.source.head);
- expect(git(s.worktree,["rev-parse","HEAD"])).toBe(plan.plan.source.head);
+ const delivered=result.records.find(row=>row.operation==="commit").source_head;
+ expect(git(s.repo,["rev-parse","refs/heads/"+s.branch])).toBe(delivered);
+ expect(git(s.worktree,["rev-parse","HEAD"])).toBe(delivered);
+ expect(delivered).not.toBe(plan.plan.source.head);
+ expect(git(s.repo,["show",`${delivered}:README.md`])).toBe("base");
+ expect(git(s.repo,["ls-tree","-r","--name-only",delivered,"--",`specs/archive/${s.id}`])).toContain(`specs/archive/${s.id}/spec.md`);
  expect(git(s.repo,["rev-parse","main"])).toBe(readFileSync(targetHeadBefore,"utf8").trim());
 });
 
@@ -438,20 +444,22 @@ describe("close actual transactions without retired workflow permits",()=>{
  it("rejects unrecorded Git authorization without changing source or target HEAD",async()=>{const s=fixture(),p=await prepare(s),c=await confirm(s,p),a=git(s.worktree,["rev-parse","HEAD"]),b=git(s.repo,["rev-parse","HEAD"]);const out=await execute(s,p,c);expect(out.status).toBe("failed");expect(out.error.code).toBe("IRREVERSIBLE_AUTHORIZATION_REQUIRED");expect(git(s.worktree,["rev-parse","HEAD"])).toBe(a);expect(git(s.repo,["rev-parse","HEAD"])).toBe(b);});
  it("preserves exactly five actions and reads their real physical results after owned cleanup",async()=>{const s=fixture(),p=await prepare(s);expect(p.plan.steps).toEqual(["commit","merge","archive","push","cleanup"]);const c=await authorized(s,p),out=await execute(s,p,c);expect(out.status).toBe("completed");expect(out.records.map(r=>r.operation)).toEqual(p.plan.steps);expect(existsSync(s.worktree)).toBe(false);expect(git(s.repo,["cat-file","-e",`main:specs/archive/${s.id}/spec.md`])).toBe("");const readback=await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref});for(const flag of ["delivery_committed","merge","archive","push","worktree_cleanup","branch_cleanup","remote_branch_cleanup"])expect(readback.facts[flag],flag).toBe(true);});
  it("preserves a remote task branch that advances between validation and cleanup deletion",async()=>{
-  const savedPath=process.env.PATH,s=fixture(),bin=join(s.base,"race-bin"),race=join(s.base,"remote-race.log"),remoteRef=`refs/heads/${s.branch}`;
-  const originalHead=git(s.worktree,["rev-parse","HEAD"]),tree=git(s.worktree,["rev-parse",`${originalHead}^{tree}`]);
-  const advancedHead=execFileSync("git",["commit-tree",tree,"-p",originalHead,"-m","concurrent remote task update"],{cwd:s.repo,encoding:"utf8"}).trim();
+  const savedPath=process.env.PATH,s=fixture(),bin=join(s.base,"race-bin"),race=join(s.base,"remote-race.log"),advancedFile=join(s.base,"advanced-head"),remoteRef=`refs/heads/${s.branch}`;
   const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim();
   mkdirSync(bin);
   writeFileSync(join(bin,"git"),["#!/bin/sh",
    "real_git="+JSON.stringify(realGit),"repo="+JSON.stringify(s.repo),"bare="+JSON.stringify(s.bare),
    "branch_ref="+JSON.stringify(remoteRef),"branch_name="+JSON.stringify(s.branch),
-   "advanced_head="+JSON.stringify(advancedHead),"race="+JSON.stringify(race),
+   "advanced_file="+JSON.stringify(advancedFile),"race="+JSON.stringify(race),
    "if [ \"$1\" = push ]; then",
    "  case \"$*\" in",
-   "    *\"--delete $branch_name\"*|*\":$branch_ref\"*)",
+   "    *\"--delete $branch_name\"*)",
+   "      current=\"$(\"$real_git\" -C \"$bare\" rev-parse \"$branch_ref\")\" || exit $?",
+   "      tree=\"$(\"$real_git\" -C \"$bare\" rev-parse \"$current^{tree}\")\" || exit $?",
+   "      advanced=\"$(\"$real_git\" -C \"$repo\" commit-tree \"$tree\" -p \"$current\" -m 'concurrent remote task update')\" || exit $?",
    "      printf 'advanced remote before delete\\n' >> \"$race\"",
-   "      \"$real_git\" -C \"$repo\" push \"$bare\" \"$advanced_head:$branch_ref\" || exit $?",
+   "      printf '%s\\n' \"$advanced\" > \"$advanced_file\"",
+   "      \"$real_git\" -C \"$repo\" push \"$bare\" \"$advanced:$branch_ref\" || exit $?",
    "      ;;",
    "  esac",
    "fi",
@@ -462,7 +470,11 @@ describe("close actual transactions without retired workflow permits",()=>{
    const p=await prepare(s),c=await authorized(s,p),result=await execute(s,p,c);
    expect(readFileSync(race,"utf8")).toBe("advanced remote before delete\n");
    expect(result).toMatchObject({status:"failed",operation:"cleanup"});
-   expect(git(s.bare,["rev-parse",remoteRef])).toBe(advancedHead);
+   const delivered=result.records.find(row=>row.operation==="commit").source_head;
+   const advanced=readFileSync(advancedFile,"utf8").trim();
+   expect(advanced).not.toBe(delivered);
+   expect(git(s.bare,["rev-parse",remoteRef])).toBe(advanced);
+   expect(spawnSync(realGit,["merge-base","--is-ancestor",delivered,advanced],{cwd:s.bare}).status).toBe(0);
   } finally { if(savedPath===undefined)delete process.env.PATH;else process.env.PATH=savedPath; }
  });
  it("preserves both task branches when a locked owned worktree blocks cleanup",async()=>{
@@ -496,7 +508,9 @@ describe("close actual transactions without retired workflow permits",()=>{
    const failedCleanup=JSON.parse(readFileSync(first.failure_ref,"utf8"));
    rmSync(hook);
    const retry=await execute(s,p,c);
-   expect({failed_cleanup_source_head:failedCleanup.source_head??null,expected_source_head:sourceHead,retry_status:retry.status,retry_error:retry.error?.code??null,retry_message:retry.error?.message??null}).toEqual({failed_cleanup_source_head:sourceHead,expected_source_head:sourceHead,retry_status:"completed",retry_error:null,retry_message:null});
+   const delivered=first.records.find(row=>row.operation==="commit").source_head;
+   expect(delivered).not.toBe(sourceHead);
+   expect({failed_cleanup_source_head:failedCleanup.source_head??null,expected_source_head:delivered,retry_status:retry.status,retry_error:retry.error?.code??null,retry_message:retry.error?.message??null}).toEqual({failed_cleanup_source_head:delivered,expected_source_head:delivered,retry_status:"completed",retry_error:null,retry_message:null});
    expect(existsSync(s.worktree)).toBe(false);
    expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
    expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
@@ -517,7 +531,9 @@ describe("close actual transactions without retired workflow permits",()=>{
    expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
    expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe(`refs/heads/${s.branch}`);
    const failedCleanup=JSON.parse(readFileSync(first.failure_ref,"utf8"));
-   expect(failedCleanup.source_head).toBe(sourceHead);
+   const delivered=first.records.find(row=>row.operation==="commit").source_head;
+   expect(delivered).not.toBe(sourceHead);
+   expect(failedCleanup.source_head).toBe(delivered);
    rmSync(hook);
    const retry=await execute(s,p,c);
    expect(retry.status).toBe("completed");

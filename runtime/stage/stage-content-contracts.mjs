@@ -1,6 +1,7 @@
 // Current post Phase and ordinary decision-log text contracts.
 // Pure facts only: no retired appendices, hash-bound identities or stage-completion machines.
 import { statSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
@@ -668,7 +669,207 @@ export function phaseTaskProseGaps(body) {
   return phaseTaskCards(body).filter(card => card.taskId && !card.prose).map(card => card.taskId);
 }
 
-export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id, prose_contract, material_path, task_record_root } = {}) {
+// Pre-dispatch readiness: one five-column table per Phase (command, expected,
+// evidence, machine-or-human judgement, owner). Parsing is pure; executing the
+// machine rows belongs to the callers that hold a task capture identity.
+const READINESS_COLUMNS = Object.freeze(["命令", "期望", "证据", "机器或人判", "负责人"]);
+
+function readinessCells(line) {
+  return line.split("|").slice(1, -1).map((cell) => cell.trim());
+}
+
+function stripCodeTicks(value) {
+  return String(value ?? "").replace(/`/g, "").trim();
+}
+
+export function phaseReadinessRows(body) {
+  const lines = String(body ?? "").split(/\r?\n/);
+  // Only a heading outside fenced code declares the table. A code sample or a
+  // prose mention of the name must not be read as a real readiness table.
+  let start = -1, fence = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const marker = lines[index].match(/^\s*(`{3,}|~{3,})/);
+    if (marker) { fence = fence === null ? marker[1] : (fence === marker[1] ? null : fence); continue; }
+    if (fence !== null) continue;
+    if (/^#{1,6}\s+[^\n]*开工就绪表\s*[（(]?[^\n]*$/.test(lines[index])) { start = index; break; }
+  }
+  if (start < 0) return Object.freeze({ declared: false, rows: Object.freeze([]), error: null });
+  let header = -1;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*#{1,6}\s/.test(lines[index])) break;
+    if (/^\s*\|/.test(lines[index])) { header = index; break; }
+  }
+  if (header < 0) return Object.freeze({ declared: true, rows: Object.freeze([]), error: `table header is missing (${READINESS_COLUMNS.join("、")})` });
+  const columns = readinessCells(lines[header]).map((cell) => cell.replace(/\*\*/g, "").trim());
+  if (columns.length < READINESS_COLUMNS.length || READINESS_COLUMNS.some((name, index) => columns[index] !== name)) {
+    return Object.freeze({ declared: true, rows: Object.freeze([]),
+      error: `table header must carry five columns: ${READINESS_COLUMNS.join("、")}` });
+  }
+  const rows = [];
+  for (let index = header + 2; index < lines.length; index += 1) {
+    if (!/^\s*\|/.test(lines[index])) break;
+    const cells = readinessCells(lines[index]);
+    rows.push(Object.freeze({
+      line: index + 1,
+      malformed: cells.length < READINESS_COLUMNS.length,
+      command: stripCodeTicks(cells[0]),
+      expected: stripCodeTicks(cells[1]),
+      evidence: stripCodeTicks(cells[2]),
+      mode: stripCodeTicks(cells[3]),
+      owner: stripCodeTicks(cells[4]),
+    }));
+  }
+  return Object.freeze({ declared: true, rows: Object.freeze(rows), error: null });
+}
+
+function readinessMode(mode) {
+  const text = String(mode ?? "").toLowerCase();
+  if (text.includes("机器") || text.includes("machine")) return "machine";
+  if (text.includes("人") || text.includes("human") || text.includes("manual")) return "human";
+  return "unknown";
+}
+
+// Structural facts plus named errors. Execution intentionally stays outside:
+// the caller must supply its own authenticated capture for real probes.
+export function phaseReadinessContract(body, path) {
+  const table = phaseReadinessRows(body);
+  if (!table.declared) return Object.freeze({ declared: false, rows: Object.freeze([]), errors: Object.freeze([]) });
+  const errors = [];
+  if (table.error) errors.push(`${path} readiness ${table.error}`);
+  if (!table.error && table.rows.length === 0) {
+    errors.push(`${path} readiness table has no probe rows (missing probe; owner=计划负责人)`);
+  }
+  const rows = [];
+  for (const [offset, row] of table.rows.entries()) {
+    const label = `${path} readiness row ${offset + 1}`;
+    if (row.malformed) { errors.push(`${label} needs five columns`); continue; }
+    if (!row.command) errors.push(`${label} has an empty command`);
+    if (!row.evidence) errors.push(`${label} lacks evidence`);
+    if (!row.owner) errors.push(`${label} lacks owner`);
+    const kind = readinessMode(row.mode);
+    if (kind === "unknown") errors.push(`${label} has unknown judgement mode ${JSON.stringify(row.mode)}`);
+    if (kind === "machine" && !/^(?:nonzero|非零|-?\d+)$/i.test(row.expected)) {
+      errors.push(`${label} expects a non-integer exit ${JSON.stringify(row.expected)}`);
+    }
+    rows.push(Object.freeze({ ...row, kind, expected_exit: kind === "machine" && /^-?\d+$/.test(row.expected) ? Number(row.expected) : null }));
+  }
+  return Object.freeze({ declared: true, rows: Object.freeze(rows), errors: Object.freeze(errors) });
+}
+
+// The fingerprint binds one readiness result to the exact bytes it judged.
+export function materialFingerprint({ spec = "", index = "", phases = {} } = {}) {
+  const files = [["spec.md", spec], ["phases/index.md", index], ...Object.entries(phases ?? {})]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  const hash = createHash("sha256");
+  for (const [path, body] of files) {
+    const bytes = Buffer.from(String(body ?? ""), "utf8");
+    hash.update(path); hash.update("\0"); hash.update(String(bytes.length)); hash.update("\0");
+    hash.update(bytes); hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+// Machine rows run as argv only. Material text is untrusted, so the command
+// must name a known read-only tool with read-only arguments; interpreters and
+// anything that can write or destroy are rejected rather than executed.
+const READINESS_SHELL_META = /[;&|<>$`(){}[\]*?~!\\]/;
+
+const READ_ONLY_PROBES = Object.freeze({
+  // Only the side-effect-free subcommand. status/log/show/diff can refresh the
+  // index or invoke external diff/textconv drivers, so they stay out.
+  git: Object.freeze({ subcommands: Object.freeze(["rev-parse"]),
+    forbid: Object.freeze([/^--output(?:=|$)/]) }),
+  node: Object.freeze({ oneOf: Object.freeze(["-v", "--version"]) }),
+  shasum: Object.freeze({ forbid: Object.freeze([/^-o$/, /^--output(?:=|$)/]) }),
+  sha256sum: Object.freeze({ forbid: Object.freeze([/^-o$/, /^--output(?:=|$)/]) }),
+  uname: Object.freeze({ flags: /^(?:-[asnrvmo]+|--(?:all|kernel-name|nodename|kernel-release|kernel-version|machine|operating-system))$/ }),
+  sw_vers: Object.freeze({ flags: /^(?:-(?:productName|productVersion|buildVersion))$/ }),
+  pwd: Object.freeze({ argv: Object.freeze([]) }),
+  whoami: Object.freeze({ argv: Object.freeze([]) }),
+  id: Object.freeze({ flags: /^-[ugGn]+$/ }),
+  date: Object.freeze({ flags: /^(?:-u|\+.+)$/ }),
+  test: Object.freeze({}),
+});
+
+const DENIED_INTERPRETERS = /^(?:sh|bash|zsh|dash|ksh|fish|csh|tcsh|python(?:\d+(?:\.\d+)?)?|pypy(?:\d+)?|ruby|perl|php|nodejs|deno|bun|osascript|swift|lua|Rscript|java|dotnet|powershell|pwsh|cmd|npm|npx|pnpm|yarn|make|cmake|ninja|gradle|mvn|xargs|env|sudo|doas|su|expect)$/;
+const DENIED_COMMANDS = /^(?:rm|rmdir|mv|cp|install|dd|mkfs(?:\..+)?|chmod|chown|chgrp|ln|mkdir|touch|tee|truncate|shred|kill|pkill|killall|curl|wget|ssh|scp|sftp|rsync|nc|ncat|socat|telnet|ftp|find|sed|awk)$/;
+
+function checkReadOnlyArgv(argv) {
+  const name = argv[0];
+  if (name.includes("/") || name.includes("\\")) {
+    throw new TypeError(`readiness probe must name a read-only tool, not a path: ${JSON.stringify(name)}`);
+  }
+  if (DENIED_INTERPRETERS.test(name)) {
+    throw new TypeError(`readiness probe must not execute an interpreter: ${JSON.stringify(name)}`);
+  }
+  if (DENIED_COMMANDS.test(name)) {
+    throw new TypeError(`readiness probe command is not read-only: ${JSON.stringify(name)}`);
+  }
+  const allowed = Object.hasOwn(READ_ONLY_PROBES, name) ? READ_ONLY_PROBES[name] : null;
+  if (!allowed) {
+    throw new TypeError(`readiness probe command is not on the read-only allowlist: ${JSON.stringify(name)} (allowed: ${Object.keys(READ_ONLY_PROBES).join(", ")})`);
+  }
+  const rest = argv.slice(1);
+  if (allowed.oneOf) {
+    if (rest.length !== 1 || !allowed.oneOf.includes(rest[0])) {
+      throw new TypeError(`readiness probe ${name} only accepts ${allowed.oneOf.join(" or ")}`);
+    }
+    return;
+  }
+  if (allowed.argv) {
+    if (rest.length !== allowed.argv.length || rest.some((arg, index) => arg !== allowed.argv[index])) {
+      throw new TypeError(`readiness probe ${name} only accepts ${allowed.argv.length === 0 ? "no arguments" : allowed.argv.join(" ")}`);
+    }
+    return;
+  }
+  if (allowed.subcommands) {
+    if (rest.length === 0 || !allowed.subcommands.includes(rest[0])) {
+      throw new TypeError(`readiness probe git only allows read-only subcommands: ${allowed.subcommands.join(", ")}`);
+    }
+    for (const arg of rest.slice(1)) {
+      if (allowed.forbid.some((pattern) => pattern.test(arg))) {
+        throw new TypeError(`readiness probe git argument is not read-only: ${JSON.stringify(arg)}`);
+      }
+    }
+    return;
+  }
+  for (const arg of rest) {
+    if (allowed.forbid?.some((pattern) => pattern.test(arg))) {
+      throw new TypeError(`readiness probe ${name} argument is not read-only: ${JSON.stringify(arg)}`);
+    }
+    if (allowed.flags && !allowed.flags.test(arg)) {
+      throw new TypeError(`readiness probe ${name} flag is not read-only: ${JSON.stringify(arg)}`);
+    }
+  }
+}
+
+export function readinessProbeArgv(command) {
+  const text = String(command ?? "").trim();
+  if (!text) throw new TypeError("readiness probe command is empty");
+  const argv = [];
+  let token = null, quote = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) { quote = null; continue; }
+      if (char === "\\" && quote === '"' && index + 1 < text.length) { token += text[index + 1]; index += 1; continue; }
+      token += char; continue;
+    }
+    if (char === '"' || char === "'") { quote = char; token ??= ""; continue; }
+    if (/\s/.test(char)) { if (token !== null) { argv.push(token); token = null; } continue; }
+    if (READINESS_SHELL_META.test(char)) {
+      throw new TypeError(`readiness probe must be an argv-only read-only command; shell metacharacter ${JSON.stringify(char)} is not allowed`);
+    }
+    token ??= ""; token += char;
+  }
+  if (quote) throw new TypeError("readiness probe has an unterminated quote");
+  if (token !== null) argv.push(token);
+  if (argv.length === 0) throw new TypeError("readiness probe command is empty");
+  checkReadOnlyArgv(argv);
+  return Object.freeze(argv);
+}
+
+export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id, prose_contract, material_path, task_record_root, require_readiness = false } = {}) {
   const errors = [];
   const proseMode = prose_contract ?? (/(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? '') ? 'diagnostic' : 'required');
   if (!['diagnostic', 'required'].includes(proseMode)) errors.push('prose_contract must be diagnostic or required');
@@ -690,6 +891,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
   }
   const phaseRows = [];
+  const readinessPhases = [];
   const archiveMaterial = /(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? "");
   const evidenceRoots = readableEvidenceRoots(evidenceSearchRoots(reviewReadScope, material_path));
   const evidenceFacts = { verified: [], planned: [], missing: [], unverified: [] };
@@ -1003,6 +1205,22 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
     }
     const taskIds = cards.map(({ heading, taskId }) => heading.match(/^(T\d{3,})\b/)?.[1] ?? taskId).filter(Boolean);
+    const readiness = phaseReadinessContract(body, expectedPath);
+    errors.push(...readiness.errors);
+    if (require_readiness && !readiness.declared) {
+      errors.push(`${expectedPath} missing readiness table (build-code dispatch requires the five columns 命令/期望/证据/机器或人判/负责人)`);
+    }
+    readinessPhases.push(Object.freeze({
+      phase_id: expectedId,
+      path: expectedPath,
+      declared: readiness.declared,
+      machine_count: readiness.rows.filter((row) => row.kind === "machine").length,
+      human_count: readiness.rows.filter((row) => row.kind === "human").length,
+      rows: Object.freeze(readiness.rows.map((row) => Object.freeze({
+        line: row.line, command: row.command, expected: row.expected, evidence: row.evidence,
+        mode: row.mode, kind: row.kind, owner: row.owner, expected_exit: row.expected_exit,
+      }))),
+    }));
     if (expectedId === phase_id) selectedPhaseScopeValid = scopeValid;
     phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(scopeValid ? declaredWriteSet : []), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
   }
@@ -1078,6 +1296,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     phase_count: phaseRows.length,
     task_count: [...new Set(phaseRows.flatMap((row) => row.task_ids))].length,
     phase_rows: Object.freeze(phaseRows),
+    material_sha256: materialFingerprint({ spec, index, phases }),
+    readiness: Object.freeze({
+      declared_count: readinessPhases.filter((phase) => phase.declared).length,
+      machine_count: readinessPhases.reduce((sum, phase) => sum + phase.machine_count, 0),
+      human_count: readinessPhases.reduce((sum, phase) => sum + phase.human_count, 0),
+      phases: Object.freeze(readinessPhases),
+    }),
     fr_coverage: Object.freeze({ accepted_count: acceptedFrs.length, covered_count: acceptedFrs.filter((id) => coveredFrs.includes(id)).length, accepted_ids: Object.freeze(acceptedFrs), covered_ids: Object.freeze(coveredFrs) }),
     ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs), deferred_ids: Object.freeze(deferredAcs) }),
     dependency_validation: Object.freeze({ valid: dependencyValid }),

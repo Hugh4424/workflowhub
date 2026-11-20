@@ -1,6 +1,6 @@
 // ORACLE-COCKPIT-EVENT: P5/T007. Same independent oracle; controlled open is a process boundary substitute.
 import { afterEach, expect, test } from 'vitest';
-import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync } from 'node:fs';
+import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -18,12 +18,24 @@ async function fixture(){
  writeFileSync(join(task.taskPath,'facts.jsonl'),'');
  const material=join(work,'specs/cockpit');mkdirSync(join(material,'phases'),{recursive:true});
  writeFileSync(join(material,'decision-log.md'),'# 当前决策\n## 目标\n让失败可见\n- U-001 用户要求保留真实失败\n## WP1\n只读页面\n');
- writeFileSync(join(material,'spec.md'),'# 真实驾驶舱\n## 功能需求\nFR-ONE 只读生成\n## Appendix A\n- [ ] **AC-ONE**：缺数据标缺\n## 风险\n风险：缺少原件\n');
- writeFileSync(join(material,'phases/index.md'),'| Phase | 文件 |\n| --- | --- |\n| P7 | [P7](P7-真实交付.md) |\n');writeFileSync(join(material,'phases/P7-真实交付.md'),'# Phase P7\n### T007 — 真实交付\n只读页面\n');
+ writeFileSync(join(material,'spec.md'),"# \u771f\u5b9e\u9a7e\u9a76\u8231\n\n## \u529f\u80fd\u9700\u6c42\n\n- **FR-EVENT-001**\uff1a\u53ea\u8bfb\u751f\u6210\u3002\n\n## \u5b9e\u73b0\u8bbe\u8ba1\uff08\u5168\u5c40\u6743\u5a01\uff09\n\n### \u4ee3\u7801\u951a\u70b9\n\n`phases/P7-\u771f\u5b9e\u4ea4\u4ed8.md`: task source; `owned.mjs`: symbol result.\n\n### \u63a5\u53e3\u4e0e\u5931\u8d25\u8bed\u4e49\n\n\u53ea\u8bfb\u9875\u9762\uff1b\u7f3a\u6570\u636e\u4fdd\u6301\u7f3a\u3002\n\n### \u9700\u6c42\u5230\u4efb\u52a1\u8ffd\u8e2a\n\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-EVENT-001 | AC-EVENT-001 | P1/T001 | ORACLE-EVENT |\n\n### \u5168\u5c40\u9a8c\u8bc1\u7b56\u7565\n\n`node --version` \u53d7\u63a7\u547d\u4ee4\u3002\n\n## Appendix A \u2014 \u9a8c\u6536\u5224\u636e\n\n- [ ] **AC-EVENT-001**\uff1a\u7f3a\u6570\u636e\u6807\u7f3a\n\n## \u98ce\u9669\n\n\u98ce\u9669\uff1a\u7f3a\u5c11\u539f\u4ef6\n");
+ writeFileSync(join(material,'phases/index.md'),"# Index\n\n## Execution Index\n\n| \u9636\u6bb5 | \u6743\u5a01\u5f15\u7528 | \u8bed\u4e49\u951a\u70b9 | \u5199\u5165\u96c6 | \u4f9d\u8d56 | \u6d88\u8d39\u8005 |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1-\u771f\u5b9e\u4ea4\u4ed8.md` | L0 \u2014 \u6765\u6e90\u5361\u7247 | `owned.mjs` | none | reader |\n");writeFileSync(join(material,'phases/P1-真实交付.md'),"# Phase P1 \u2014 \u6765\u6e90\u5361\u7247\n\n- **\u5168\u5c40\u89c4\u683c**: `spec.md#\u5b9e\u73b0\u8bbe\u8ba1\uff08\u5168\u5c40\u6743\u5a01\uff09`\n- **\u5199\u5165\u96c6**: `owned.mjs`\n- **\u4f9d\u8d56**: none\n- **\u6d88\u8d39\u8005**: reader\n- **gate_cmd**: `node --version`\n- **oracle**: ORACLE-EVENT\n- **evidence_path**: `quality/tests/cards.output`\n- **STOP**: \u4fdd\u7559\u7f3a\u5931\u8f93\u5165\u548c\u5931\u8d25\u539f\u4ef6\u3002\n- **Done**: \u771f\u5b9e\u5361\u6765\u6e90\u4e0e\u771f\u5b9e\u6267\u884c\u7ed3\u679c\u3002\n\n## L0 \u2014 \u6765\u6e90\u5361\u7247\n\nFR-EVENT-001 / AC-EVENT-001\n\n## L1 \u2014 executable contract\n\n### T001 \u2014 \u771f\u5b9e\u4ea4\u4ed8\n\n\u672c\u5361\u4ea4\u4ed8\u771f\u5b9e\u7ed3\u679c\uff0c\u5931\u8d25\u4fdd\u7559\u539f\u59cb\u9519\u8bef\u3002\n\n- **Source / FR / AC**: R-001 / FR-EVENT-001 / AC-EVENT-001\n- **Files / symbols**: `owned.mjs`; symbol: result\n- **Action**: 1\uff09\u8bfb\u53d6\u771f\u5b9e\u5931\u8d25\u539f\u4ef6\u30022\uff09\u6838\u5bf9\u6765\u6e90\u6307\u9488\u3002\n- **Inputs**: Owned local module and fixed source text.\n- **Outputs / failure**: Result is 1; wrong result is nonzero.\n- **Boundary / DO NOT TOUCH**: Other materials stay readonly.\n- **Dependency**: none\n- **Test tier / skill**: contract / backend-testing\n- **Scenario / fixture or service**: Local temporary fixture; no network.\n- **RED/GREEN gate_cmd**: `node --version`\n- **expected_exit**: RED nonzero; GREEN 0\n- **RED target failure**: ORACLE-EVENT expected result 1; result 0 assertion fails.\n- **GREEN oracle**: ORACLE-EVENT actual result is 1.\n- **Evidence**: Actual output and exit; no prefilled pass.\n- **STOP / recovery**: Preserve failure and return to original developer.\n- **Coverage limit**: Local event fixture only.\n- **Done**: AC-EVENT-001 has actual result and evidence.\n\n## L2 \u2014 reference\n\nControlled.\n");
  writeFileSync(join(work,'changed.txt'),'real diff');git(work,['add','.']);git(work,['commit','-qm','real change']);
  await task.appendRecord({dir:'quality/tests',slug:'actual-test',ext:'json',bytes:JSON.stringify({argv:['node','test'],exit_code:0})});await task.appendRecord({dir:'quality/reviews',slug:'actual-review',ext:'json',bytes:JSON.stringify({status:'completed',findings:[]})});
  const reportPath=join(root,'report.json');writeFileSync(reportPath,JSON.stringify({task_id:'cockpit',rings:Array.from({length:10},(_,i)=>({ring:i+1,name:['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'][i],state:i===9?'skipped':'incomplete',basis:[],applicability:'required',evidence_type:[],counted_in_denominator:true,conflict:null}))}));
  return {taskPath:task.taskPath,reportPath,outDir:join(task.taskPath,'quality/evidence/pages'),htmlName:'cockpit.html',material};
+}
+// The current decision-log shape: package directory table plus per-package cards.
+async function packageFixture({misbound=false}={}){
+ const f=await fixture();
+ const indexRef='quality/evidence/decision-log-refs/requirement-index.md';
+ const indexPath=join(f.taskPath,indexRef);mkdirSync(join(indexPath,'..'),{recursive:true});
+ writeFileSync(indexPath,'# 需求索引\n\n## 0. 十包定稿\n\n| 包 | 名称 | 依赖 | 覆盖需求 | 主 AC | 来源 |\n| --- | --- | --- | --- | --- | --- |\n| 1 | 包甲 | 无 | 1 | AC-P1-1 | `DL §4.1` |\n| 2 | 包乙 | 1 | 2 | AC-P2-1 | `DL §4.2` |\n');
+ writeFileSync(join(f.material,'decision-log.md'),`# 当前决策\n需求索引：\`${indexRef}\`\n\n| AC | 包 | 命令或人工操作 |\n| --- | --- | --- |\n| AC-P1-1 | 1 | \`node --version\` |\n| AC-P2-1 | 2 | \`node --version\` |\n\n## 4. 每包设计\n\n### 4.1 包甲\n\n- **原始需求**：真实失败要可见。\n- **最终决定**：保留真实失败。\n- **完整方案**：只读来源卡片，不写任务事实。\n- **配套与影响**：只读。\n- **验收**：AC-P1-1 可核。\n- **风险/回退**：无。\n\n### 4.2 包乙\n\n- **原始需求**：恢复要换路。\n- **最终决定**：没有新事实就换路。\n- **完整方案**：只读说明。\n- **配套与影响**：只读。\n- **验收**：${misbound?'AC-P1-1 可核':'AC-P2-1 可核'}。\n- **风险/回退**：无。\n`);
+ writeFileSync(join(f.material,'spec.md'),"# \u771f\u5b9e\u9a7e\u9a76\u8231\n\n## \u529f\u80fd\u9700\u6c42\n\n- **FR-ONE-001**\uff1a\u53ea\u8bfb\u751f\u6210\u3002\n\n## \u5b9e\u73b0\u8bbe\u8ba1\uff08\u5168\u5c40\u6743\u5a01\uff09\n\n### \u4ee3\u7801\u951a\u70b9\n\n`phases/P1-\u771f\u5b9e\u4ea4\u4ed8.md`: task source; `owned.mjs`: symbol result.\n\n### \u63a5\u53e3\u4e0e\u5931\u8d25\u8bed\u4e49\n\n\u53ea\u8bfb\u6765\u6e90\u5361\u7247\uff1b\u7f3a\u5931\u4fdd\u6301 gap\uff0c\u4e0d\u8865\u8bcd\u3002\n\n### \u9700\u6c42\u5230\u4efb\u52a1\u8ffd\u8e2a\n\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-ONE-001 | AC-P1-001 | P1/T001 | ORACLE-PROGRESS |\n| R-001 | FR-ONE-001 | AC-P2-001 | P1/T001 | ORACLE-PROGRESS |\n\n### \u5168\u5c40\u9a8c\u8bc1\u7b56\u7565\n\n`node --version` \u53d7\u63a7\u547d\u4ee4\uff1b\u9875\u9762\u6a21\u578b\u65ad\u8a00\u3002\n\n## Appendix A \u2014 \u9a8c\u6536\u5224\u636e\n\n- [ ] **AC-P1-001** \u771f\u5b9e\u5931\u8d25\u53ef\u89c1\u3002\n\u5224\u5b9a\u65b9\u5f0f\uff1a\u673a\u5668\u53ef\u5224\u3002\n\u6210\u672c\uff1aevidence_tier=\u547d\u4ee4\u7ea7\u3002\n- [ ] **AC-P2-001** \u6062\u590d\u8981\u6362\u8def\u3002\n\u5224\u5b9a\u65b9\u5f0f\uff1a\u673a\u5668\u53ef\u5224\u3002\n\u6210\u672c\uff1aevidence_tier=\u771f\u5b9e\u73af\u5883\u7ea7\u3002\n\n## Appendix B \u2014 \u9700\u6c42\u4e0e\u7f16\u53f7\u5bf9\u7167\n\n| \u9a8c\u6536 | \u7f16\u53f7 | \u539f\u65e5\u5fd7 |\n| --- | --- | --- |\n| \u9a8c\u6536 1 | AC-P1-001 | \u539f\u65e5\u5fd7 AC-P1-1\uff5c\u9636\u6bb5 1\uff5cFR-ONE-001 |\n| \u9a8c\u6536 2 | AC-P2-001 | \u539f\u65e5\u5fd7 AC-P2-1\uff5c\u9636\u6bb5 2\uff5cFR-ONE-001 |\n\n## \u98ce\u9669\n\n\u98ce\u9669\uff1a\u7f3a\u5c11\u539f\u4ef6\n");
+ writeFileSync(join(f.material,'phases/index.md'),'# Index\n\n## Execution Index\n\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1-真实交付.md` | L0 — 来源卡片 | `owned.mjs` | none | reader |\n');
+ writeFileSync(join(f.material,'phases/P1-真实交付.md'),"# Phase P1 \u2014 \u6765\u6e90\u5361\u7247\n\n- **\u5168\u5c40\u89c4\u683c**: `spec.md#\u5b9e\u73b0\u8bbe\u8ba1\uff08\u5168\u5c40\u6743\u5a01\uff09`\n- **\u5199\u5165\u96c6**: `owned.mjs`\n- **\u4f9d\u8d56**: none\n- **\u6d88\u8d39\u8005**: reader\n- **gate_cmd**: `node --version`\n- **oracle**: ORACLE-PROGRESS\n- **evidence_path**: `quality/tests/cards.output`\n- **STOP**: \u4fdd\u7559\u7f3a\u5931\u8f93\u5165\u548c\u5931\u8d25\u539f\u4ef6\u3002\n- **Done**: \u771f\u5b9e\u5361\u6765\u6e90\u4e0e\u771f\u5b9e\u6267\u884c\u7ed3\u679c\u3002\n\n## L0 \u2014 \u6765\u6e90\u5361\u7247\n\nFR-ONE-001 / AC-P1-001 / AC-P2-001\n\n## L1 \u2014 executable contract\n\n### T001 \u2014 \u771f\u5b9e\u4ea4\u4ed8\n\n\u672c\u5361\u4ea4\u4ed8\u771f\u5b9e\u7ed3\u679c\uff0c\u5931\u8d25\u4fdd\u7559\u539f\u59cb\u9519\u8bef\u3002\n\n- **Source / FR / AC**: R-001 / FR-ONE-001 / AC-P1-001 / AC-P2-001\n- **Files / symbols**: `owned.mjs`; symbol: result\n- **Action**: 1\uff09\u8bfb\u53d6\u771f\u5b9e\u5931\u8d25\u539f\u4ef6\u30022\uff09\u6838\u5bf9\u6765\u6e90\u6307\u9488\u3002\n- **Inputs**: Owned local module and fixed source text.\n- **Outputs / failure**: Result is 1; wrong result is nonzero.\n- **Boundary / DO NOT TOUCH**: Other materials stay readonly.\n- **Dependency**: none\n- **Test tier / skill**: contract / backend-testing\n- **Scenario / fixture or service**: Local temporary fixture; no network.\n- **RED/GREEN gate_cmd**: `node --version`\n- **expected_exit**: RED nonzero; GREEN 0\n- **RED target failure**: ORACLE-PROGRESS expected result 1; result 0 assertion fails.\n- **GREEN oracle**: ORACLE-PROGRESS actual result is 1.\n- **Evidence**: Actual output and exit; no prefilled pass.\n- **STOP / recovery**: Preserve failure and return to original developer.\n- **Coverage limit**: Local package fixture only.\n- **Done**: AC-P1-001\u3001AC-P2-001 have actual result and evidence.\n\n## L2 \u2014 reference\n\nControlled.\n");
+ return f;
 }
 const data=path=>JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(readFileSync(path,'utf8'))[1]);
 test('ORACLE-COCKPIT-EVENT: six events use one entry; first/change opens, identical skips, errors remain visible',async()=>{
@@ -98,4 +110,59 @@ test('ORACLE-COCKPIT-EVENT correction: owned native guard binds both exact appli
  await expect(invoke([{path:'/owned/Chrome.app',pid:99}])).rejects.toThrow(/owned浏览器/);expect(appCalls).toBe(0);
  await expect(invoke([{path:'/owned/Chrome.app',pid:42},{path:'/owned/Chrome.app',pid:99}])).rejects.toThrow(/owned浏览器/);expect(appCalls).toBe(0);
  await expect(invoke([{path:'/foreign/Chrome.app',pid:99},{path:'/owned/Chrome.app',pid:42}])).rejects.toThrow('owned app reached');expect(appCalls).toBe(1);
+});
+test('ORACLE-COCKPIT-EVENT: a rejected bad model keeps the pair and shows the verified previous bytes marked expired',async()=>{
+ const f=await packageFixture(),opened=[],open=async path=>{opened.push(path);return true;};
+ const first=await renderer.refreshAnswerPage({...f,event:'phase-closed',open});
+ expect(first.ok,first.open_reason).toBe(true);expect(first.opened).toBe(true);
+ const html=readFileSync(first.htmlPath),nodes=readFileSync(first.nodesPath),validDecision=readFileSync(join(f.material,'decision-log.md'));
+ writeFileSync(join(f.material,'decision-log.md'),validDecision.toString('utf8').replace('AC-P2-1 可核','AC-P1-1 可核'));
+ const rejected=await renderer.refreshAnswerPage({...f,event:'phase-closed',open});
+ expect(rejected.ok).toBe(false);expect(rejected.failed).toBe(true);expect(rejected.changed).toBe(false);
+ expect(rejected.errors.map(error=>error.code)).toContain('PACKAGE_RECONCILE');
+ expect(rejected.previous_pair).toBe('preserved');expect(rejected.open_reason).toContain('上一版');
+ expect(readFileSync(first.htmlPath)).toEqual(html);expect(readFileSync(first.nodesPath)).toEqual(nodes);
+ const expiredPath=join(f.outDir,'cockpit.expired.html');
+ expect(existsSync(expiredPath)).toBe(true);
+ const expired=data(expiredPath);
+ expect(expired.stageStatus.label).toBe('上一版 · 已过期');expect(expired.stageStatus.tone).toBe('fail');
+ expect(expired.objects.filter(o=>o.kind==='wp').map(o=>o.title)).toEqual(['包甲','包乙']);
+ expect(expired.provenance).toContain('本次新候选未通过检查');
+ expect(opened.at(-1)).toBe(expiredPath);
+ // The repeated failure reuses only this task's own expired position.
+ const repeated=await renderer.refreshAnswerPage({...f,event:'phase-closed',open});
+ expect(repeated.ok).toBe(false);expect(readdirSync(f.outDir).filter(name=>name.includes('.expired.'))).toEqual(['cockpit.expired.html']);
+ expect(readFileSync(first.htmlPath)).toEqual(html);expect(readFileSync(first.nodesPath)).toEqual(nodes);
+ // Restoring valid materials refreshes the current page and clears the derived view.
+ writeFileSync(join(f.material,'decision-log.md'),validDecision);
+ const restored=await renderer.refreshAnswerPage({...f,event:'phase-closed',open});
+ expect(restored.ok).toBe(true);expect(restored.expired_cleared.cleared).toBe(true);
+ expect(existsSync(expiredPath)).toBe(false);
+ expect(data(restored.htmlPath).stageStatus).toBeUndefined();
+});
+test('ORACLE-COCKPIT-EVENT: a rejected model with no verifiable previous pair names the gap and writes no page',async()=>{
+ const f=await packageFixture({misbound:true}),opened=[];
+ const result=await renderer.refreshAnswerPage({...f,event:'phase-closed',open:async path=>{opened.push(path);return true;}});
+ expect(result.ok).toBe(false);expect(result.previous_pair).toBe('unverifiable');expect(result.expired).toBeNull();
+ expect(result.open_reason).toContain('无可验证的上一版');
+ expect(opened).toEqual([]);
+ expect(existsSync(join(f.outDir,'cockpit.html'))).toBe(false);
+ expect(existsSync(join(f.outDir,'cockpit.expired.html'))).toBe(false);
+});
+test('ORACLE-COCKPIT-EVENT: the CLI exits nonzero on a rejected model and opens only the expired view',async()=>{
+ const f=await packageFixture(),entry=join(import.meta.dirname,'../../skills/answer-as-page/scripts/render-answer-page.mjs');
+ await renderer.refreshAnswerPage({...f,event:'phase-closed',open:async()=>true});
+ const pair=readFileSync(join(f.outDir,f.htmlName));
+ writeFileSync(join(f.material,'decision-log.md'),readFileSync(join(f.material,'decision-log.md'),'utf8').replace('AC-P2-1 可核','AC-P1-1 可核'));
+ const bin=join(f.outDir,'fake-bin'),log=join(f.outDir,'cli-expired-open.log');mkdirSync(bin,{recursive:true});
+ writeFileSync(join(bin,'osascript'),'#!/usr/bin/env node\nconst fs=require("node:fs");fs.appendFileSync(process.env.COCKPIT_EXPIRED_LOG,process.env.WH_PAGE_TARGET+"\\n");console.log(JSON.stringify({opened:true,action:"opened",browser:"controlled"}));\n');chmodSync(join(bin,'osascript'),0o700);
+ const hostPreload=join(bin,'owned-browser-host.cjs');writeFileSync(hostPreload,"Object.defineProperty(process,'platform',{value:'darwin'});");
+ const argv=['--require',hostPreload,entry,'--task-path',f.taskPath,'--report',f.reportPath,'--out-dir',f.outDir,'--html',f.htmlName,'--event','phase-closed'];
+ const run=spawnSync(process.execPath,argv,{encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,COCKPIT_EXPIRED_LOG:log}});
+ expect(run.status,run.stderr).not.toBe(0);
+ const result=JSON.parse(run.stdout);
+ expect(result.ok).toBe(false);
+ expect(result.expired.htmlPath).toBe(join(f.outDir,'cockpit.expired.html'));
+ expect(readFileSync(join(f.outDir,f.htmlName))).toEqual(pair);
+ expect(readFileSync(log,'utf8').trim()).toBe(join(f.outDir,'cockpit.expired.html'));
 });

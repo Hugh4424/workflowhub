@@ -15,7 +15,7 @@ function required(values,name){if(!values[name])throw new TypeError(`--${name} i
 function metadataGit(cwd,argv){const env={...process.env};for(const key of Object.keys(env))if(key.startsWith("GIT_"))delete env[key];env.GIT_OPTIONAL_LOCKS="0";return execFileSync("git",argv,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
 export async function archiveReadback({taskDir,planRef}) {
   const state=await inspectDeliveryCloseState({taskDir,planRef});
-  return {archive:state.facts?.archive??null,merge:state.facts?.merge??null,readback:state};
+  return {archive:state.facts?.archive??null,merge:state.facts?.merge??null,pushes:state.pushes??[],graph:state.graph??null,archive_readback:state.archive_readback??null,readback:state};
 }
 export async function taskCloseMain(argv=process.argv.slice(2),{cwd=process.cwd(),signal}={}){
   const {command,values}=args(argv);
