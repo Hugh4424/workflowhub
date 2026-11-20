@@ -310,6 +310,9 @@ it("isolated archive before delivery names an unreadable consumed push receipt i
 import{createHash}from"node:crypto";import{environmentFingerprint,stageRuntimeCliMain}from"../../tools/cli/stage-runtime.mjs";
 const CLAIMS_CLI=fileURLToPath(new URL("../../tools/cli/check-delivery-claims.mjs",import.meta.url));
 const REPLAY_CLI=fileURLToPath(new URL("../../tools/cli/check-replay.mjs",import.meta.url));
+// The replay verdict vocabulary is the entry contract: a pass-shaped verdict is
+// not a token this entry can print, so assertions use the real vocabulary.
+import{REPLAY_VERDICTS}from"../../tools/cli/check-replay.mjs";
 // The claims fixture declares the real Phase gate: the gate identity is the
 // captured command matched against the current Phase card's `gate_cmd`, so a
 // captured command that is not the declared gate can never be the delivery gate.
@@ -673,7 +676,7 @@ it("matched target replay: a lost T6/T16 original is reported unavailable with r
   const redSha=sha(readFileSync(red)),env=environmentFingerprint();
   const lost=id=>({id,original:{status:"lost",reason:`${id}: the historical original was lost before this task`,owner:"P9 acceptance owner"},input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}});
   const casesFile=join(root,"lost-originals.json");
-  const matched={id:"owned-matched-red",input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}};
+  const matched={id:"owned-matched-red",original:{status:"available"},input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}};
   writeFileSync(casesFile,JSON.stringify({schema_version:"1.0.0",cases:[lost("t6-lost-original"),lost("t16-lost-original"),matched]},null,2));
   const run=spawnSync(process.execPath,[REPLAY_CLI,`--cases=${casesFile}`],{cwd:root,encoding:"utf8"});
   expect(run.status,`a lost original must keep the replay incomplete:\n${run.stdout}${run.stderr}`).toBe(1);
@@ -692,7 +695,11 @@ it("matched target replay: a lost T6/T16 original is reported unavailable with r
     expect(row.observed).toBeUndefined();
   }
   expect(replayed).toMatchObject({id:"owned-matched-red",verdict:"target_red"});
-  expect(run.stdout).not.toMatch(/"verdict"\s*:\s*"pass"|"status"\s*:\s*"passed"|已回放/);
+  // Reachable check: every reported verdict comes from the entry vocabulary. The
+  // replaced assertion only forbade tokens this entry cannot print, so it could
+  // never fail; a pass-shaped verdict is excluded by the vocabulary itself.
+  for(const row of body.cases)expect(REPLAY_VERDICTS).toContain(row.verdict);
+  expect(REPLAY_VERDICTS).not.toContain("pass");
   // A lost declaration that names no reason or owner is invalid, not silently unavailable.
   const unnamed=join(root,"lost-without-owner.json");
   writeFileSync(unnamed,JSON.stringify({schema_version:"1.0.0",cases:[{...lost("t6-lost-without-owner"),original:{status:"lost"}}]},null,2));
@@ -713,24 +720,27 @@ it("matched environment replay confirms the named target failure and separates i
   const sha=value=>createHash("sha256").update(value).digest("hex");
   const redSha=sha(readFileSync(red)),env=environmentFingerprint();
   const judge=cases=>{const file=join(root,`${cases[0].id}.json`);writeFileSync(file,JSON.stringify({schema_version:"1.0.0",cases},null,2));const run=spawnSync(process.execPath,[REPLAY_CLI,`--cases=${file}`],{cwd:root,encoding:"utf8"});return{run,body:JSON.parse(run.stdout)}};
-  const matched=judge([{id:"owned-matched-red",input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}}]);
+  const matched=judge([{id:"owned-matched-red",original:{status:"available"},input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}}]);
   expect(matched.run.status,matched.run.stderr).toBe(0);
   expect(matched.body.status).toBe("replayed");
   expect(matched.body.cases[0]).toMatchObject({id:"owned-matched-red",verdict:"target_red"});
-  const incomparable=judge([{id:"owned-incomparable",input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:"0".repeat(64)}}]);
+  const incomparable=judge([{id:"owned-incomparable",original:{status:"available"},input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,red],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:"0".repeat(64)}}]);
   expect(incomparable.run.status).toBe(1);
   expect(incomparable.body.cases[0].verdict).toBe("incomparable");
-  const swapped=judge([{id:"owned-swapped",input:"swapped-green.mjs",input_sha256:redSha,target:{argv:[process.execPath,green],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}}]);
+  const swapped=judge([{id:"owned-swapped",original:{status:"available"},input:"swapped-green.mjs",input_sha256:redSha,target:{argv:[process.execPath,green],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}}]);
   expect(swapped.run.status).toBe(1);
   expect(swapped.body.cases[0].verdict).toBe("fixture_mismatch");
   const greenSha=sha(readFileSync(green));
-  const renamed=judge([{id:"owned-green",input:"swapped-green.mjs",input_sha256:greenSha,target:{argv:[process.execPath,green],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}}]);
+  const renamed=judge([{id:"owned-green",original:{status:"available"},input:"swapped-green.mjs",input_sha256:greenSha,target:{argv:[process.execPath,green],expected:{exit:1,gap:"required-original-missing"}},environment:{hash:env}}]);
   expect(renamed.run.status).toBe(1);
   expect(renamed.body.cases[0].verdict).toBe("target_green");
-  expect(`${matched.run.stdout}${incomparable.run.stdout}${swapped.run.stdout}${renamed.run.stdout}`).not.toMatch(/"verdict"\s*:\s*"pass"|"status"\s*:\s*"passed"|"matched"\s*:\s*true|已回放/);
-  const blockedShell=judge([{id:"owned-blocked-shell",input:"target-red.mjs",input_sha256:redSha,target:{argv:["/bin/sh","-c","echo owned-free-text"],expected:{exit:1}},environment:{hash:env}}]);
+  // The four states are named per case instead of asserting the absence of tokens
+  // the entry never prints.
+  expect([matched,incomparable,swapped,renamed].map(result=>result.body.cases[0].verdict)).toEqual(["target_red","incomparable","fixture_mismatch","target_green"]);
+  for(const row of [matched,incomparable,swapped,renamed].flatMap(result=>result.body.cases))expect(REPLAY_VERDICTS).toContain(row.verdict);
+  const blockedShell=judge([{id:"owned-blocked-shell",original:{status:"available"},input:"target-red.mjs",input_sha256:redSha,target:{argv:["/bin/sh","-c","echo owned-free-text"],expected:{exit:1}},environment:{hash:env}}]);
   expect(blockedShell.run.status).toBe(1);expect(blockedShell.body.cases[0].verdict).toBe("invalid_case");
-  const blockedPath=judge([{id:"owned-blocked-path",input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,"/etc/hosts"],expected:{exit:1}},environment:{hash:env}}]);
+  const blockedPath=judge([{id:"owned-blocked-path",original:{status:"available"},input:"target-red.mjs",input_sha256:redSha,target:{argv:[process.execPath,"/etc/hosts"],expected:{exit:1}},environment:{hash:env}}]);
   expect(blockedPath.run.status).toBe(1);expect(blockedPath.body.cases[0].verdict).toBe("invalid_case");
 
 });

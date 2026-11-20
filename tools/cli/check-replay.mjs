@@ -28,9 +28,14 @@ function inside(root, path) {
 
 // The case must say whether its recorded input is the actual original. A lost
 // original is never replaced by a controlled copy; reason and owner are
-// mandatory so the gap is attributable instead of silently passing.
+// mandatory so the gap is attributable instead of silently passing. A case that
+// declares nothing at all is invalid instead of "not declared": silence cannot
+// tell an obtained original from a controlled copy standing in for a lost one,
+// so such a case is neither executed nor passed.
 function originalDeclaration(raw) {
-  if (raw === undefined) return { status: "not_declared" };
+  if (raw === undefined) {
+    return { error: "case original is not declared; every case must state {status, reason, owner} so a controlled copy cannot stand in for a lost original, and an undeclared case is never executed nor passed" };
+  }
   const value = typeof raw === "string" ? { status: raw } : raw;
   if (!plain(value) || !text(value.status)) return { error: "case original must declare {status, reason, owner}" };
   const status = value.status.trim().toLowerCase();
@@ -74,13 +79,35 @@ function isolatedArgv(argv, casesDir) {
   return { argv: [...argv] };
 }
 
+// Repository identity is recorded so the replay can say what it ran against, but
+// it is not a comparability condition: a later implementation commit moves HEAD
+// (and therefore the recorded worktree hash) inside the same worktree without
+// changing the environment the frozen target runs in. Comparing HEAD made every
+// replayed case incomparable right after the implementation commit, which turned
+// a real red into a silent non-result. Binding rests on the cases bytes sha256
+// and the environment fingerprint; workspace drift is reported beside the
+// verdict so the movement stays visible instead of discarding the case.
+function workspaceDrift(environment) {
+  if (!plain(environment) || !plain(environment.workspace)) return null;
+  const declared = environment.workspace;
+  const actual = workspaceIdentity({ cwd: process.cwd() });
+  const drift = [];
+  for (const field of ["worktree_root", "branch", "head"]) {
+    const recorded = declared[field] ?? null;
+    if (recorded !== (actual[field] ?? null)) drift.push({ field, recorded, actual: actual[field] ?? null });
+  }
+  if (text(declared.hash) && declared.hash !== actual.sha256) drift.push({ field: "hash", recorded: declared.hash, actual: actual.sha256 });
+  return { recorded: text(declared.hash) ? declared.hash : null, actual: actual.sha256, drift };
+}
+
 function judgeCase(raw, casesDir) {
-  if (!plain(raw) || !text(raw.id)) return { id: null, verdict: "invalid_case", reason: "case has no string id" };
+  if (!plain(raw) || !text(raw.id)) return { id: null, verdict: "invalid_case", reason: "case has no string id", original: null };
   const id = raw.id;
-  const reject = (verdict, reason) => ({ id, verdict, reason });
   const original = originalDeclaration(raw.original);
+  const workspace = workspaceDrift(raw.environment);
+  const withOriginal = (result) => ({ ...result, original: original.status ?? null, ...(workspace === null ? {} : { workspace }) });
+  const reject = (verdict, reason) => withOriginal({ id, verdict, reason });
   if (original.error) return reject("invalid_case", original.error);
-  const withOriginal = (result) => ({ ...result, original: original.status });
   if (!plain(raw.target) || !plain(raw.target.expected) || !Number.isInteger(raw.target.expected.exit)) return withOriginal(reject("invalid_case", "case target.expected.exit must be an integer"));
   if (!plain(raw.environment) || !HEX.test(raw.environment.hash ?? "")) return withOriginal(reject("invalid_case", "case environment.hash must be a sha256 of the recorded environment"));
   if (!HEX.test(raw.input_sha256 ?? "")) return withOriginal(reject("invalid_case", "case input_sha256 must be a sha256 of the frozen fixture bytes"));
@@ -103,13 +130,6 @@ function judgeCase(raw, casesDir) {
   }
   if (digest !== raw.environment.hash) {
     return withOriginal({ id, verdict: "incomparable", reason: `environment is not comparable (recorded ${raw.environment.hash}, actual ${digest}); this case cannot be replayed as a pass`, environment: { expected: raw.environment.hash, actual: digest } });
-  }
-  if (plain(raw.environment.workspace)) {
-    const declared = raw.environment.workspace, actual = workspaceIdentity({ cwd: process.cwd() });
-    if (declared.hash !== actual.sha256 || declared.worktree_root !== actual.worktree_root
-        || declared.branch !== actual.branch || declared.head !== actual.head) {
-      return withOriginal({ id, verdict: "incomparable", reason: `worktree/branch identity is not comparable (recorded ${declared.hash ?? "missing"}, actual ${actual.sha256}); this case cannot be replayed as a pass`, environment: { expected: declared.hash ?? null, actual: actual.sha256 } });
-    }
   }
   const isolation = isolatedArgv(raw.target.argv, casesDir);
   if (isolation.error) return withOriginal(reject("invalid_case", isolation.error));
@@ -141,7 +161,7 @@ export function judgeReplayCases(casesValue, casesFile) {
   const cases = casesValue.cases.map((raw) => {
     const judged = judgeCase(raw, casesDir);
     if (judged.id !== null) {
-      if (seen.has(judged.id)) return { id: judged.id, verdict: "invalid_case", reason: "duplicate case id", original: judged.original ?? "not_declared" };
+      if (seen.has(judged.id)) return { id: judged.id, verdict: "invalid_case", reason: "duplicate case id", original: judged.original ?? null };
       seen.add(judged.id);
     }
     return judged;
@@ -202,11 +222,14 @@ export function checkReplayMain(argv = process.argv.slice(2)) {
   const binding = text(values["task-path"])
     ? verifyCasesBinding(values["task-path"], casesFile)
     : { status: "not_checked", reason: "no --task-path was supplied; case-set bytes are not bound to a task fact, so this replay is diagnostic only" };
-  if (binding.status !== "bound" && binding.status !== "not_checked") {
-    return { schema_version: "replay-result.v1", status: "incomplete", binding, unavailable: [], cases: [], reason: binding.reason };
-  }
   const casesValue = JSON.parse(readFileSync(casesFile, "utf8"));
-  return { ...judgeReplayCases(casesValue, casesFile), binding };
+  const judged = judgeReplayCases(casesValue, casesFile);
+  if (binding.status === "bound" || binding.status === "not_checked") return { ...judged, binding };
+  // An unbound, malformed or mismatched case set is not a claimable replay, but
+  // every case is still judged: an empty `cases` list would hide all per-case
+  // diagnostics behind the binding failure. Only the status is forced to
+  // incomplete, whatever the individual verdicts say.
+  return { ...judged, status: "incomplete", binding, reason: `${binding.reason}; per-case diagnostics are reported, but this case set is not a claimable replay` };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
