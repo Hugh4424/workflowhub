@@ -10565,6 +10565,19 @@
       ],
       "delete_condition": "当该驱动的门禁由经独立验证的替代测试承接后由原 owner 删除；真实业务缺口随就绪件补齐另行执行，不靠删除断言求绿。",
       "retention_basis": "C10 P6/T006–T008 的 add；固定替身与真实运行分层，不以 fixture 冒业务。"
+    },
+    {
+      "source": "tests/fixtures/execution-quality/prepare-test-data.mjs",
+      "destination": "tests/fixtures/execution-quality/prepare-test-data.mjs",
+      "status": "add",
+      "role": "test_only",
+      "responsibility": "P4/T004 受控测试数据夹具：只接受显式 --data-root 与样本版本，按同一合成 seed 生成最小样本并读回；缺隔离根、缺版本、落后或未登记版本具名失败，不回退 cwd、TMPDIR 或产品库；拒绝符号链接组件与仓内/cwd/符号链接根，写删前重核路径；同目录临时文件加 rename 原子写、根内锁用 rename-claim 原子接管陈旧锁并拒绝并发、崩溃临时文件/claim 按前缀回收、坏或缺失清单走显式恢复清理；--clean 只删清单内自有对象并报 owner 与 complete 完成信号。不设第二数据 owner、不写固定配额，不代表真实测试入口已证。",
+      "owner": "testing-system-blueprint 测试数据约定 owner（唯一测试数据 owner）；本文件由 P4/T004 实施者新增，冻结后变更遵既有 TCR",
+      "consumer": "tests/contract/temp-dir.test.mjs 的 ORACLE-P4-ISOLATED-TEST-DATA 用受控 PATH/TMPDIR 子进程入口消费（缺根、缺版本、落后版本三案），同文件追加的 P4 fixture lifecycle 用例消费合法准备、复跑同字节、清理残留、根/版本拒绝、坏清单恢复与并发锁；P5 开工检查按同一命令读准备、版本诊断与清理回执。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "当同一受控夹具职责由经独立验证的替代命令承接、ORACLE-P4-ISOLATED-TEST-DATA 与 P5 消费者完整改接后，由测试数据约定 owner 删除；原 RED/GREEN 原件保留。",
+      "retention_basis": "P4/T004 写集与 AC-P8-001/AC-P8-002；只证 fixture 级隔离，真实测试入口解析者仍是具名缺口。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
