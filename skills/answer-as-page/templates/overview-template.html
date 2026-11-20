@@ -77,6 +77,8 @@ b{font-weight:700}
 .hstage.is-done{background:var(--ok-soft);color:var(--ok)}
 .hstage.is-now{background:var(--ink);color:#fff}
 .hstage.is-todo{border:1px dashed #c4cbd6;color:var(--sub)}
+.hstage[role="button"]{cursor:pointer}
+.stage-note{order:4;flex:1 0 100%;margin:0 0 8px;font-size:12px;line-height:18px;color:var(--sub);overflow-wrap:anywhere}
 .sep{color:var(--unk)}
 .hdr-counts{font-size:12px;line-height:16px;color:var(--sub);flex-shrink:1}
 .fail-strong{font-weight:500;color:var(--fail)}
@@ -1095,10 +1097,13 @@ function headerHtml() {
   const actual=DATA.stages.find(function(s){return s.id===DATA.stageStatus?.stage;})||now;
   const hint=actual?.hint&&!DATA.stageLabel.includes(actual.hint)?actual.hint:'';
   const stages = DATA.stages.map(function (st, i) {
+    const label = st.label || (st.state === 'done' ? '已完成' : st.state === 'now' ? '当前' : '未开始');
     return '<li>' +
-      '<div class="hstage is-' + st.state + '"' + (st.state === 'now' ? ' aria-current="step"' : '') + '>' +
-        '<div class="hstage-k">' + esc(st.label || (st.state === 'done' ? '已完成' : st.state === 'now' ? '当前' : '未开始')) + '</div>' +
-        '<div class="hstage-n" aria-label="' + esc(st.name) + '">' + esc(st.id || st.name) + '</div>' +
+      '<div class="hstage is-' + st.state + '" role="button" tabindex="0"' + (st.state === 'now' ? ' aria-current="step"' : '') +
+        ' aria-label="' + esc(label + '，' + (st.name || st.id || '')) + '"' +
+        ' aria-expanded="false" aria-controls="stage-note" data-stage-note="' + esc(st.hint || '') + '">' +
+        '<div class="hstage-k">' + esc(label) + '</div>' +
+        '<div class="hstage-n">' + esc(st.id || st.name) + '</div>' +
       '</div>' +
       (i < DATA.stages.length - 1 ? '<span class="sep" aria-hidden="true">›</span>' : '') +
     '</li>';
@@ -1108,6 +1113,7 @@ function headerHtml() {
       '<div class="hdr-task-sub"><b>' + esc(DATA.stageLabel) + '</b>' + (hint ? '<span class="info-tip"><button type="button" aria-label="当前位置说明" aria-describedby="stage-position-tip"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 4.5v1"/></svg></button><span role="tooltip" id="stage-position-tip">'+esc(hint)+'</span></span>' : '') + (DATA.stageStatus ? ' '+tag(DATA.stageStatus.label,DATA.stageStatus.tone) : '') + '</div>' +
     '</div>' +
     '<ol class="hdr-stages" aria-label="任务阶段">' + stages + '</ol>' +
+    '<p class="stage-note" id="stage-note" role="status" aria-live="polite" hidden></p>' +
     '<details class="hdr-counts"><summary>Task 共 ' + c.total + ' 个 · 状态</summary>' +
       '<div class="hdr-count-body">'+Object.keys(c).filter(function(k){return k !== 'total';}).map(function(k){return '<div>'+esc(k)+' '+c[k]+'</div>';}).join('')+'</div></details>' +
     '<div class="hdr-right">' + headerRightHtml() + '</div>';
@@ -1231,6 +1237,16 @@ function handleToggle(el) {
   const again = main.querySelector(selector);
   if (again) again.focus();
 }
+function toggleStageNote(btn) {
+  const note = document.getElementById('stage-note');
+  const text = (btn.getAttribute('data-stage-note') || '').trim();
+  if (!note || !text) return;
+  const open = btn.getAttribute('aria-expanded') === 'true';
+  Array.from(hdr.querySelectorAll('[data-stage-note]')).forEach(function (other) { other.setAttribute('aria-expanded', 'false'); });
+  btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+  note.textContent = open ? '' : text;
+  note.hidden = open;
+}
 document.addEventListener('click', function (e) {
   const seen = e.target.closest('[data-seen]');
   if (seen) {
@@ -1245,10 +1261,19 @@ document.addEventListener('click', function (e) {
   if (back) { goBack(); return; }
   const toggle = e.target.closest('[data-toggle]');
   if (toggle) { handleToggle(toggle); return; }
+  const stage = e.target.closest('[data-stage-note]');
+  if (stage) { toggleStageNote(stage); return; }
   const overview=e.target.closest('[data-overview-select]');
   if(overview){focusId=overview.dataset.overviewSelect;sel='progress';renderAll();return;}
   const nav = e.target.closest('[data-go]');
   if (nav) { go(nav.dataset.go); return; }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const stage = e.target && e.target.closest ? e.target.closest('[data-stage-note]') : null;
+  if (!stage) return;
+  e.preventDefault();
+  toggleStageNote(stage);
 });
 side.addEventListener('keydown', function (e) {
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
