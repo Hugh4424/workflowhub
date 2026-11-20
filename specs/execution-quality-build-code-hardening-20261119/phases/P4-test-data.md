@@ -183,7 +183,7 @@ P4 和 P5 同路径依真实数据准备先供给的顺序串行。
 - **Dependency**：P3/T003
 - **Test tier / skill**：feature / backend-testing；本段核命令、集成和真实消费者。UI、真实产品库和生产网络在本段范围外。每条判据另按正文档位实际取证。
 - **Scenario / fixture or service**：隔离设置缺失或改指路径外，合法目录中另种入落后版本。放一个禁止接触的受控哨兵目录，核无读取或副本。 临时任务在同进程内创建和清理；原始输入不覆盖。
-- **RED/GREEN gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/temp-dir.test.mjs -t ORACLE-P4-ISOLATED-TEST-DATA`
+- **RED/GREEN gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/temp-dir.test.mjs`
 - **expected_exit**：RED nonzero; GREEN 0。只以抵达 ORACLE-P4-ISOLATED-TEST-DATA 的目标断言判 RED。
 - **RED target failure**：ORACLE-P4-ISOLATED-TEST-DATA 冻结目标断言应抓实际配置缺失仍企图读出准备结果、或过期未具名。现夹具未实现，不存在/模块未装只算装置失败，不冒称已取得 RED。 本轮无目标 RED 原件。
 - **GREEN oracle**：ORACLE-P4-ISOLATED-TEST-DATA 经现 verify/capture 复跑受控夹具，过期和省略 --data-root 都给具名拒绝。
@@ -204,7 +204,8 @@ P4 和 P5 同路径依真实数据准备先供给的顺序串行。
 - **Write set**：`skills/testing-system-blueprint/SKILL.md`；`workflows/build-plan/SKILL.md`；`tests/fixtures/execution-quality/prepare-test-data.mjs`；`tests/contract/temp-dir.test.mjs`；`docs/architecture/move-map.json`
 - **Dependency**：P3
 - **消费者**：P5 的开工检查入口
-- **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/temp-dir.test.mjs -t ORACLE-P4-ISOLATED-TEST-DATA`
+- **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/temp-dir.test.mjs`
+- **门覆盖（2026-11-21 材料变更，外部审查 #11/#33）**：整文件 14 条全跑才算门；原 `-t ORACLE-P4-ISOLATED-TEST-DATA` 快检只选 1/14，不作为门。改卡理由是该快检把红线缩成单例，不能代表本文件对其余用例的拒绝与隔离断言。
 - **oracle**：ORACLE-P4-ISOLATED-TEST-DATA
 - **evidence_path**： planned: `quality/tests/p4-isolated-test-data-green.output`
 - **STOP**：路径或归属无法验证时停数据动作并保原错误。测试数据负责人提供合法隔离根或修版本输入后原命令重跑；禁止试真库恢复。

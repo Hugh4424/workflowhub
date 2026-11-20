@@ -239,7 +239,7 @@ P2 先交链检查的来源读回，P3 先交新旧日志入口与 make-decision
 组合 Vitest 及其余目标断言尚待预写与运行。已取得的单项目标 RED 见上方 012 原件。
 真实 runner 不存在时记配置失败，修设置后再取得目标读数。
 
-`node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs -t 'v2 log evidence through actual consumers|phase and findings reconcile against v2'`
+`node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs`
 
 - RED 目标：实际审查/规划消费者将本日志落点丢成旧槽位，漏合法原需求或不发现伪造处置。用冻结检查触发可命名的目标断言。
 - GREEN 目标：实际入口逐条消费当前日志和旧日志，负例可定位；B/C 落点与真实发现、源码和阶段引用一一可核。
@@ -330,7 +330,7 @@ P10 交单份既有终末报告、独立签字、授权确认、物理结果、�
   超时或 SIGINT/TERM 按现有流程关闭拥有的子进程并保初错。
   SIGKILL 后下次只对已验证 owner、路径及节点身份的可再生残留做受控回收。
   仍活进程、符号链接、节点身份变化或未知目录保留并具名报告。
-- **RED/GREEN 门禁命令**: `node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs -t 'v2 log evidence through actual consumers|phase and findings reconcile against v2'`
+- **RED/GREEN 门禁命令**: `node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs`
 - **预期退出码**: RED nonzero; GREEN 0。
   目标未收集、无依赖或夹具无效只算环境/准备失败。
 - **RED 目标失败**: ORACLE-LOG-V2-TERMINAL。用冻结检查逐项匹配真实原文与行位。
@@ -353,7 +353,9 @@ P10 交单份既有终末报告、独立签字、授权确认、物理结果、�
 - **写入集**: `skills/decision-log/SKILL.md`；`skills/material-writing/SKILL.md`；`skills/spec-analyze/SKILL.md`；`skills/spec-plan/scripts/build-decision-baseline.mjs`；`skills/wh-review/scripts/review-materials.mjs`；`tools/cli/check-decision-log-chain.mjs`；`workflows/make-decision/SKILL.md`；`workflows/build-plan/SKILL.md`；`tests/contract/spec-analyze-classes.test.mjs`；`tests/contract/decision-evidence-consumption.test.mjs`；`tests/contract/review-decision-baseline.test.mjs`；`tests/contract/review-materials-contract.test.mjs`
 - **依赖**: P1, P2, P3, P4, P5, P6, P7, P8, P9
 - **消费者**: 独立终末验收者、用户与下一任务
-- **gate_cmd**: `node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs -t 'v2 log evidence through actual consumers|phase and findings reconcile against v2'`
+- **gate_cmd**: `node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs tests/contract/decision-evidence-consumption.test.mjs tests/contract/review-decision-baseline.test.mjs tests/contract/review-materials-contract.test.mjs`
+- **gate_replay**: `node node_modules/vitest/vitest.mjs run tests/contract/final-chain-negatives.test.mjs -t 'ORACLE-CLOSE-CLAIMS-REPLAY gate counterexamples'`
+- **门覆盖（2026-11-21 材料变更，外部审查 #33）**: 四文件全量跑才算门；原 `-t` 按测试名只命中 2/185，实测同批文件全量给 3 failed 而声明门给 exit 0，会把红门报成绿门，不再作为门。`gate_replay` 为回放判据旁证（六条反例），守 P9 的 AC-P7-002 与终末门可信度，不属于四文件任一轴。
 - **oracle**: ORACLE-LOG-V2-TERMINAL
 - **evidence_path**: planned: `quality/tests/log-terminal-effects.output`
 - **STOP**: 新解析或投递失真时只撤相关写入，旧模板及真实错投和失败保存。归档与推送发生后只补真实读回或授权后修复，不覆写已签字原件。 缺外部权限或绑定失配停该动作。
