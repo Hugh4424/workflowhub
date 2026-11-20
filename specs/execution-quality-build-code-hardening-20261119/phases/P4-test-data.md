@@ -24,6 +24,17 @@
 **配套与影响**：配套调整＝`skills/testing-system-blueprint/SKILL.md` 的测试数据指向、`workflows/build-plan/SKILL.md` 统一准备段、`tests/fixtures/execution-quality/prepare-test-data.mjs`；配套迁移＝旧测试库与数据保留、版本与清理约定迁入现 owner 的段；配套移除＝`P0.md`、固定配额与第二数据 owner；影响范围＝P5 开工探测、本仓测试磁盘占用、build-plan 数据段写法。
 未决事实见验收和停止条件。未知信号由原负责人提供恢复条件。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列测试数据准备脚本与隔离夹具的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `node --version` | 0 | quality/tests/p4-readiness-node.output | 机器 | 计划负责人 |
+| `test -f tests/fixtures/execution-quality/prepare-test-data.mjs` | 0 | quality/tests/p4-readiness-prepare.output | 机器 | 计划负责人 |
+| `test -d tests/fixtures/execution-quality` | 0 | quality/tests/p4-readiness-fixtures.output | 机器 | 计划负责人 |
+| 合成样本不含真实用户数据，隔离根在仓库外 | 样本与隔离根经人工核对 | quality/evidence/p4-readiness-sample-isolation.md | 人 | 测试负责人 |
+
 ## 这一 Phase 怎么验收？
 
 完成本段需要约 34 活动分钟。两条验收各自保留，后段只消费实际原件。

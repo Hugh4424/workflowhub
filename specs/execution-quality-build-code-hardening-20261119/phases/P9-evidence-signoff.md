@@ -22,6 +22,17 @@
 - **未决事实**：独立验收的角色已明确。具体可用执行者身份和真实签字原件到终验取得。历史环境及输入不可比时保相应档位。
 - **配套与影响**：配套调整＝`tools/cli/stage-runtime.mjs` 的捕获接线、`core/task-close.mjs` 的声明读回、`skills/stage-close/SKILL.md`；配套迁移＝旧 review 记录只读保留、回放案例按 fixture 重建；配套移除＝六组手工负例、独立 `check-verdict` 入口；影响范围＝收口、三种交付声明、独立签名。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列冻结材料指纹与回放入口的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `shasum -a 256 specs/execution-quality-build-code-hardening-20261119/spec.md` | 0 | quality/tests/p9-readiness-spec-sha.output | 机器 | 计划负责人 |
+| `test -f tools/cli/stage-runtime.mjs` | 0 | quality/tests/p9-readiness-stage-runtime.output | 机器 | 计划负责人 |
+| `test -f core/task-close.mjs` | 0 | quality/tests/p9-readiness-task-close.output | 机器 | 计划负责人 |
+| 独立验收者与实施者不是同一执行单元 | 签字原件来自另一上下文 | quality/evidence/p9-readiness-signer.md | 人 | 验收负责人 |
+
 ## 这一 Phase 怎么验收？
 
 先由另一执行单元判本段首验。测试退出值仅证明命令曾到达自身结果。

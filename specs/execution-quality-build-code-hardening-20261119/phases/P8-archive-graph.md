@@ -22,6 +22,17 @@
 - **未决事实**：实际双路远端身份与范围授权由终末用户确认和认证读取确定。隔离仓可在此前执行。图工具实版缺失由图负责人恢复。
 - **配套与影响**：配套调整＝`core/task-close.mjs`、`tools/cli/task-close.mjs`、`runtime/stage/current-close-projection.mjs` 与 `skills/stage-close/SKILL.md`；配套迁移＝旧归档与图片只读保留、增量更新替代全量；配套移除＝图提交前更新、全量重抽、每工作树图副本、永久例外表；影响范围＝收口顺序、下一个任务的读回、P9 的声明对账。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列收口入口与归档技能的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `git rev-parse --show-toplevel` | 0 | quality/tests/p8-readiness-toplevel.output | 机器 | 计划负责人 |
+| `test -f core/task-close.mjs` | 0 | quality/tests/p8-readiness-task-close.output | 机器 | 计划负责人 |
+| `test -f skills/stage-close/SKILL.md` | 0 | quality/tests/p8-readiness-stage-close.output | 机器 | 计划负责人 |
+| 双路远端身份与收口范围经用户确认 | 与终末确认原件一致 | quality/evidence/p8-readiness-remote-scope.md | 人 | 收口负责人 |
+
 ## 这一 Phase 怎么验收？
 
 先由另一执行单元判本段首验。测试退出值仅证明命令曾到达自身结果。

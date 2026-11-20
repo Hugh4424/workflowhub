@@ -28,6 +28,17 @@
 独立验收者判本段功能和实际排版，下游第 9 段读这些原件做交付对账。
 **配套与影响**：配套调整＝`skills/answer-as-page/` 三个脚本与 `quality/evidence/cockpit/` 成对文件；配套迁移＝旧页按新模型重渲染、旧编号映射一次性迁出；配套移除＝自由文本解析器、仅按 mtime 判陈旧、旧编号兼容分支；影响范围＝用户驾驶舱、build-plan 追溯、P9 的交付对账输入。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列页面数据与渲染入口的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `node --version` | 0 | quality/tests/p7-readiness-node.output | 机器 | 计划负责人 |
+| `test -f skills/answer-as-page/scripts/render-answer-page.mjs` | 0 | quality/tests/p7-readiness-render.output | 机器 | 计划负责人 |
+| `test -f skills/answer-as-page/scripts/build-page-data.mjs` | 0 | quality/tests/p7-readiness-page-data.output | 机器 | 计划负责人 |
+| 上一版页面与其侧车配对可读 | 同名 HTML 与 JSON 成对存在 | quality/evidence/p7-readiness-page-pair.md | 人 | 页面负责人 |
+
 ## 这一 Phase 怎么验收？
 
 ### 验收 1：有坏模型时发布会拒绝吗？

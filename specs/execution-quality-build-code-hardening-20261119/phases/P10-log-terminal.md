@@ -22,6 +22,18 @@
 - **未决事实**：终末活动分钟和外部条件须据真实源量测。真实签字人选身份到执行确认。来源缺失、失败或灰度中断逐项显示，不能提前宣称最终成功。
 - **配套与影响**：配套调整＝`skills/material-writing/SKILL.md` 的记录节例外、`skills/spec-plan/scripts/build-decision-baseline.mjs` 与 `skills/wh-review/scripts/review-materials.mjs` 的读取；配套迁移＝v1→v2 逐包迁移、旧 12 包行只作素材；配套移除＝旧 69 个 AC 槽位与索引空槽、旧模板改造方案、包 3 的「唯一十项来源」声明；影响范围＝build-plan 作者与审查者、baseline、四查与覆盖矩阵的读取口径。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列末验所需的材料目录与检查入口的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `node --version` | 0 | quality/tests/p10-readiness-node.output | 机器 | 计划负责人 |
+| `test -f tools/cli/run-checks.mjs` | 0 | quality/tests/p10-readiness-run-checks.output | 机器 | 计划负责人 |
+| `test -d specs/execution-quality-build-code-hardening-20261119/phases` | 0 | quality/tests/p10-readiness-phases.output | 机器 | 计划负责人 |
+| `git rev-parse --verify HEAD` | 0 | quality/tests/p10-readiness-head.output | 机器 | 计划负责人 |
+| 用户确认实际交付与收口范围 | 与终末确认原件一致 | quality/evidence/p10-readiness-close-scope.md | 人 | 收口负责人 |
+
 ## 这一 Phase 怎么验收？
 
 - 防再发（build-plan 审查后）：baseline 对 14 条需求全命中，不只 3 条；每条有 AC 或“已声明不做”。

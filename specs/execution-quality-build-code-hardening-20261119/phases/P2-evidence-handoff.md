@@ -24,6 +24,17 @@
 **配套与影响**：配套调整＝talk/U/refs/facts 与确认回执的读取、`skills/stage-handoff/SKILL.md` 方法第 4–7 步；配套迁移＝旧摘要交接转不可变引用、backfilled 逐条标身份；配套移除＝第二份证据账本与手写九字段摘要合同；影响范围＝build-plan/build-code 的读取入口、旧任务交接、链检查告警口径。
 未决事实见验收和停止条件。未知信号由原负责人提供恢复条件。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列冻结对象与交接技能的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `git rev-parse --show-toplevel` | 0 | quality/tests/p2-readiness-toplevel.output | 机器 | 计划负责人 |
+| `git rev-parse --verify HEAD` | 0 | quality/tests/p2-readiness-head.output | 机器 | 计划负责人 |
+| `test -f skills/stage-handoff/SKILL.md` | 0 | quality/tests/p2-readiness-handoff-skill.output | 机器 | 计划负责人 |
+| 补录交接原件的原负责人确认对象身份与行位 | 与当前任务材料同版 | quality/evidence/p2-readiness-backfill-owner.md | 人 | 运行时负责人 |
+
 ## 这一 Phase 怎么验收？
 
 完成本段需要约 39 活动分钟。两条验收各自保留，后段只消费实际原件。

@@ -28,6 +28,17 @@
 验收字节、审查 provider、任务事实模型及风险承担归它们的原 owner。
 **配套与影响**：配套调整＝`workflows/build-code/SKILL.md` 的失败处置与分诊、`docs/standard-workflow.md` 的每 Phase 执行清单、`skills/spec-plan/templates/phase-template.md` 的执行交接指针；配套迁移＝旧审查日志保留、新阶段改写分诊行；配套移除＝`check-repair-log`、试点段与固定轮数上限；影响范围＝所有 Phase 的失败处置、成本读数与独立审查输入。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列失败处置方法与标准工作方法入口的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `git rev-parse --verify HEAD` | 0 | quality/tests/p6-readiness-head.output | 机器 | 计划负责人 |
+| `test -f workflows/build-code/SKILL.md` | 0 | quality/tests/p6-readiness-build-code.output | 机器 | 计划负责人 |
+| `test -f docs/standard-workflow.md` | 0 | quality/tests/p6-readiness-standard-workflow.output | 机器 | 计划负责人 |
+| 同因失败原件由原负责人保留并可回读 | 原件未被覆盖且可打开 | quality/evidence/p6-readiness-original-kept.md | 人 | 实施负责人 |
+
 ## 这一 Phase 怎么验收？
 
 ### 验收 1：同因失败能触发真实分诊吗？

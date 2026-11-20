@@ -24,6 +24,17 @@
 **配套与影响**：配套调整＝`workflows/make-decision/SKILL.md`、决策日志技能与 `skills/catalog.yaml`；配套迁移＝旧卡与五角色引用改三角色、`repo-skills.manifest.json` 由本段重生成；配套移除＝五角色×12、主持人兼写兼审；影响范围＝全部包收敛、子代理成本、三类审查的输入。
 未决事实见验收和停止条件。未知信号由原负责人提供恢复条件。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列定方向入口与角色模板的只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `git rev-parse --show-toplevel` | 0 | quality/tests/p3-readiness-toplevel.output | 机器 | 计划负责人 |
+| `test -f workflows/make-decision/SKILL.md` | 0 | quality/tests/p3-readiness-make-decision.output | 机器 | 计划负责人 |
+| `test -f skills/catalog.yaml` | 0 | quality/tests/p3-readiness-catalog.output | 机器 | 计划负责人 |
+| 三个角色由三位独立作者实际执行 | 三角色回答与卡由不同执行单元产出 | quality/evidence/p3-readiness-role-separation.md | 人 | 包负责人 |
+
 ## 这一 Phase 怎么验收？
 
 - 防再发（build-plan 审查后）：卡验收格必须含通过/失败/至少一个反例；同一段并存通过/失败判词判失败。

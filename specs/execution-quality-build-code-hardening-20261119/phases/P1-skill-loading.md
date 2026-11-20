@@ -24,6 +24,17 @@
 **配套与影响**：配套调整＝`reading_baseline` 读取、`check-stage-steps` 判定与 facts 加载事件；配套迁移＝旧任务没有加载事件记 unknown，新会话重新安装并记录实际根；配套移除＝「文件存在即完成」判断与旧跳过逻辑；影响范围＝P2/P3/P4 的步骤入口、现有任务完成门、新会话可见性。
 未决事实见验收和停止条件。未知信号由原负责人提供恢复条件。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列步骤读取入口与检查脚本的真实只读条件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `git rev-parse --show-toplevel` | 0 | quality/tests/p1-readiness-toplevel.output | 机器 | 计划负责人 |
+| `test -f tools/cli/check-stage-steps.mjs` | 0 | quality/tests/p1-readiness-step-cli.output | 机器 | 计划负责人 |
+| `test -f tests/contract/check-stage-steps.test.mjs` | 0 | quality/tests/p1-readiness-step-test.output | 机器 | 计划负责人 |
+| 主持人确认首次技能读取回执归属当前会话 | 回执由本次调用返回且任务一致 | quality/evidence/p1-readiness-read-receipt.md | 人 | 运行时负责人 |
+
 ## 这一 Phase 怎么验收？
 
 完成本段需要约 42 活动分钟。两条验收各自保留，后段只消费实际原件。

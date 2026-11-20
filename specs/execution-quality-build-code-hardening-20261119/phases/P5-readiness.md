@@ -29,6 +29,17 @@
 当前 `run --action=execute` 仍只承担已有游标与终末引用职责，首步只加一次就绪调用。
 **配套与影响**：配套调整＝`skills/spec-plan/templates/phase-template.md` 的就绪表、`workflows/build-code/SKILL.md` 派发前步骤、`tools/cli/stage-runtime.mjs` 首步调用；配套迁移＝旧任务补就绪表、旧「第 0 阶段」建议删去；配套移除＝「第 0 阶段」建议与 `run-checks` 加首步调用的双调用；影响范围＝build-code 第一步、P4 数据探测、主管道既有游标职责。
 
+### 开工就绪表
+
+开发开工前只跑一次这张表；本段只列就绪检查所需的解析、材料检查与模板文件。
+
+| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
+| --- | --- | --- | --- | --- |
+| `test -f runtime/stage/stage-content-contracts.mjs` | 0 | quality/tests/p5-readiness-contracts.output | 机器 | 计划负责人 |
+| `test -f tools/cli/run-checks.mjs` | 0 | quality/tests/p5-readiness-run-checks.output | 机器 | 计划负责人 |
+| `test -f skills/spec-plan/templates/phase-template.md` | 0 | quality/tests/p5-readiness-template.output | 机器 | 计划负责人 |
+| 旧任务的 10 张 Phase 卡均按本模板补就绪表 | 补表后材料检查不再报 missing readiness table | quality/evidence/p5-readiness-backfill.md | 人 | 计划负责人 |
+
 ## 这一 Phase 怎么验收？
 
 - 防再发（build-plan 审查后）：gate_cmd 裸变量、写集派生件、AC 与写集范围、需求对账四项粗查；缺项具名，不假过。
