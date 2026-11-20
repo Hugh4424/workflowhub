@@ -13,6 +13,8 @@ post 任务的当前正文必须写入认证 worktree 的 `specs/<task-id>/decis
 
 新日志用 [decision-log-template-v2.md](templates/decision-log-template-v2.md)；旧日志仍用 [decision-log-template.md](templates/decision-log-template.md)。将真实输入整理为 `decision-log.md` 供上述读者消费；模板只安排正文，不认证身份或授权。方向问答及最终确认归主会话，本技能不代答。
 
+普通读者按模板分两路：v2 日志给 build-plan/build-code 作者与独立审查者按每包十项记录读，来源与设计历程在正文可回读；旧模板只给读旧任务或做迁移核对的人按旧四材料口径读。当前任务只有 `specs/<task-id>/decision-log.md` 一个日志入口，旧模板与历史日志只读，不改写、不双写，也不另建第二份当前日志。
+
 ## 写作步骤
 
 写 decision-log 或改写本方法前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。

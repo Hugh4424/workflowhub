@@ -1106,3 +1106,99 @@ describe("ORACLE-P3-PORTABLE-TEMPLATE v2 template travels with the old one", () 
     expect(readFileSync(join(ROOT, v2))).toEqual(readFileSync(join(bundle, v2)));
   });
 });
+
+// P10: the current v2 log's ten-item design record is read by the real chain
+// checker. Missing items are named and stay advisory; the old-shape exit
+// behavior is not widened into a new blocking gate.
+describe("ORACLE-LOG-V2-TERMINAL ten-item design report", () => {
+  const logPath = "specs/execution-quality-build-code-hardening-20261119/decision-log.md";
+  it("reports all ten real design packages with every template item", () => {
+    const result = checkDecisionLogChain({ markdown: readFileSync(logPath, "utf8") });
+    expect(result.design_packages).toHaveLength(10);
+    for (const pkg of result.design_packages) expect(pkg.missing_items, `package ${pkg.id}`).toEqual([]);
+    expect(result.warnings.filter(item => item.code === "package_design_incomplete")).toEqual([]);
+    expect(result.exit_code).toBe(0);
+  });
+  it("names a missing item and keeps the advisory exit", () => {
+    const broken = readFileSync(logPath, "utf8").replace("**风险/回退**：", "**回退**：");
+    const result = checkDecisionLogChain({ markdown: broken });
+    const gap = result.warnings.find(item => item.code === "package_design_incomplete");
+    expect(gap?.message).toContain("风险/回退");
+    expect(gap?.message).toContain("owner=包");
+    expect(result.exit_code).toBe(0);
+  });
+});
+
+// P10 independent cases: the v2 template's numbered-heading shape is read by the
+// real chain checker, the real 28 findings stay open until evidence exists, and
+// the ten-ring report after the P10 evidence registration names ring 2 as
+// incomplete (missing title groups), ring 8 as completed and ring 9 as
+// unavailable. The task materials live outside the repo; WORKFLOWHUB_TASK_ROOT
+// overrides the default task-library location.
+import { existsSync, realpathSync } from "node:fs";
+const P10_TASK = "execution-quality-build-code-hardening-20261119";
+const P10_ITEMS = ["原始需求", "最初方案", "发散与被否", "调研", "最终决定", "完整方案", "验收", "风险/回退", "未决/消费者/证据", "配套与影响"];
+const p10TaskRoot = () => process.env.WORKFLOWHUB_TASK_ROOT ?? "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/" + P10_TASK;
+function p10TemplateShape(items = P10_ITEMS) {
+  return ["# 决策日志（模板 v2 受控样例）", "", "## 4. 每包设计", "", "### 包 1：受控包", "",
+    ...items.map((name, index) => `#### ${index + 1}. ${name}\n- 受控内容：${name}。\n`),
+    "## 5. 跨包共享", "", "- 受控。", ""].join("\n");
+}
+
+describe("P10 ORACLE-LOG-V2-TERMINAL template shape, real dispositions and ten rings", () => {
+  it("reads the v2 template numbered-heading shape and the current log as ten of ten", () => {
+    const shaped = checkDecisionLogChain({ markdown: p10TemplateShape() });
+    expect(shaped.design_packages, "the v2 numbered-heading shape yields one package").toHaveLength(1);
+    expect(shaped.design_packages[0].missing_items).toEqual([]);
+    expect(shaped.warnings.filter((item) => item.code === "package_design_incomplete")).toEqual([]);
+    expect(shaped.exit_code).toBe(0);
+    const current = checkDecisionLogChain({ markdown: readFileSync(join(ROOT, "specs", P10_TASK, "decision-log.md"), "utf8") });
+    expect(current.design_packages).toHaveLength(10);
+    for (const pkg of current.design_packages) expect(pkg.missing_items, `package ${pkg.id}`).toEqual([]);
+    expect(current.exit_code).toBe(0);
+  });
+  it("names a deleted numbered item and keeps the advisory exit", () => {
+    const result = checkDecisionLogChain({ markdown: p10TemplateShape().replace("#### 8. 风险/回退\n", "") });
+    const gap = result.warnings.find((item) => item.code === "package_design_incomplete");
+    expect(gap, "the deleted item is named by package_design_incomplete").toBeDefined();
+    expect(gap.message).toContain("风险/回退");
+    expect(gap.decision_id).toBe("包 1");
+    expect(result.exit_code).toBe(0);
+  });
+  it("keeps the real 28 dispositions open until evidence exists", () => {
+    const review = join(p10TaskRoot(), "quality/reviews/2026-11-19-018-build-plan-document.json");
+    const dispositions = join(p10TaskRoot(), "quality/evidence/build-plan/2026-11-19-015-merged-review-dispositions-c.md");
+    expect(existsSync(review), `real review file at ${review}`).toBe(true);
+    expect(existsSync(dispositions), `real dispositions file at ${dispositions}`).toBe(true);
+    const result = spawnSync(process.execPath, ["skills/spec-plan/scripts/build-decision-baseline.mjs", "--task", P10_TASK, "--review", review, "--dispositions", dispositions], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("findings 28 条；处置 28 条；fixed 0/22 有可读修复证据；缺口 28 条");
+    for (const id of ["/10", "/11", "/12", "/13", "/17", "/25"]) expect(result.stdout).toContain(`finding ${id} 待人工处置`);
+    expect((result.stdout.match(/待人工处置/g) ?? [])).toHaveLength(6);
+    expect(result.stdout).not.toContain("fixed 22/22");
+  });
+  it("reports ring 2 incomplete with the missing title groups, ring 8 completed and ring 9 unavailable", async () => {
+    const api = await import("../../runtime/task/final-chain-runner.mjs");
+    const materialRoot = join(ROOT, "specs", P10_TASK);
+    const state = api.runFinalChainCheck({ taskPath: p10TaskRoot(), materialRoot });
+    const ring = (number) => state.rings.find((row) => row.ring === number);
+    expect(ring(2).state, "registered chain/index scans make ring 2 incomplete, not unavailable").toBe("incomplete");
+    expect(ring(8).state, "the P10 gate command completes ring 8").toBe("completed");
+    expect(ring(9).state, "no canonical review result keeps ring 9 unavailable").toBe("unavailable");
+    const log = readFileSync(join(materialRoot, "decision-log.md"), "utf8");
+    for (const titles of [["任务身份"], ["工作包与决定", "每个包定了哪些决定？"], ["未决项", "还有什么没定，谁来定？"]])
+      expect(titles.some((title) => log.includes(title)), `title group ${titles.join("/")}`).toBe(false);
+    expect((ring(2).basis ?? []).flatMap((item) => item.notes ?? []).join("\n")).toContain("必要段缺失");
+    // Controlled counterexample: with the two registrations removed, the same
+    // reader reports ring 2 unavailable instead of incomplete.
+    // /var is a symlink to /private/var on macOS; the reader rejects alias paths.
+    const copy = realpathSync(temp("p10-rings-"));
+    cpSync(join(p10TaskRoot(), "task.json"), join(copy, "task.json"));
+    const rows = readFileSync(join(p10TaskRoot(), "facts.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    const stage = rows.at(-1);
+    stage.evidence.value = stage.evidence.value.filter((entry) => !String(entry.command).includes("check-decision-log-chain"));
+    writeFileSync(join(copy, "facts.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
+    const without = api.runFinalChainCheck({ taskPath: copy, materialRoot });
+    expect(without.rings.find((row) => row.ring === 2).state).toBe("unavailable");
+  });
+});

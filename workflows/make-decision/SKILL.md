@@ -342,6 +342,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
    **本步产物**：确认前对最终决策草稿、真实问答、Grill/审查与已产生证据的只读一致性核对结果；日志留必要说明/原件引用及领域写入读回或有源 no-change。
    **进下一步前**：逐项核草稿是否对应用户已见方向、真实问答与审查处置；缺口保持可见，改变决定的修复先准备可审稿再交第14步取得真实确认，不增加日常审批或机器门。 执行 `node tools/cli/run-checks.mjs --task-path <任务根>`，把 `missing_steps` 清单原样写进阶段核对，点名每个缺失 `step_slug`；阶段材料检查另跑 `node tools/cli/run-checks.mjs --material-root <材料目录> --stage=make-decision`，本阶段尚未产出 spec.md/phases 属正常，不据此判红；有留痕阶段清单非空记本阶段核对 incomplete。零留痕时保 `steps_unattested` 与未观测事实，不把退出 0 当成已执行或完整覆盖；这是报告核对，不新增审批或推进 gate。
 
+   本步同时产出 A 表并交最终确认：读任务库 `quality/evidence/decision-log-refs/requirement-index.md` §1 的 14 行，逐条核需求原文 ref、sha256、用户答复位置、包、决定、AC 与缺口 owner，再用 `node skills/spec-plan/scripts/build-decision-baseline.mjs --decision-log <当前日志>` 的「原始需求」段按行位对回正文；缺行、只在合并句出现或仍指旧槽位记具名缺口与 owner。A 表是本轮人工原件，不用它替代最终确认。
    对最终决策草稿和真实问答/审查作只读一致性核对：逐项核草稿是否对应用户已见方向、真实问答与审查处置，确认材料与真实来源一致；逐一核对本次已解决术语及边界变化的所属术语表与实际写入读回，或有来源的 no-change 理由；未解/冲突保原问题及待问来源，核对结果留现 decision-log 的必要说明和引用。缺口保持可见，普通修复在当前任务继续；改变已确认方向、范围或验收时，先准备可审稿再交最终确认，取得该决定真实答复，不新增日常审批或机器门，也不把本步核对当最终确认。
 
    UI 任务时核对引一行「UI 范围与设计基准」；非 UI 跳过。

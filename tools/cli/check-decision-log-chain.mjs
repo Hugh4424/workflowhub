@@ -422,6 +422,59 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source,
  * The CLI always passes both (see main), so the unknown-original check is real on
  * the public entry; a direct in-process call without them is not equivalent.
  */
+
+// The v2 design record keeps one block per work package and the ten template
+// items as bold labels or numbered headings. This CLI stays self-contained:
+// it reports the current bytes, it does not load the portable plan script.
+const DESIGN_ITEMS = ['原始需求', '最初方案', '发散与被否', '调研', '最终决定', '完整方案', '验收', '风险/回退', '未决/消费者/证据', '配套与影响'];
+function designItemName(value) {
+  return String(value ?? '').trim().replace(/[（(][^）)]*[）)]\s*$/, '').trim();
+}
+function readDesignBlocks(markdown) {
+  const visible = [];
+  let fence = null;
+  const all = String(markdown).split(/\r?\n/);
+  for (let index = 0; index < all.length; index++) {
+    const line = all[index];
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) { if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null; continue; }
+    if (marker) { fence = marker[1]; continue; }
+    visible.push({ text: line, line: index + 1 });
+  }
+  const packages = [];
+  let current = null, sectionDepth = null;
+  for (const { text: line, line: lineNo } of visible) {
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (heading) {
+      const raw = heading[2].trim();
+      const title = raw.replace(/^\d+(?:\.\d+)*[.、]?\s*/, '');
+      if (title === '每包设计') { sectionDepth = heading[1].length; current = null; continue; }
+      if (sectionDepth === null) continue;
+      if (heading[1].length <= sectionDepth) { sectionDepth = null; current = null; continue; }
+      if (heading[1].length === sectionDepth + 1) {
+        // v2 template shape: `### 包 <N>：<name>` with `#### <n>. <item>` below it.
+        const named = /^包\s*`?(\d+)`?\s*[：:]\s*(.+)$/.exec(title);
+        // current log shape: `### 4.1 <name>`; template index shape: `### 1. <name>`.
+        const numbered = /^(\d+)\.(\d+)\s+(.+)$/.exec(raw);
+        const single = /^(\d+)\.\s+(.+)$/.exec(raw);
+        const id = named ? Number(named[1]) : numbered ? Number(numbered[2]) : single ? Number(single[1]) : null;
+        const name = named ? named[2].trim() : numbered ? numbered[3].trim() : single ? single[2].trim() : null;
+        if (name && Number.isSafeInteger(id)) { current = { id, name, line: lineNo, level: heading[1].length, items: new Set(), acs: [] }; packages.push(current); continue; }
+      }
+      if (!current || heading[1].length <= current.level) continue;
+      const itemHeading = /^(\d+)\.\s*(.+)$/.exec(raw);
+      if (itemHeading && DESIGN_ITEMS.includes(designItemName(itemHeading[2]))) current.items.add(designItemName(itemHeading[2]));
+      for (const ac of line.match(/AC-P\d+-\d+/g) ?? []) if (!current.acs.includes(ac)) current.acs.push(ac);
+      continue;
+    }
+    if (!current) continue;
+    const bold = /^\*\*([^*]+)\*\*\s*[：:]?/.exec(line.trim());
+    if (bold && DESIGN_ITEMS.includes(designItemName(bold[1]))) current.items.add(designItemName(bold[1]));
+    for (const ac of line.match(/AC-P\d+-\d+/g) ?? []) if (!current.acs.includes(ac)) current.acs.push(ac);
+  }
+  return packages.map(pkg => ({ ...pkg, missing: DESIGN_ITEMS.filter(item => !pkg.items.has(item)) }));
+}
+
 export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source, log_path, index_path } = {}) {
   if (typeof markdown !== "string") {
     return {
@@ -429,14 +482,23 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
       source_ref,
       warnings: [warning("invalid_input", "unknown", "markdown", "decision log content is not text")],
       failures: [],
+      design_packages: [],
       exit_code: 0,
     };
   }
 
+  // The v2 record writes one design block per work package with the ten
+  // template items. Report each block and every missing item by name; this is
+  // an advisory reading of the current bytes, not a new gate.
+  const designPackages = readDesignBlocks(markdown).map(pkg => ({ ...pkg, missingItems: pkg.missing }));
   const mappings = decisionIdMappings(markdown);
   const { sections, unmapped, nonCanonical, headings, sourceIds } = decisionSections(markdown, mappings);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = unitWarnings(markdown);
+  for (const pkg of designPackages) {
+    if (!pkg.missingItems.length) continue;
+    warnings.push(warning("package_design_incomplete", `包 ${pkg.id}`, "每包设计", `包 ${pkg.id}（${pkg.name}）缺 ${pkg.missingItems.join("、")}；owner=包 ${pkg.id} 作者`));
+  }
   let recognizedFields = 0;
 
   for (const { label, line } of unmapped) {
@@ -599,6 +661,7 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     source_ref,
     recognized_blocks: sections.length,
     recognized_fields: recognizedFields,
+    design_packages: designPackages.map(pkg => ({ id: pkg.id, name: pkg.name, line: pkg.line, acs: pkg.acs, missing_items: pkg.missingItems })),
     warnings,
     failures: [],
     // Old-shape materials keep the advisory exit. A named new-shape source
@@ -831,6 +894,11 @@ export function main(args = process.argv.slice(2)) {
     }
     checkedInputs += 1;
     console.log(`[check-decision-log-chain] scanned ${JSON.stringify({input_path:resolve(input.path),input_sha256:executionHash(inputBytes),checker_sha256:checkerExecutionHash})}`);
+    for (const pkg of result.design_packages ?? []) {
+      const total = 10;
+      const have = total - pkg.missing_items.length;
+      console.log(`[check-decision-log-chain] design package ${pkg.id} (${pkg.name}) line ${pkg.line}: ${have}/${total} items${pkg.missing_items.length ? `; missing ${pkg.missing_items.join("、")}` : ""}; AC ${pkg.acs.join("、") || "none"}`);
+    }
     for (const item of result.warnings) {
       warningCount += 1;
       if (ANSWER_FLAGS.includes(item.code)) answerErrors += 1;
