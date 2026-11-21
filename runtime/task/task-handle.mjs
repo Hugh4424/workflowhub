@@ -4,6 +4,7 @@ import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-iden
 import { assertTaskHandle, brandTaskHandle } from "./task-capability.mjs";
 import { createFileOnce, writeFileAtomic, appendRecord as appendOrdinaryRecord } from "../interface/safe-write.mjs";
 import { createTaskDiskWriteExecutor } from "../evidence/disk-budget.mjs";
+import { resolveTaskTestsDiskLimits } from "../evidence/storage-root.mjs";
 import { captureCommand as captureNativeCommand } from "../interface/run-command.mjs";
 import { recordConfirmation as recordHumanConfirmation } from "../interface/human-confirm.mjs";
 import { record as recordGitGrant, consume as consumeGitGrant } from "../interface/git-authorize.mjs";
@@ -92,7 +93,14 @@ export function openTask(taskPath, expected, expectedTaskId) {
   const verify = () => { verifyDirectories(ancestry); if (!readBytes(root, "task.json").equals(manifestBytes)) throw new Error("task manifest changed after open"); };
   const writable = () => { verify(); if (manifest.activation_cohort !== "post") throw new Error("pre/history task records are read-only"); };
   const parents = ref => { recordPath(root, ref); directories(dirname(recordPath(root, ref)), true); verify(); };
-  const performWrite = createTaskDiskWriteExecutor({taskRoot:root});
+  const defaultWrite = createTaskDiskWriteExecutor({taskRoot:root});
+  let testsWrite;
+  const performWrite = (request, write) => {
+    const ref = relative(root, request.path).split(sep).join('/');
+    if (!ref.startsWith('quality/tests/')) return defaultWrite(request, write);
+    testsWrite ??= createTaskDiskWriteExecutor({taskRoot:root,limits:resolveTaskTestsDiskLimits({ ...actual, taskRoot:root })});
+    return testsWrite(request, write);
+  };
   const quality = ref => /^quality\/(?:evidence|reviews|tests)(?:\/|$)/.test(ref);
   const writeOptions = ref => quality(ref) ? {performWrite} : undefined;
   const sameOriginal = (ref,bytes) => { try { return readBytes(root,ref).equals(Buffer.from(bytes)); } catch(error) { if(error.code==='ENOENT')return false;throw error; } };

@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
-import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, lstatSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { deriveTaskPath } from "../task/task-identity.mjs";
+import { DEFAULT_TASK_DISK_LIMITS } from "./disk-budget.mjs";
 
 /**
  * Unique owner of the WorkflowHub user configuration path.
@@ -26,22 +28,62 @@ function safeJsonPosition(error) {
   return positioned ? `position ${positioned[1]}` : "position unknown";
 }
 
-function readConfiguredTaskDir({ env, home }) {
-  const path = workflowHubConfigPath({ env, home });
-  if (!existsSync(path)) return undefined;
+function readOperatorConfig(path, source = path) {
+  if (source === path && !existsSync(path)) return undefined;
   let config;
   try {
-    config = JSON.parse(readFileSync(path, "utf8"));
+    config = JSON.parse(readFileSync(source, "utf8"));
   } catch (error) {
     throw new TypeError(`invalid WorkflowHub config JSON at ${path} (${safeJsonPosition(error)}); parser content is not echoed`);
   }
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     throw new TypeError(`WorkflowHub config must be a JSON object: ${path}`);
   }
+  return config;
+}
+
+function configuredTaskDir(config, path) {
+  if (!config) return undefined;
   if (typeof config.task_dir !== "string" || config.task_dir.trim() === "") {
     throw new TypeError(`WorkflowHub config task_dir must be a non-empty absolute path: ${path}`);
   }
   return config.task_dir.trim();
+}
+
+/** Operator-only exception, resolved by the existing authenticated task handle. */
+export function resolveTaskTestsDiskLimits({ projectName, taskId, taskRoot }) {
+  const path = workflowHubConfigPath();
+  const invalid = () => Object.assign(new Error("TASK_TESTS_DISK_BUDGET_INVALID: check operator config identity, canonical root, ownership and hard_bytes"), { code: "TASK_TESTS_DISK_BUDGET_INVALID" });
+  let fd;
+  try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+  catch (error) {
+    if (error.code === "ENOENT") return undefined;
+    if (error.code === "ELOOP") throw invalid();
+    throw error;
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) throw invalid();
+    const config = readOperatorConfig(path, fd);
+    if (!Object.hasOwn(config, "task_tests_disk_budget")) return undefined;
+    const entry = config.task_tests_disk_budget;
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw invalid();
+    const { project_name, task_id, task_root, hard_bytes } = entry;
+    const matchesIdentity = project_name === projectName && task_id === taskId;
+    const namesRoot = typeof task_root === "string" && isAbsolute(task_root) && resolve(task_root) === taskRoot;
+    if (!matchesIdentity && !namesRoot) return undefined;
+    if (!matchesIdentity || task_root !== taskRoot || Object.keys(entry).length !== 4 ||
+        !Number.isSafeInteger(hard_bytes) || hard_bytes <= DEFAULT_TASK_DISK_LIMITS.tests.hardBytes ||
+        hard_bytes > DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes) throw invalid();
+    const storage = realpathSync(validateStorageRoot(configuredTaskDir(config, path)));
+    const placement = relative(join(storage, "Projects"), path);
+    const named = lstatSync(path);
+    if (deriveTaskPath(storage, projectName, taskId) !== taskRoot ||
+        !(placement === ".." || placement.startsWith(`..${sep}`) || isAbsolute(placement)) ||
+        stat.nlink !== 1 || stat.uid !== process.getuid?.() || (stat.mode & 0o022) !== 0 ||
+        stat.dev !== named.dev || stat.ino !== named.ino || realpathSync(path) !== path) throw invalid();
+    return { tests: { hardBytes: hard_bytes } };
+  } finally { closeSync(fd); }
 }
 
 function validateStorageRoot(value) {
@@ -74,7 +116,8 @@ export function resolveStorageRootDetails({ env = process.env, home = homedir() 
   const envValue = typeof configured === "string" && configured.trim() !== ""
     ? configured.trim()
     : null;
-  const configValue = readConfiguredTaskDir({ env, home }) ?? null;
+  const configPath = workflowHubConfigPath({ env, home });
+  const configValue = configuredTaskDir(readOperatorConfig(configPath), configPath) ?? null;
   const homeValue = home;
   const selectedSource = envValue !== null ? "env" : configValue !== null ? "config" : "home";
   const selectedValue = envValue ?? configValue ?? homeValue;
