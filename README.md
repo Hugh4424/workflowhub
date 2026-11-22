@@ -265,6 +265,23 @@ node tools/cli/build-skill-manifests.mjs --check
 - `mode` 不能随手写：`make-decision`（按 `direction`/`detail` 分轨）、`build-plan` 必须是 `single_round`；`build-code` 必须是 `full_only`。不写 `mode` 时默认 `adaptive`，这几个阶段就会报 `mode must be ...`。
 - **provider 和 model 的定义不在这个文件里**，归你的 3rd-review 配置；这里只写 provider ID。
 
+### 给单个任务提高测试记录上限
+
+默认 `quality/tests` 硬上限仍为 256 MiB。遇到 `DISK_BUDGET_EXCEEDED` 且必须保留已有原件时，操作者可在现有用户配置中加入一个 `task_tests_disk_budget`，保留其它配置项不动：
+
+```json
+"task_tests_disk_budget": {
+  "project_name": "ExampleProject",
+  "task_id": "example-task",
+  "task_root": "/absolute/storage/Projects/ExampleProject/tasks/example-task",
+  "hard_bytes": 335544320
+}
+```
+
+- 填写已认证任务的精确身份与物理绝对路径；它必须是同一配置中 `task_dir` 下该项目/任务的标准位置。文件须归当前用户所有、为单链接普通文件、不经符号链接、不可由组或其他用户写入，并在该存储根的 `Projects` 之外。建议权限 `0600`。
+- `hard_bytes` 必须为大于 `268435456` 且不超过 `536870912` 的整数。只提高该当前任务 `quality/tests` 的硬字节线；软线、文件数、审查和其它证据的配额保持不变。选中任务的配置绑定无效时，报告 `TASK_TESTS_DISK_BUDGET_INVALID`；其他任务仍按默认值。
+- 不改验证命令：原 `verify --action=execute` 仍经认证 task handle 保存输出与回执。任务材料、事实和 verify 输入不能设置这个值。配置归本机操作者维护，现有 task handle 消费；不再需要时删除该键并重新运行命令（长驻 API 使用者重新打开 handle）。若占用仍高于默认线，撤回后只拒绝新写入，不删除、迁移或改写原件及其引用。
+
 ### 3rd-review 从哪来
 
 `third_review` 三处值不是占位符能蒙过去的：
