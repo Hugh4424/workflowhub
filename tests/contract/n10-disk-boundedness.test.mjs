@@ -80,6 +80,134 @@ async function actualTask(){
  const task=await createTask({storageRoot:root,manifest:{schema_version:'1.0.0',project_name:'workflowhub',task_id:'disk-owned',created_at:'2026-10-21T00:00:00Z',target_repo_root:root,activation_cohort:'post',record_model:'vnext-single-write',execution_mode:'per_invocation',issue_ids:[],inputs:{}}});return {root,task};
 }
 function fill(task,group,bytes){const dir=task.recordPath('quality/'+group);mkdirSync(dir,{recursive:true});const path=join(dir,'owned-sparse');writeFileSync(path,'');truncateSync(path,bytes);return path;}
+describe('operator test capture budget',()=>{
+  it('keeps the default for absent or other task settings and enforces the selected hard limit',async()=>{
+    const {root,task}=await actualTask(), configRoot=fixture();
+    const {openTask,createTask}=await import('../../runtime/task/task-handle.mjs');
+    mkdirSync(join(configRoot,'workflowhub'));
+    const config=join(configRoot,'workflowhub','config.json');
+    const entry={project_name:'workflowhub',task_id:'disk-owned',task_root:task.taskPath,hard_bytes:268435457};
+    const other=await createTask({storageRoot:root,manifest:{...task.manifest,task_id:'disk-other',inputs:{task_tests_disk_budget:{...entry,task_id:'disk-other'}}}});
+    fill(task,'tests',268435456); fill(other,'tests',268435456);
+    fill(task,'reviews',268435456);
+    await other.appendRecord({dir:'quality/evidence',slug:'untrusted-override',ext:'json',bytes:JSON.stringify(entry)});
+    vi.stubEnv('XDG_CONFIG_HOME',configRoot);
+    try {
+      const save=(value)=>writeFileSync(config,JSON.stringify(value),{mode:0o600});
+      const propose=(target)=>openTask(target.taskPath,target.identity).createRecord('quality/tests/new','x');
+      save({task_dir:root});
+      await expect(propose(task)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED',hard_bytes:268435456});
+      save({task_dir:root,task_tests_disk_budget:entry});
+      await expect(propose(other)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED',hard_bytes:268435456});
+      const selected=openTask(task.taskPath,task.identity);
+      await selected.createRecord('quality/tests/boundary','x');
+      await expect(propose(task)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED',hard_bytes:268435457});
+      await expect(selected.createRecord('quality/reviews/new','x')).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED',hard_bytes:268435456});
+      save({task_dir:root});
+      await expect(propose(task)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED',hard_bytes:268435456});
+      expect(selected.readRecord('quality/tests/boundary')).toBe('x');
+    } finally {vi.unstubAllEnvs();}
+  });
+
+  it('rejects attempted bindings through mismatched identities, roots, or link aliases',async()=>{
+    const {root,task}=await actualTask(), configRoot=fixture();
+    const {openTask}=await import('../../runtime/task/task-handle.mjs');
+    const dir=join(configRoot,'workflowhub'); mkdirSync(dir);
+    const config=join(dir,'config.json'), alias=join(root,'alias'); symlinkSync(task.taskPath,alias);
+    const entry={project_name:'workflowhub',task_id:'disk-owned',task_root:task.taskPath,hard_bytes:300000000};
+    vi.stubEnv('XDG_CONFIG_HOME',configRoot);
+    try {
+      const save=(patch,task_dir=root,file=config)=>writeFileSync(file,JSON.stringify({task_dir,task_tests_disk_budget:{...entry,...patch}}),{mode:0o600});
+      const reopen=()=>openTask(task.taskPath,task.identity).createRecord('quality/tests/not-allowed','x');
+      for(const patch of [{project_name:'wrong'},{task_id:'wrong'},{task_root:root},{task_root:'relative'},{task_root:alias},{task_root:task.taskPath+'/.'},{hard_bytes:536870913},{hard_bytes:268435456},{hard_bytes:300000000.5},{hard_files:20000}]) {
+        save(patch);
+        await expect(reopen()).rejects.toMatchObject({code:'TASK_TESTS_DISK_BUDGET_INVALID'});
+      }
+      save({},configRoot);
+      await expect(reopen()).rejects.toMatchObject({code:'TASK_TESTS_DISK_BUDGET_INVALID'});
+      expect(()=>openTask(alias,task.identity)).toThrow(/real directory/);
+      const linkedConfigHome=fixture(), linkedConfigDir=join(linkedConfigHome,'workflowhub'); mkdirSync(linkedConfigDir);
+      save({}); symlinkSync(config,join(linkedConfigDir,'config.json'));
+      vi.stubEnv('XDG_CONFIG_HOME',linkedConfigHome);
+      await expect(reopen()).rejects.toMatchObject({code:'TASK_TESTS_DISK_BUDGET_INVALID'});
+    } finally {vi.unstubAllEnvs();}
+  });
+
+  it('does not consult operator config on read and rejects FIFO without blocking test writes',async()=>{
+    const {task}=await actualTask(), configRoot=fixture();
+    const dir=join(configRoot,'workflowhub'); mkdirSync(dir);
+    const config=join(dir,'config.json');
+    execFileSync('mkfifo',[config]);
+    const taskHandle=new URL('../../runtime/task/task-handle.mjs',import.meta.url).href;
+    const script=`import {openTask} from ${JSON.stringify(taskHandle)};
+      const task=openTask(${JSON.stringify(task.taskPath)},'workflowhub','disk-owned');
+      task.readRecord('task.json');
+      await task.createRecord('quality/evidence/unaffected','original');
+      try { await task.createRecord('quality/tests/nope','x'); }
+      catch (error) { if(error.code==='TASK_TESTS_DISK_BUDGET_INVALID') process.exit(0); throw error; }
+      process.exit(1);`;
+    const child=spawnSync(process.execPath,['--input-type=module','-e',script],{env:{...process.env,XDG_CONFIG_HOME:configRoot},encoding:'utf8',timeout:2500});
+    expect(child.error).toBeUndefined();
+    expect(child.status,child.stderr).toBe(0);
+  });
+
+  it('uses the operator limit in public verify but rejects a limit supplied as verify input',async()=>{
+    const {root,task}=await actualTask(), configRoot=fixture(), repo=fixture(), wt=join(repo,'owned-worktree');
+    const git=(...args)=>execFileSync('git',args,{cwd:repo,stdio:'pipe'});
+    git('init','-q','-b','main');
+    git('-c','user.name=Owned','-c','user.email=owned@example.invalid','-c','commit.gpgsign=false','commit','-qm','owned baseline','--allow-empty');
+    git('worktree','add','-q','-b','task/workflowhub/disk-owned',wt);
+    writeFileSync(task.recordPath('task.json'),JSON.stringify({...task.manifest,target_repo_root:repo,workspace_mode:'existing',workspace_root:wt}));
+    mkdirSync(join(wt,'specs','disk-owned'),{recursive:true});
+    writeFileSync(join(wt,'specs','disk-owned','decision-log.md'),'# Owned decision\n');
+    writeFileSync(join(task.taskPath,'facts.jsonl'),'');
+    mkdirSync(join(task.taskPath,'quality','tests'),{recursive:true});
+    const ballast=join(task.taskPath,'quality','tests','owned-sparse');
+    writeFileSync(ballast,''); truncateSync(ballast,268435456);
+    mkdirSync(join(configRoot,'workflowhub'));
+    const setting={project_name:'workflowhub',task_id:'disk-owned',task_root:task.taskPath,hard_bytes:268440000};
+    const config=join(configRoot,'workflowhub','config.json'), path=join(root,'verify-input.json');
+    const run=(input)=>{
+      writeFileSync(path,JSON.stringify(input));
+      return spawnSync(process.execPath,[fileURLToPath(new URL('../../tools/cli/stage-runtime.mjs',import.meta.url)),'verify','--action=execute','--stage=build-code','--project=workflowhub','--task=disk-owned','--task-path='+task.taskPath,'--input='+path],{cwd:wt,env:{...process.env,XDG_CONFIG_HOME:configRoot,WORKFLOWHUB_TASK_DIR:root},encoding:'utf8',timeout:10000});
+    };
+    const input={argv:[process.execPath,'-e','process.stdout.write("verify actual")'],slug:'owned-disk-verify'};
+    writeFileSync(config,JSON.stringify({task_dir:root}),{mode:0o600});
+    const injected=run({...input,task_tests_disk_budget:setting});
+    expect(injected.status).toBe(1);
+    expect(injected.stderr).toContain('verify input has unknown fields');
+    const rejected=run(input);
+    expect(rejected.status).toBe(1);
+    expect(rejected.stderr).toContain('DISK_BUDGET_EXCEEDED');
+    writeFileSync(config,JSON.stringify({task_dir:root,task_tests_disk_budget:setting}));
+    const saved=run(input);
+    expect(saved.status,saved.stderr).toBe(0);
+    const receipt=JSON.parse(saved.stdout);
+    expect(readFileSync(receipt.output_ref,'utf8')).toBe('verify actual');
+    expect(JSON.parse(readFileSync(receipt.receipt_ref,'utf8')).output_ref).toBe(receipt.output_ref);
+  });
+
+  it('lets the exact task capture above the default and preserves existing originals',async()=>{
+    const {root,task}=await actualTask(), configRoot=fixture();
+    const original=await task.createRecord('quality/tests/original','original');
+    fill(task,'tests',268435456);
+    mkdirSync(join(configRoot,'workflowhub'));
+    const config=join(configRoot,'workflowhub','config.json');
+    writeFileSync(config,JSON.stringify({task_dir:root,task_tests_disk_budget:{project_name:'workflowhub',task_id:'disk-owned',task_root:task.taskPath,hard_bytes:268440000}}),{mode:0o600});
+    vi.stubEnv('XDG_CONFIG_HOME',configRoot);
+    try {
+      const {openTask}=await import('../../runtime/task/task-handle.mjs');
+      const scoped=openTask(task.taskPath,'workflowhub','disk-owned');
+      const outcome=await scoped.captureCommand({cwd:root,slug:'above-default',argv:[process.execPath,'-e','process.stdout.write("actual")']});
+      expect(outcome.exit_code).toBe(0);
+      expect(readFileSync(outcome.output_ref,'utf8')).toBe('actual');
+      expect(JSON.parse(readFileSync(outcome.receipt_ref,'utf8')).output_ref).toBe(outcome.output_ref);
+      expect(scoped.readRecord('quality/tests/original')).toBe('original');
+      expect(original.path).toBe(scoped.recordPath('quality/tests/original'));
+    } finally {vi.unstubAllEnvs();}
+  });
+});
+
 describe('T039 real task write owners and cross-caller budget',()=>{
  it('A create/write/append reject full evidence while known identical bytes reuse first',async()=>{
   const {task}=await actualTask(),m=await moduleUnderTest();await task.createRecord('quality/evidence/known','owned');fill(task,'evidence',m.DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes-5);

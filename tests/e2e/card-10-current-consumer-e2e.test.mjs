@@ -90,6 +90,42 @@ function expectProjection(f, run, state) {
 }
 
 describe("CARD-10 current public CLI consumers", () => {
+  it('uses the current six-section decision for both PRD writes and leaves archived decisions untouched', async () => {
+    const f = await fixture();
+    const entry = '# 决策日志\n\n## 1. 入口\n\n### 这是什么任务\n';
+    const initial = entry + '- **任务类型**：`规划任务`（只做规划）。\n';
+    const archive = join(f.wt, 'specs/archive/current-consumer');
+    mkdirSync(archive, { recursive: true });
+    writeFileSync(join(archive, 'decision-log.md'), initial);
+    const name = join(f.material, 'prd.md');
+    const args = { rawInput: '# 草稿\n', extra: ['--name=prd.md'] };
+    const input = inputFor(f);
+    const beforeFacts = facts(f);
+
+    for (const current of [entry, entry + '- **任务类型**：`普通任务`。\n']) {
+      writeFileSync(f.decision, current);
+      const draft = call(f, 'run', 'draft', args);
+      const execute = call(f, 'run', 'execute', { input });
+      for (const denied of [draft, execute]) {
+        expect(denied.status).not.toBe(0);
+        expect(denied.combined).toMatch(/explicit planning task type/);
+      }
+      expect(existsSync(name)).toBe(false);
+      expect(existsSync(join(portableRoot(f), 'terminal'))).toBe(false);
+    }
+
+    writeFileSync(f.decision, initial);
+    const drafted = call(f, 'run', 'draft', args);
+    expect(drafted.status, drafted.combined).toBe(0);
+    expect(readFileSync(name, 'utf8')).toBe(args.rawInput);
+    const ran = call(f, 'run', 'execute', { input });
+    expect(ran.status, ran.combined).toBe(0);
+    expect(ran.value.state).toBe('succeeded');
+    expect(readFileSync(f.decision, 'utf8')).toBe(initial);
+    expect(readFileSync(join(archive, 'decision-log.md'), 'utf8')).toBe(initial);
+    expect(facts(f)).toEqual(beforeFacts);
+  });
+
   it("scene 1: planning run consumes every actual declared step and projects the exact terminal through status/doctor", async () => {
     const f = await fixture(), before = facts(f), sentinelBytes = f.sentinels.map(p => readFileSync(p));
     expect(readFileSync(join(f.wt, "workflows/build-prd/steps.json"))).toEqual(declaration);
@@ -157,11 +193,15 @@ describe("CARD-10 current public CLI consumers", () => {
   it.each(["pre", "history", "unknown"])(
     "scene 6: %s cohort remains readable and rejects planning writes before new directories or record mutation", async cohort => {
       const f = await fixture(), path = join(f.taskPath, "task.json"), manifest = JSON.parse(readFileSync(path));
+      writeFileSync(f.decision, '## 1. 入口\n### 这是什么任务\n- **任务类型**：`规划任务`。\n');
       manifest.activation_cohort = cohort; writeFileSync(path, JSON.stringify(manifest) + "\n");
       const originalManifest = readFileSync(path), before = facts(f), originalDecision = readFileSync(f.decision);
       for (const [behavior, action] of [["status", "begin"], ["doctor", "workspace"]]) expect(call(f, behavior, action).status).toBe(0);
       const denied = call(f, "run", "execute", { input: { task_id: "current-consumer", workflow: "build-prd", step_results: [] } });
       expect(denied.status).not.toBe(0); expect(existsSync(portableRoot(f))).toBe(false);
+      const draft = call(f, 'run', 'draft', { rawInput: '# 草稿\n', extra: ['--name=prd.md'] });
+      expect(draft.status).not.toBe(0);
+      expect(existsSync(join(f.material, 'prd.md'))).toBe(false);
       expect(readFileSync(path)).toEqual(originalManifest); expect(facts(f)).toEqual(before); expect(readFileSync(f.decision)).toEqual(originalDecision);
     });
   it("scene 7: ordinary run preserves existing source fields and only writes the navigation cursor; broken facts stay visible", async () => {
