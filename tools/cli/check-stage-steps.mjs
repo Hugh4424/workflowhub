@@ -27,7 +27,7 @@ const MAPPING_HEADING = /旧编号对照|编号对照/;
 // numbering (工作包 N / ①-⑳ / 一-十, optionally in full-width brackets) now.
 // Only the heading form expands here; module counts and gap rules stay put.
 const PACKAGE_NUMBER_SOURCE = '(?:[0-9]+|[①-⑳]|[一二三四五六七八九十])';
-const PACKAGE_HEADING = new RegExp(`^(?:#{1,6}\\s+|\\*\\*)(?:WP-?(\\d+)\\s*[—–-]|工作包\\s*(?:[（(]\\s*(${PACKAGE_NUMBER_SOURCE})\\s*[）)]|(${PACKAGE_NUMBER_SOURCE}))\\s*(?:[—–\\-:：]|$))`);
+const PACKAGE_HEADING = new RegExp(`^(?:#{1,6}\\s+|\\*\\*)(?:WP-?(\\d+)\\s*[—–-]|工作包\\s*(?:[（(]\\s*(${PACKAGE_NUMBER_SOURCE})\\s*[）)]|(${PACKAGE_NUMBER_SOURCE}))\\s*(?:[—–\\-:：]|$)|包\\s*(${PACKAGE_NUMBER_SOURCE})\\s*(?:[—–\\-:：]|$))`);
 const CIRCLED_PACKAGE_NUMBERS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 const CHINESE_PACKAGE_NUMBERS = Object.freeze({ 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 });
 const packageNumber = token => {
@@ -425,7 +425,7 @@ function anchoredSection(text, anchor) {
   const target = String(anchor ?? '').replace(/^#/, '');
   if (!target) return null;
   const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/-/g, '[\\s\\-—–:：]*');
-  const range = sectionRange(text, new RegExp(`^(#{2,6})\\s*${escaped}.*$`));
+  const range = sectionRange(text, new RegExp(`^(#{2,6})\\s*${escaped}(?!\\d).*$`));
   return range ? range.lines.slice(range.start, range.end).join('\n').trim() : null;
 }
 function tableValue(block, label) {
@@ -749,6 +749,147 @@ function coldReadGaps({ id, body, taskPath, taskName }) {
     }
   }
   return { gaps, errors };
+}
+// P1 same-package five originals: every 已收敛 package must declare one current
+// pointer per class under 「### 包 N 五件同包原件」. The card must be this
+// package's own card section (`## 工作包 N`), not the decision log or an overall
+// confirmation; the other four must bind the same task, package, discussion
+// batch and card-section sha256. Missing blocks, classes and identity fields are
+// named gaps, not a legacy pass.
+const FIVE_MATERIAL_CLASSES = Object.freeze(['方案卡', '质询', '冷读', '对抗', '真实答复']);
+const FIVE_MATERIAL_CLASS_PATTERN = FIVE_MATERIAL_CLASSES.join('|');
+const FIVE_MATERIAL_HEADING = '五件同包原件';
+const fiveMaterialHeadingPattern = id => new RegExp(`^###\\s*包\\s*${Number(id)}(?!\\d)\\s*${FIVE_MATERIAL_HEADING}\\s*$`);
+function convergencePointerRefs(decision) {
+  return [...new Set([...String(decision ?? '').matchAll(/`(quality\/evidence\/[^`\n]*convergence-checklist[^`\n]*\.md)`/g)].map(match => match[1]))];
+}
+// Single failure predicate shared by check-stage-steps and run-checks, so a gap
+// that fails one entry cannot stay green in the other.
+function isDirectionMaterialFailure(gap) {
+  return [
+    // Direction material and the pre-existing evidence-gap classes share one
+    // failure predicate; the run-checks seam must not narrow the old range.
+    /收敛清单缺指针/, /收敛清单指针候选数/, /权威模块集合未取得或重复（已声明收敛）/,
+    /收敛清单不可读/, /收敛清单越界/,
+    new RegExp(`包 \\d+ (?:${FIVE_MATERIAL_CLASS_PATTERN})：`),
+    /包 \d+ 同包五件：/,
+    /聊天呈现未取得/, /卡片摘要不符/, /缺少?真实问答指针/, /冷读五问未绑定/,
+    /缺冷读记录/, /缺冷读原件/, /收敛格缺当前卡节/, /冷读读者未声明独立/,
+    /冷读五问不全/, /冷读结论未写五问全答出/, /冷读原件未绑定卡摘要/,
+    /冷读原件摘要不符/, /修订未复读/, /先设计后提问缺证/,
+    /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
+    /UI设计源首问/, /证据标签非原件/, /证据缺当前原件/, /引用旧清单/,
+  ].some(pattern => pattern.test(String(gap)));
+}
+function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
+  const packageId = String(Number(id));
+  const name = taskName || `包 ${packageId}`;
+  const gaps = [], errors = [];
+  const pushGap = (cls, detail) => {
+    gaps.push(`包 ${packageId} ${cls}：${detail}`);
+    errors.push(`${name}/同包五件: 包 ${packageId} ${cls}：${detail}`);
+  };
+  const heading = fiveMaterialHeadingPattern(id);
+  const headings = String(body ?? '').split(/\r?\n/).filter(line => heading.test(line)).length;
+  if (!headings) {
+    pushGap('方案卡', '缺五件声明');
+    return { present: false, gaps, errors };
+  }
+  if (headings > 1) {
+    const detail = '重复声明块';
+    return { present: true, gaps: [`包 ${packageId} 同包五件：${detail}`], errors: [`${name}/同包五件: 包 ${packageId} 同包五件：${detail}`] };
+  }
+  const range = sectionRange(body, heading);
+  const block = range.lines.slice(range.start, range.end).join('\n');
+  const declared = new Map();
+  const linePattern = new RegExp(`^-\\s*当前(${FIVE_MATERIAL_CLASS_PATTERN})\\s*[：:]\\s*(.+)$`);
+  for (const line of block.split(/\r?\n/)) {
+    const match = linePattern.exec(line.trim());
+    if (!match) continue;
+    declared.set(match[1], [...(declared.get(match[1]) ?? []), match[2]]);
+  }
+  const field = (text, key) => new RegExp(`${key}\\s*[=:：]\\s*([^；;\\s）)]+)`).exec(String(text ?? ''))?.[1] ?? null;
+  // Only real card originals may supply the current card section: the
+  // per-package decision-maker card, the convergence card ledger, or a
+  // controlled convergence cards file. Any other evidence file (notes,
+  // research, design, discussion) is rejected even with a matching heading.
+  const isCardOriginal = file => /^quality\/evidence\/decision-maker\/p\d+\/card\.md$/.test(file)
+    || /^quality\/evidence\/convergence-cards\.md$/.test(file)
+    || /^quality\/evidence\/decision-log-refs\/(?:[^/]*-)?cards(?:-\d+)?\.md$/.test(file)
+    || /^quality\/evidence\/convergence\/(?:[^/]+\/)*(?:[^/]*-)?cards(?:-\d+)?\.md$/.test(file)
+    || /^quality\/evidence\/convergence\/(?:[^/]+\/)*card\.md$/.test(file);
+
+  let cardDigest = null;
+  let cardBatch = null;
+  for (const cls of FIVE_MATERIAL_CLASSES) {
+    const entries = declared.get(cls) ?? [];
+    if (!entries.length) { pushGap(cls, `缺${cls}当前原件`); continue; }
+    if (entries.length > 1) { pushGap(cls, `重复${cls}当前原件`); continue; }
+    const value = entries[0];
+    const ref = /`([^`]+)`/.exec(value)?.[1] ?? null;
+    if (!ref) { pushGap(cls, `缺${cls}指针`); continue; }
+    const declaredPackage = field(value, '包');
+    const digest = field(value, '卡节\\s*sha256');
+    const batch = field(value, '批次');
+    const declaredTask = field(value, '任务');
+    if (!declaredPackage) { pushGap(cls, '缺包号身份'); continue; }
+    if (String(Number(declaredPackage)) !== packageId) { pushGap(cls, `包号不符（声明 ${declaredPackage}）`); continue; }
+    if (!digest || !/^[0-9a-f]{64}$/i.test(digest)) { pushGap(cls, '缺卡节 sha256'); continue; }
+    if (!batch) { pushGap(cls, '缺批次身份'); continue; }
+    if (cls === '方案卡') {
+      if (!ref.includes('#')) { pushGap(cls, '缺本包卡节锚点；总确认或整份文件不能代替'); continue; }
+      const [file] = ref.split('#');
+      if (!isCardOriginal(file)) {
+        pushGap(cls, '不是方案卡原件；决策日志、总确认、notes/research/design 等普通证据加锚点不能代卡');
+        continue;
+      }
+      const identity = cardIdentity(ref, null);
+      if (!identity.number || identity.number !== packageId || !/工作包/.test(identity.anchor)) {
+        pushGap(cls, '锚点未点名本包'); continue;
+      }
+      // Declared digest/batch are pure declaration facts: compare them before
+      // any file read so material-only callers keep the same identity checks.
+      cardDigest = digest.toLowerCase();
+      cardBatch = batch;
+      if (!taskPath) continue;
+      let sectionText = null;
+      try { sectionText = anchoredSection(readTaskOriginal(taskPath, file), identity.anchor); }
+      catch (error) { pushGap(cls, `卡节不可回读（${error.message}）`); continue; }
+      if (!sectionText) { pushGap(cls, '卡节不可回读'); continue; }
+      const headingMatch = /^#{2,6}\s*工作包\s*(\d+)(?!\d)/.exec(sectionText.split(/\r?\n/)[0]);
+      if (!headingMatch || Number(headingMatch[1]) !== Number(id)) {
+        pushGap(cls, '卡节标题不是本包 ## 工作包 N'); continue;
+      }
+      const actual = coldDigest(sectionText);
+      if (actual !== digest.toLowerCase()) { pushGap(cls, '卡节摘要不符'); continue; }
+      cardDigest = actual;
+      continue;
+    }
+    if (!declaredTask) { pushGap(cls, '缺任务身份'); continue; }
+    if (taskId && declaredTask !== taskId) { pushGap(cls, `任务不符（声明 ${declaredTask}）`); continue; }
+    if (cardDigest && digest.toLowerCase() !== cardDigest) { pushGap(cls, '卡节 sha256 与方案卡不一致（异版）'); continue; }
+    if (cardBatch && batch !== cardBatch) { pushGap(cls, '批次与方案卡不一致'); continue; }
+    if (!taskPath) continue;
+    let text;
+    try { text = readTaskOriginal(taskPath, ref.split('#')[0]); }
+    catch (error) { pushGap(cls, `原件不可回读（${error.message}）`); continue; }
+    const actualTask = field(text, '任务'), actualPackage = field(text, '包');
+    const actualBatch = field(text, '批次'), actualDigest = field(text, '卡节\\s*sha256');
+    if (!actualTask) { pushGap(cls, '原件缺任务身份'); continue; }
+    if (!actualPackage) { pushGap(cls, '原件缺包号身份'); continue; }
+    if (!actualBatch) { pushGap(cls, '原件缺批次身份'); continue; }
+    if (!actualDigest) { pushGap(cls, '原件缺卡节 sha256'); continue; }
+    if (actualTask !== declaredTask) { pushGap(cls, `原件任务不符（声明 ${actualTask}）`); continue; }
+    if (String(Number(actualPackage)) !== packageId) { pushGap(cls, `原件包号不符（声明 ${actualPackage}）`); continue; }
+    if (actualBatch !== batch) { pushGap(cls, '原件批次不符'); continue; }
+    if (actualDigest.toLowerCase() !== digest.toLowerCase()) { pushGap(cls, '原件卡节 sha256 不符（异版）'); continue; }
+  }
+  return { present: true, gaps, errors };
+}
+// Single exported seam for the two internal readers. run-checks imports this
+// object instead of copying the pointer, class or failure lists.
+export function directionMaterialApi() {
+  return { convergencePointerRefs, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, fiveMaterialHeading: FIVE_MATERIAL_HEADING };
 }
 // A skill read is evidence only when the host opened the declared file in the
 // current call and the authenticated capture kept the original bytes. The
@@ -1215,6 +1356,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   let strictUnconverged = [];
   let convergenceReadable = false;
   let convergenceFormat = null;
+  const fiveMaterialGaps = [];
   // The current decision owns both the module set and its evidence pointer.
   const mappings = legacyIdMappings(decision);
   // Old WPn headings and Chinese package headings name the same package set.
@@ -1223,7 +1365,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const mappingGaps = [];
   const expected = [];
   const unpairedHeadings = { wp: new Map(), chinese: new Map(), v2: new Map() };
-  const headingNumber = match => match[1] ?? packageNumber(match[2] ?? match[3]);
+  const headingNumber = match => match[1] ?? packageNumber(match[2] ?? match[3] ?? match[4]);
   const mappedPackageId = number => {
     const mapped = mappings.get(`工作包 ${number}`);
     return mapped && /^WP-?\d+$/.test(mapped) ? String(Number(mapped.match(/\d+/)[0])) : number;
@@ -1319,13 +1461,16 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const packageSetGaps = [];
   // A declared 包目录 with no readable entry is a named gap: an empty index can
   // neither confirm nor contradict the authoritative package sections.
-  if (v2Heading && directoryIds && directoryIds.length === 0) packageSetGaps.push('包目录未列任何包：目录索引为空，不能核对包节');
-  if (v2Heading && directoryIds) {
+  // Only the v2 `### <n>.<m>` section form is compared with the directory; a
+  // 包目录 with real `### 包 N：` sections must not be reported as directory-only.
+  const hasV2Sections = packageEntries.some(entry => entry.form === 'v2');
+  if (v2Heading && hasV2Sections && directoryIds && directoryIds.length === 0) packageSetGaps.push('包目录未列任何包：目录索引为空，不能核对包节');
+  if (v2Heading && hasV2Sections && directoryIds) {
     const sectionIds = packageEntries.filter(entry => entry.form === 'v2').map(entry => entry.id);
     for (const id of new Set(directoryIds.filter(value => !sectionIds.includes(value)))) packageSetGaps.push(`包目录与包节不一致：包 ${id} 只有目录无包节`);
     for (const id of new Set(sectionIds.filter(value => !directoryIds.includes(value)))) packageSetGaps.push(`包目录与包节不一致：包 ${id} 只有包节无目录`);
   }
-  const pointers = [...new Set([...decision.matchAll(/`(quality\/evidence\/[^`\n]*convergence-checklist[^`\n]*\.md)`/g)].map(match => match[1]))];
+  const pointers = convergencePointerRefs(decision);
   // Resolve only the current decision's own references; prose alone is not proof.
   const section = (body, pattern) => {
     const range = sectionRange(body, pattern);
@@ -1561,6 +1706,18 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       }
       if (gaps.length) row.evidenceGaps = [...new Set(gaps)];
     }
+    // The P1 declaration block is read for every table shape: once a package
+    // declares the five same-package originals, its missing classes and
+    // identity mismatches join the evidence gaps (and therefore the exit code).
+    for (const row of modules) {
+      const id = /^\d+/.exec(row.name)?.[0];
+      if (!id || row.state !== '已收敛') continue;
+      const five = fiveMaterialDeclarationGaps({ id, body, taskPath, taskName: row.name, taskId: manifest?.task_id });
+      row.evidenceGaps = [...new Set([...(row.evidenceGaps ?? []), ...five.gaps])];
+      fiveMaterialGaps.push(...five.gaps);
+      if (five.gaps.some(gap => /缺五件声明/.test(gap))) strictUnconverged.push(`未收敛：${row.name}（缺五件声明）`);
+      errors.push(...five.errors);
+    }
     convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
     // 跨包不合批：同一讨论批次被多个包共用就是病根，直接点名，不靠目录非空。
     const batchUse = new Map();
@@ -1622,17 +1779,35 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
   const strictGaps = [...new Set([...deferralGaps, ...strictUnconverged])];
   const gaps = statusColumnFormat
-    ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...ordinaryPendingGaps, ...strictGaps, ...evidenceGaps, ...batchGaps] : ['收敛清单无可读模块行'])
-    : [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...fieldGaps, ...batchGaps];
+    ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...ordinaryPendingGaps, ...strictGaps, ...evidenceGaps, ...fiveMaterialGaps, ...batchGaps] : ['收敛清单无可读模块行'])
+    : [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...fiveMaterialGaps, ...fieldGaps, ...batchGaps];
   // A package is only "missing" once the current checklist itself was read; an
   // absent or out-of-range ledger is already named by the pointer gap and must
   // not also claim, per package, a fact about bytes nobody opened.
   gaps.push(...(convergenceReadable ? missing.map(id => `缺模块 WP${id}`) : []), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps,
     ...packageSetGaps, ...originalEvidenceGaps, ...checklistVersionGaps);
-  if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
+  if (!expected.length || new Set(expected).size !== expected.length) {
+    gaps.push('权威模块集合未取得或重复');
+    errors.push('decision-log.md: 权威模块集合未取得或重复');
+    // A log that already declares packages (package directory, headings or a
+    // checklist pointer) cannot leave the authoritative module set empty or
+    // duplicated and still pass the direction stage. A bare pre-convergence
+    // log keeps the report-only gap.
+    const declaresPackages = pointers.length > 0
+      || /^##\s*\d+\.\s*包目录/m.test(decision)
+      || /^#{2,4}\s*(?:WP-?\d+|工作包\s*\d+)/m.test(decision);
+    if (declaresPackages) gaps.push('权威模块集合未取得或重复（已声明收敛）');
+  }
   if (!convergenceRef) gaps.push('收敛清单指针未取得');
   else if (rangeGap) gaps.push(`收敛清单越界：${convergenceRef}（${rangeGap}）`);
   else if (!convergenceReadable) gaps.push('收敛清单不可读');
+  // A direction log that already declares packages must name its current
+  // checklist. A bare pre-convergence log (no packages) keeps exit 0.
+  if (!convergenceRef && expected.length) gaps.push(`收敛清单缺指针：已声明 ${expected.length} 个工作包`);
+  // A task that declares no convergence checklist at all is a legitimate
+  // pre-convergence state (exit stays 0). Two or more candidate pointers is a
+  // different failure: the single current checklist is not identifiable.
+  if (pointers.length > 1) gaps.push(`收敛清单指针候选数：${pointers.length}`);
   const convergence = { source: convergenceRef, expected_modules: expected, complete: gaps.length === 0 && expected.length > 0, gaps };
   const invalidatedList = invalidated.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]);
   const unscopedInvalidations = invalidated.filter(record => !record.scope);
@@ -1837,6 +2012,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     /引用旧清单/,
   ];
   if (report.convergence.gaps.some(gap => EVIDENCE_GAP.some(pattern => pattern.test(String(gap))))) process.exitCode = 1;
+  // P1 direction material failures are non-zero at the direction stage only.
+  // build-plan keeps its existing report-only semantics: its author records the
+  // named gap and stops the affected package instead of treating exit 0 as done.
+  if ((!options.stage || options.stage === 'make-decision')
+    && report.convergence.gaps.some(isDirectionMaterialFailure)) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
     if (report.card) console.log(JSON.stringify(report.card, null, 2));

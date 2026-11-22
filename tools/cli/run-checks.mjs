@@ -261,16 +261,36 @@ async function materialTaskRecordRoot(materialRoot) {
   } catch { return undefined; }
 }
 
-function materialConvergenceErrors(root, files) {
+async function materialConvergenceErrors(root, files) {
+  const { convergencePointerRefs, fiveMaterialDeclarationGaps, fiveMaterialHeading } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
   const decision = String(files?.['decision-log.md'] ?? '');
-  const pointer = /清单：`([^`\n]*convergence-checklist[^`\n]*\.md)`/.exec(decision)?.[1];
-  if (!pointer) return [];
+  // The direction checker and this material reader share one pointer parse:
+  // any backticked current convergence-checklist path, not only a "清单：" line.
+  const pointers = convergencePointerRefs(decision);
+  if (!pointers.length) {
+    // A bare pre-convergence log stays clean; one that already declares
+    // packages must name its current checklist. Returning [] here would let a
+    // missing pointer pass as a clean material.
+    return /^####\s*WP-?\d+|^###\s*工作包\s*\d+|^\|\s*\d+\s*\|/m.test(decision)
+      ? ['收敛清单指针未取得：已声明工作包'] : [];
+  }
+  if (pointers.length > 1) return [`收敛清单指针候选数：${pointers.length}`];
+  const pointer = pointers[0];
+  if (pointer.split('/').some(part => part === '..' || part === '.') || pointer.includes('\\')) return [`收敛清单越界：${pointer}`];
   const candidates = [resolve(root, pointer), resolve(root, 'quality/evidence/decision-log-refs', pointer)];
   const ledgerPath = candidates.find(candidate => existsSync(candidate));
   if (!ledgerPath) return [`收敛清单不可读：${pointer}`];
   let ledger = '';
   try { ledger = readFileSync(ledgerPath, 'utf8'); } catch { return [`收敛清单不可读：${pointer}`]; }
   const errors = [];
+  // A declared package set with no readable/unique module rows cannot pass the
+  // material side merely because a checklist file exists.
+  const declaredIds = [...decision.matchAll(/^#{2,4}\s*(?:WP-?(\d+)|工作包\s*(\d+)|包\s*(\d+))/gm)]
+    .map(match => String(Number(match[1] ?? match[2] ?? match[3])));
+  const ledgerIds = [...ledger.matchAll(/^\|\s*(\d+)\s*\|/gm)].map(match => String(Number(match[1])));
+  if (declaredIds.length && (!ledgerIds.length || new Set(ledgerIds).size !== ledgerIds.length)) {
+    errors.push('权威模块集合未取得或重复');
+  }
   for (const line of ledger.split('\n')) {
     if (!/^\s*\|/.test(line)) continue;
     const cells = line.split('|').map(cell => cell.trim());
@@ -278,6 +298,19 @@ function materialConvergenceErrors(root, files) {
     if (!/^\d+$/.test(id) || !/^已收敛/.test(state ?? '')) continue;
     const block = new RegExp(`##\\s*工作包\\s*${id}(?![0-9])[\\s\\S]*?(?=\\n##\\s*工作包\\s*\\d|$)`).exec(ledger)?.[0] ?? '';
     if (!/冷读|真实问答|聊天呈现/.test(block)) errors.push(`包 ${id} 已收敛但缺冷读/真实问答原件`);
+  }
+  // Every 已收敛 row needs its five-original declaration; block absence is a
+  // named gap, not a legacy pass. File-byte identity still needs --task-path.
+  const ids = new Set([...ledger.matchAll(new RegExp(`^###\\s*包\\s*(\\d+)\\s*${fiveMaterialHeading}\\s*$`, "gm"))].map(match => match[1]));
+  for (const line of ledger.split('\n')) {
+    if (!/^\s*\|/.test(line)) continue;
+    const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+    const id = /^(\d+)/.exec(cells[0] ?? '')?.[1];
+    if (id && cells.includes('已收敛')) ids.add(id);
+  }
+  for (const id of ids) {
+    const result = fiveMaterialDeclarationGaps({ id, body: ledger, taskPath: null, taskName: `包 ${id}` });
+    errors.push(...result.gaps);
   }
   return errors;
 }
@@ -630,7 +663,7 @@ async function runMaterialChecks(root, { stage } = {}) {
       const errors = [...inspection.errors];
       if (!String(inspection.files["decision-log.md"] ?? "").trim()) errors.push("decision-log.md 未取得：make-decision 阶段至少要有一份可读决策日志");
       for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
-      const convergenceErrors = materialConvergenceErrors(root, inspection.files);
+      const convergenceErrors = await materialConvergenceErrors(root, inspection.files);
       errors.push(...convergenceErrors);
       if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`); return false; }
       console.log(`[run-checks][material] ${root} stage=make-decision：本次只核 decision-log 可读与材料结构错误=0；未要求 spec.md/phases，不判阶段完成，也不证明步骤齐备`);
@@ -806,15 +839,21 @@ async function main() {
     const { exit_code, ...coverage } = stepCoverageExit(report);
     let convergenceExit = exit_code;
     try {
-      const manifest = JSON.parse(readFileSync(joinPath(resolve(options.taskPath), "task.json"), "utf8"));
-      const material = joinPath(manifest.target_repo_root, "specs", manifest.task_id);
+      const manifest = JSON.parse(readFileSync(join(resolve(options.taskPath), "task.json"), "utf8"));
+      const material = join(manifest.target_repo_root, "specs", manifest.task_id);
       if (existsSync(material)) {
         const { runStageStepsCheck } = await import("./check-stage-steps.mjs");
         const checked = runStageStepsCheck({ taskPath: resolve(options.taskPath), materialRoot: material, repoRoot: options.workflowRoot ?? undefined, stage: "make-decision" });
         const gaps = checked.convergence?.gaps ?? [];
-        if (gaps.some(gap => /缺冷读原件|收敛格缺当前卡节|聊天呈现未取得|缺真实问答指针|冷读五问未绑定|先设计后提问缺证|UI设计源首问|冷读原件摘要不符|卡片摘要不符/.test(String(gap)))) convergenceExit = 1;
+        const { isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+        if (gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
       }
-    } catch { /* a missing material root leaves the existing aggregate unchanged */ }
+    } catch (error) {
+      // The material root existed, so a throw here is a real reader failure:
+      // keep the named error and fail instead of falling back to success.
+      console.error(`[run-checks] make-decision convergence check failed: ${error.message}`);
+      convergenceExit = 1;
+    }
     process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
     process.exitCode = convergenceExit;
   } catch (error) {
