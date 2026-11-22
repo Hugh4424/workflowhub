@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import YAML from 'js-yaml';
@@ -82,6 +82,116 @@ describe('ORACLE-C07-REVIEW materials', () => {
     }
     const bundlePath = join(broken, 'skills/spec-plan/skill-bundle.json'); writeFileSync(bundlePath, readFileSync('skills/spec-plan/skill-bundle.json'));
     expect(() => resolveSkillPackage({ packageRoot: broken, manifestPath, dependency })).toThrow(/build-decision-baseline|missing|ENOENT/i);
+  });
+
+  it('reads only an explicitly selected, hash-bound external reply index in task mode', () => {
+    const work = root(), evidence = root(), task = 'external-replies';
+    const specs = join(work, 'specs', task), ref = 'quality/evidence/fixture/requirement-index.md';
+    const indexPath = join(evidence, ref);
+    mkdirSync(join(specs, 'phases'), { recursive: true });
+    mkdirSync(dirname(indexPath), { recursive: true });
+    writeFileSync(join(specs, 'spec.md'), '');
+    writeFileSync(join(specs, 'phases/index.md'), '');
+    const index = `# 需求索引
+## 一、用户答复
+| 编号 | 来源分级 | 答复原文 | 语气 | 原件ref与行位 | 时点 | 所属包 |
+| --- | --- | --- | --- | --- | --- | --- |
+| U-001 | 自由手写 | 本次保留草稿。 | 要求 | source.md:4 | 2026-11-21 | 包 1 |
+| U-036 | 自由手写 | 无此用户答复，不作依据。 | 拒绝 | 无 | 2026-11-21 | 包 1 |
+## 二、需求清单
+- R-900 不是用户答复。
+`;
+    const logFor = bytes => decisionLog.replace(/\| 答复 \|[\s\S]*?(?=## 工作包)/,
+      '- 需求索引：`requirement-index.md`（外置逐条答复索引，主文不复制原话）。\n') +
+      `\n## 7. 证据索引\n| 内容或原件 | ref | sha256 |\n| --- | --- | --- |\n| 答复索引 | \`${ref}\` | \`${createHash('sha256').update(bytes).digest('hex')}\` |\n`;
+    const cli = join(process.cwd(), 'skills/spec-plan/scripts/build-decision-baseline.mjs');
+    const run = (...args) => spawnSync(process.execPath, [cli, '--task', task, ...args], { cwd: work, encoding: 'utf8' });
+    const withIndex = path => run('--reply-index', path ?? indexPath);
+    const put = (log, bytes) => { writeFileSync(join(specs, 'decision-log.md'), log); writeFileSync(indexPath, bytes); };
+    const fails = (result, message) => { expect(result.status).toBe(1); expect(result.stdout).toBe(''); expect(result.stderr).toMatch(message); };
+
+    put(logFor(index), index);
+    const ok = withIndex();
+    expect(ok.status, ok.stderr).toBe(0);
+    expect(ok.stdout).toContain('用户答复（1 条');
+    expect(ok.stdout).toContain('U-001：本次保留草稿');
+    expect(ok.stdout).toContain(`来源：${ref}#L5`);
+    // A row-level gap is listed as an invalid line, not a fifth 来源分级 value.
+    expect(ok.stdout).toMatch(/无效行（不作依据[^\n]*\n[\s\S]*U-036[^\n]*原件位置缺失/);
+    expect(ok.stdout).not.toContain('- 答复 R-900');
+    fails(run(), /no recognized 答复/);
+    fails(withIndex(join(work, ref)), /ENOENT/);
+    const unbound = join(evidence, 'requirement-index.md');
+    writeFileSync(unbound, index);
+    fails(withIndex(unbound), /not bound/);
+    put(logFor(index), index.replace('本次保留', '本次不留'));
+    fails(withIndex(), /sha256 mismatch/);
+    // Structural errors refuse the whole table; row-level gaps are listed instead.
+    const fourColumns = index.replace('| 编号 | 来源分级 | 答复原文 | 语气 | 原件ref与行位 | 时点 | 所属包 |', '| 编号 | 来源分级 | 答复原文 | 原件ref与行位 |');
+    for (const malformed of ['', index.replace('## 一、用户答复', '## 二、历史示例'), index.replace('U-036', 'U-001'),
+      index.replace(' | 时点', ''), fourColumns]) {
+      put(logFor(malformed), malformed);
+      fails(withIndex(), /BASELINE_SOURCE_INVALID/);
+    }
+    // Only a list or table line declares the pointer; a bare line is not a declaration.
+    put(logFor(index).replace('- 需求索引：', '需求索引：'), index);
+    fails(withIndex(), /not bound/);
+    put(logFor(index).replaceAll('需求索引', '历史指针'), index);
+    fails(withIndex(), /not bound/);
+  });
+
+  it('reads exact fixed evidence in the bound task root but not escapes, absent files or a different task', () => {
+    const work = root(), task = 'external-findings', evidence = join(root(), task);
+    const specs = join(work, 'specs', task), ref = 'quality/evidence/requirement-index.md';
+    const indexPath = join(evidence, ref), reviewPath = join(evidence, 'quality/reviews/review.json');
+    const dispositionsPath = join(evidence, 'quality/evidence/dispositions.md');
+    const index = '# Index\n## 用户答复\n| 编号 | 来源分级 | 答复原文 | 语气 | 原件位置 | 时点 | 所属包 |\n| --- | --- | --- | --- | --- | --- | --- |\n| U-001 | 自由手写 | 保留草稿。 | 要求 | source.md:4 | 2026-11-21 | 包 1 |';
+    // The v2 template's own sentence, not a compact variant written only by this test.
+    const logFor = bytes => decisionLog.replace(/\| 答复 \|[\s\S]*?(?=## 工作包)/,
+      '- 需求索引：`requirement-index.md`（外置逐条答复索引，主文不复制原话）。\n') +
+      `\n## 证据索引\n基准目录是本任务库根的绝对路径：\`${evidence}\`。\n| 答复索引 | \`${ref}\` | \`${createHash('sha256').update(bytes).digest('hex')}\` |`;
+    mkdirSync(join(specs, 'phases'), { recursive: true });
+    mkdirSync(dirname(indexPath), { recursive: true });
+    mkdirSync(dirname(reviewPath), { recursive: true });
+    writeFileSync(join(specs, 'spec.md'), '');
+    writeFileSync(join(specs, 'phases/index.md'), '');
+    writeFileSync(join(specs, 'decision-log.md'), logFor(index));
+    writeFileSync(indexPath, index);
+    writeFileSync(join(evidence, 'task.json'), JSON.stringify({ task_id: task, activation_cohort: 'post' }));
+    writeFileSync(reviewPath, JSON.stringify({ findings: ['ok', 'absent', 'escape', 'traversal'].map(id => ({ id })) }));
+    writeFileSync(join(evidence, 'quality/evidence/fixed.md'), '实际修订原件。');
+    const external = join(work, 'outside.md');
+    writeFileSync(external, '不是任务证据。');
+    symlinkSync(external, join(evidence, 'quality/evidence/escape.md'));
+    writeFileSync(dispositionsPath, ['## 逐项处置', '| 序号 | 处置 | 落点 |', '| --- | --- | --- |',
+      ...['fixed.md', 'absent.md', 'escape.md', '../evidence/fixed.md'].map((file, i) => `| ${i + 1} | fixed | \`quality/evidence/${file}\` |`),
+    ].join('\n'));
+    const cli = join(process.cwd(), 'skills/spec-plan/scripts/build-decision-baseline.mjs');
+    const run = (review = reviewPath) => spawnSync(process.execPath, [cli, '--task', task, '--reply-index', indexPath,
+      '--review', review, '--dispositions', dispositionsPath], { cwd: work, encoding: 'utf8' });
+    const manifest = value => writeFileSync(join(evidence, 'task.json'), JSON.stringify(value));
+    const result = run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('fixed 1/4 有可读修复证据；缺口 3 条');
+    for (const id of ['absent', 'escape', 'traversal']) expect(result.stdout).toMatch(new RegExp(`finding ${id} 的 fixed 证据 .* 不可读`));
+    // The real requirement index spaces the location label; v2 writes 「原件位置」
+    // and the old template 「原件ref与行位」. All three spellings read the same table.
+    const spaced = index.replace('原件位置', '原件 ref 与行位');
+    writeFileSync(indexPath, spaced);
+    writeFileSync(join(specs, 'decision-log.md'), logFor(spaced));
+    expect(run().status).toBe(0);
+    // Older logs write the compact base sentence; both forms authenticate.
+    writeFileSync(join(specs, 'decision-log.md'), logFor(spaced).replace('基准目录是本任务库根的绝对路径：', '基准目录：'));
+    expect(run().status).toBe(0);
+    // Inputs outside the authenticated root silently buy no fixed evidence.
+    const outsideReview = join(work, 'review.json');
+    writeFileSync(outsideReview, JSON.stringify({ findings: ['ok', 'absent', 'escape', 'traversal'].map(id => ({ id })) }));
+    expect(run(outsideReview).stdout).toContain('fixed 0/4 有可读修复证据；缺口 4 条');
+    // Each strong check is locked alone: wrong id with a post cohort, then a non-post cohort with the right id.
+    manifest({ task_id: 'different-task', activation_cohort: 'post' });
+    expect(run().stdout).toContain('fixed 0/4 有可读修复证据；缺口 4 条');
+    manifest({ task_id: task, activation_cohort: 'pre' });
+    expect(run().stdout).toContain('fixed 0/4 有可读修复证据；缺口 4 条');
   });
 
   it('derives requirements, grouped replies and decisions from supplied source bytes', () => {
@@ -299,7 +409,7 @@ U-014 最小决定：此前把取消等同删除的建议作废，保留关闭�
   });
 
   it('v2 log evidence through actual consumers (ORACLE-LOG-V2-TERMINAL): the current requirement blocks and their source lines reach the portable baseline CLI and both review packets', async () => {
-    const logPath = 'specs/execution-quality-build-code-hardening-20261119/decision-log.md';
+    const logPath = 'specs/archive/execution-quality-build-code-hardening-20261119/decision-log.md';
     const lines = readFileSync(logPath, 'utf8').split('\n');
     const records = [];
     lines.forEach((line, index) => {

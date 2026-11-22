@@ -107,7 +107,12 @@ post build-plan 收口前完整执行一次；它是六类中「遗漏」的具�
 
 - A 表（make-decision 第 13 步）：读任务库 `quality/evidence/decision-log-refs/requirement-index.md` §1，逐条核需求原文 ref、sha256（未取得写 owner）、用户答复位置、包、决定、AC 与缺口 owner；再用 `node skills/spec-plan/scripts/build-decision-baseline.mjs --decision-log <当前日志>` 的「原始需求」段按行位对回正文。缺行、只在合并句出现或仍指旧槽位记具名缺口。
 - B 表（build-plan 第 6 步末，粗查）：在库根运行 `node skills/spec-plan/scripts/build-decision-baseline.mjs --task <task-id>`，读「B 表」段，只核每包是否有独立 Phase、覆盖 AC、依赖与任务；缺项写 owner。此处不核接口、写集或 AC 细节。
+- 包级验收组只适用于同时满足三段的材料：日志「编号对照」说明列写 `包级验收组` 且机器编号为 `AC-P<n>`；「决定索引」以落点 `包 <n>` 一格一包给出该包决定（一个包可有多条决定，一行一条）；spec 的 `Source|FR|AC|Phase/Task` 行把该决定、FR、AC 与一个独立 Phase 连起来。这类 spec 行的 `Source` 必须写该决定的 `D-<n>` 或 `决定 <n>`（两者按「编号对照」对应）；一个包有多条决定时，按 spec 引用的那条选 Phase。没写决定、同时引用多条、缺 FR 或 AC、Phase 不唯一，都记具名缺口，owner＝规划作者；这种追溯只作粗查，不作逐条等价。
 - C 表（build-plan 第 10 步审查后，细查）：同一命令读「C 表」段，核十项与 spec/phases 落点；加 `--review <审查原件> --dispositions <逐项处置表>` 时核 findings 闭合：每条 finding 一条合法处置，fixed 要有可读修订位置，原断言仍在即具名，needs_human 保持 open 并写 owner。只列被触及行。
+- 外置答复索引（`--reply-index <索引件>`）：日志用 `需求索引：<ref>` 声明外置索引、主文不复制原话时，加在 A/B/C 任一命令上。声明行必须是 `- 需求索引：`<ref>``（或表格 `|` 行），裸行不算。输入＝该 ref 指向的答复表，七列都要有（编号、来源分级、答复原文、语气、位置、时点、所属包）；位置列写「原件位置」或「原件ref与行位」，空白不计（规范检查器只认逐字「原件ref与行位」）。
+- 绑定只认两件事：`--reply-index` 路径以证据索引的 ref 结尾，字节与日志「证据索引」那一行的 SHA-256 相同。未声明、多条、哈希不符都报 `BASELINE_SOURCE_INVALID`；它不认证任务根，位置由 ref 后缀声明、内容由哈希锁住。
+- 输出＝「用户答复」段逐条编号、原文与 `ref#L<行>`，缺列或 U 编号重复时整表拒绝；单行缺字段（位置缺失、来源分级/语气/时点/所属包空）列入「无效行」，不作来源分级、不作依据，也不补造。
+- fixed 证据外读只在 `--task` 且同时给 `--review`/`--dispositions` 时发生：日志「证据索引」的基准目录（任一行含「基准目录」、取首个绝对路径）要经 `task.json`（`activation_cohort=post`、`task_id`＝目录名）认证；`--review` 必须在任务根 `quality/reviews/` 下、`--dispositions` 在 `quality/evidence/` 下，才按处置表 `fixed` 行的精确 `quality/evidence/` ref 读可读原件。不跟随符号链接、不越出任务根；认证不过、输入放错位置、文件缺失或路径越界都计入缺口，不阻断其余行。
 
 ## 结束披露
 

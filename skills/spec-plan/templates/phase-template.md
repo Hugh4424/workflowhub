@@ -972,6 +972,10 @@ import 失败明确报错，结果不等于 false 时断言失败，不回退默
 | R-001 | FR-EXAMPLE-001 | AC-EXAMPLE-001 | P1/T001 | ORACLE-EXAMPLE-BEHAVIOR |
 | R-002 | FR-EXAMPLE-002 | AC-EXAMPLE-002 | P2/T002 | ORACLE-EXAMPLE-DOCUMENT |
 
+决策日志声明「包级验收组」的包，本表对应行 `Source` 写该包决定：`D-<n>` 或 `决定 <n>`，
+两者按决策日志「编号对照」对应；普通行仍写 R/U 编号。
+一个包有多条决定时，这行只引它实际负责的那条；没写决定会被 B 表记具名缺口，owner＝规划作者。
+
 ### 全局验证策略
 
 行为命令由 Phase 1 卡唯一承载，文档由 Phase 2 独立执行单元复放。

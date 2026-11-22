@@ -1206,7 +1206,7 @@ describe("ORACLE-P3-PORTABLE-TEMPLATE v2 template travels with the old one", () 
 // checker. Missing items are named and stay advisory; the old-shape exit
 // behavior is not widened into a new blocking gate.
 describe("ORACLE-LOG-V2-TERMINAL ten-item design report", () => {
-  const logPath = "specs/execution-quality-build-code-hardening-20261119/decision-log.md";
+  const logPath = "specs/archive/execution-quality-build-code-hardening-20261119/decision-log.md";
   it("reports all ten real design packages with every template item", () => {
     const result = checkDecisionLogChain({ markdown: readFileSync(logPath, "utf8") });
     expect(result.design_packages).toHaveLength(10);
@@ -1274,6 +1274,7 @@ describe("ORACLE-AC-NUMBER-NORMALIZATION normalized ids and spec reconciliation"
 // overrides the default task-library location.
 import { existsSync, realpathSync } from "node:fs";
 const P10_TASK = "execution-quality-build-code-hardening-20261119";
+const P10_SPEC = `archive/${P10_TASK}`;
 const P10_ITEMS = ["原始需求", "最初方案", "发散与被否", "调研", "最终决定", "完整方案", "验收", "风险/回退", "未决/消费者/证据", "配套与影响"];
 const p10TaskRoot = () => process.env.WORKFLOWHUB_TASK_ROOT ?? "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/" + P10_TASK;
 function p10TemplateShape(items = P10_ITEMS) {
@@ -1289,7 +1290,7 @@ describe("P10 ORACLE-LOG-V2-TERMINAL template shape, real dispositions and ten r
     expect(shaped.design_packages[0].missing_items).toEqual([]);
     expect(shaped.warnings.filter((item) => item.code === "package_design_incomplete")).toEqual([]);
     expect(shaped.exit_code).toBe(0);
-    const current = checkDecisionLogChain({ markdown: readFileSync(join(ROOT, "specs", P10_TASK, "decision-log.md"), "utf8") });
+    const current = checkDecisionLogChain({ markdown: readFileSync(join(ROOT, "specs", P10_SPEC, "decision-log.md"), "utf8") });
     expect(current.design_packages).toHaveLength(10);
     for (const pkg of current.design_packages) expect(pkg.missing_items, `package ${pkg.id}`).toEqual([]);
     expect(current.exit_code).toBe(0);
@@ -1307,7 +1308,7 @@ describe("P10 ORACLE-LOG-V2-TERMINAL template shape, real dispositions and ten r
     const dispositions = join(p10TaskRoot(), "quality/evidence/build-plan/2026-11-19-015-merged-review-dispositions-c.md");
     expect(existsSync(review), `real review file at ${review}`).toBe(true);
     expect(existsSync(dispositions), `real dispositions file at ${dispositions}`).toBe(true);
-    const result = spawnSync(process.execPath, ["skills/spec-plan/scripts/build-decision-baseline.mjs", "--task", P10_TASK, "--review", review, "--dispositions", dispositions], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const result = spawnSync(process.execPath, ["skills/spec-plan/scripts/build-decision-baseline.mjs", "--task", P10_SPEC, "--review", review, "--dispositions", dispositions], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain("findings 28 条；处置 28 条；fixed 0/22 有可读修复证据；缺口 28 条");
     for (const id of ["/10", "/11", "/12", "/13", "/17", "/25"]) expect(result.stdout).toContain(`finding ${id} 待人工处置`);
@@ -1316,7 +1317,7 @@ describe("P10 ORACLE-LOG-V2-TERMINAL template shape, real dispositions and ten r
   });
   it("reports ring 2 incomplete with the missing title groups, ring 8 completed and ring 9 unavailable", async () => {
     const api = await import("../../runtime/task/final-chain-runner.mjs");
-    const materialRoot = join(ROOT, "specs", P10_TASK);
+    const materialRoot = join(ROOT, "specs", P10_SPEC);
     const state = api.runFinalChainCheck({ taskPath: p10TaskRoot(), materialRoot });
     const ring = (number) => state.rings.find((row) => row.ring === number);
     expect(ring(2).state, "registered chain/index scans make ring 2 incomplete, not unavailable").toBe("incomplete");

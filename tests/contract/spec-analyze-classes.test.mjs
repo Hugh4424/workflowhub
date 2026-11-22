@@ -15,7 +15,7 @@ test('step eleven selects actual source scope and independent record validation'
 import { readdirSync } from 'node:fs';
 import { reconcilePhaseCoverage, reconcileDesignLanding, reconcileFindings, parseFindingDispositionTable } from '../../skills/spec-plan/scripts/build-decision-baseline.mjs';
 
-const TASK = 'execution-quality-build-code-hardening-20261119';
+const TASK = 'archive/execution-quality-build-code-hardening-20261119';
 const taskPath = file => `specs/${TASK}/${file}`;
 const phaseFiles = () => readdirSync(`specs/${TASK}/phases`).filter(file => /^P\d+.*\.md$/.test(file)).sort()
   .map(file => ({ path: `phases/${file}`, text: readFileSync(taskPath(`phases/${file}`), 'utf8') }));
@@ -83,6 +83,98 @@ function p10TemplateShape(items = P10_ITEMS) {
     ...items.map((name, index) => `#### ${index + 1}. ${name}\n- 受控内容：${name}。\n`),
     '## 5. 跨包共享', '', '- 受控。', ''].join('\n');
 }
+
+test('B traces a declared package-level AC group through decisions and the current spec, without equating clauses', () => {
+  const decisionLog = p10TemplateShape().replace('- 受控。', `### 决定索引
+| 决定 | 内容 | 落点 |
+| --- | --- | --- |
+| 决定 3 | 保留草稿 | 包 1 |
+### 编号对照
+| 正文编号 | 机器编号 | 说明 |
+| --- | --- | --- |
+| 决定 3 | D-017 | 当前决定 |
+| 验收 1 | AC-P1 | 包级验收组 |`);
+  const spec = `| Source | FR | AC | Phase/Task | oracle |
+| --- | --- | --- | --- | --- |
+| R-009 / D-017 | FR-DRAFT-001 | AC-DRAFT-007、AC-DRAFT-008 | P2/T003 | ORACLE-DRAFT |`;
+  const phase = { path: 'phases/P2.md', text: '# Phase P2\n- **覆盖 AC**：AC-DRAFT-007、\n  AC-DRAFT-008\n- **依赖**：P1' };
+  const resolveB = (log, spec, phases) => reconcilePhaseCoverage({ decisionLog: log, spec, phases });
+  const result = resolveB(decisionLog, spec, [phase]);
+  expect(result.gaps).toEqual([]);
+  expect(result.rows[0]).toMatchObject({ package: 1, phase: 'P2', acs: 'AC-DRAFT-007、AC-DRAFT-008' });
+  expect(result.rows[0].basis).toContain('D-017');
+  expect(result.rows[0].basis).toContain('不作逐条等价');
+  for (const [log, changedSpec, phases] of [
+    [decisionLog.replace('包级验收组', '历史示例'), spec, [phase]],
+    [decisionLog.replace('保留草稿 | 包 1', '保留草稿 | 包 2'), spec, [phase]],
+    [decisionLog, spec.replace(' / D-017', ''), [phase]],
+    [decisionLog, spec.replace('FR-DRAFT-001', '待定'), [phase]],
+    [decisionLog, spec, [{ ...phase, text: phase.text.replace('  AC-DRAFT-008', '  待定') }]],
+    [decisionLog, spec, [{ ...phase, text: phase.text.replace('- **覆盖 AC**', '- **示例 AC**') }]],
+  ]) expect(resolveB(log, changedSpec, phases).gaps).not.toEqual([]);
+  // A missing declaration keeps one owner, the planning author.
+  expect(resolveB(decisionLog.replace('包级验收组', '历史示例'), spec, [phase]).gaps.join('\n')).toContain('owner=规划作者');
+});
+
+test('B selects the decision the spec cites, so a multi-decision package is not a gap', () => {
+  const decisionLog = p10TemplateShape().replace('- 受控。', `### 决定索引
+| 决定 | 内容 | 落点 |
+| --- | --- | --- |
+| 决定 3 | 保留草稿 | 包 1 |
+| 决定 4 | 补失败恢复 | 包 1 |
+### 编号对照
+| 正文编号 | 机器编号 | 说明 |
+| --- | --- | --- |
+| 决定 3 | D-017 | 当前决定 |
+| 决定 4 | D-018 | 当前决定 |
+| 验收 1 | AC-P1 | 包级验收组 |`);
+  const specFor = source => `| Source | FR | AC | Phase/Task | oracle |
+| --- | --- | --- | --- | --- |
+| ${source} | FR-DRAFT-001 | AC-DRAFT-007、AC-DRAFT-008 | P2/T003 | ORACLE-DRAFT |`;
+  const phase = { path: 'phases/P2.md', text: '# Phase P2\n- **覆盖 AC**：AC-DRAFT-007、\n  AC-DRAFT-008\n- **依赖**：P1' };
+  const resolveB = spec => reconcilePhaseCoverage({ decisionLog, spec, phases: [phase] });
+  // Human 「决定 n」 and machine D ids are the same cited decision via 编号对照.
+  for (const [source, id] of [['决定 4', 'D-018'], ['D-017', 'D-017']]) {
+    const result = resolveB(specFor(source));
+    expect(result.gaps).toEqual([]);
+    expect(result.rows[0]).toMatchObject({ package: 1, phase: 'P2' });
+    expect(result.rows[0].basis).toContain(id);
+  }
+  // Citing both package decisions is ambiguous; citing no decision is a named gap.
+  expect(resolveB(specFor('决定 3、决定 4')).gaps.join('\n')).toContain('同时引用多个本包决定');
+  const uncited = resolveB(specFor('R-009、U-002')).gaps.join('\n');
+  expect(uncited).toContain('Source 没有引用本包决定');
+  expect(uncited).toContain('owner=规划作者');
+});
+
+test('B keeps the registered gap when the real R/U spec does not cite a package decision', () => {
+  const decisionLog = p10TemplateShape().replace('- 受控。', `### 决定索引
+| 决定 | 内容 | 落点 |
+| --- | --- | --- |
+| 决定 3 | 保留草稿 | 包 1 |
+### 编号对照
+| 正文编号 | 机器编号 | 说明 |
+| --- | --- | --- |
+| 决定 3 | D-017 | 当前决定 |
+| 验收 1 | AC-P1 | 包级验收组 |`);
+  const spec = readFileSync(taskPath('spec.md'), 'utf8');
+  const phase = { path: 'phases/P1.md', text: '# Phase P1\n- **覆盖 AC**：AC-P1-001' };
+  const gaps = reconcilePhaseCoverage({ decisionLog, spec, phases: [phase] }).gaps.join('\n');
+  expect(gaps).toContain('Source 没有引用本包决定');
+  expect(gaps).toContain('owner=规划作者');
+});
+
+test('C accepts explicit no migration or removal only in the applicable companion fields', () => {
+  const source = p10TemplateShape().replace('- 受控内容：配套与影响。', [
+    '- 配套调整：补测试。', '- 配套迁移：无。', '- 配套移除：无移除。', '- 影响范围：仅编辑器。',
+  ].join('\n'));
+  const check = decisionLog => reconcileDesignLanding({ decisionLog, phaseCoverage: reconcilePhaseCoverage({ decisionLog, phases: ['# Phase P1'] }) });
+  expect(check(source).gaps).toEqual([]);
+  for (const body of ['', '待定。', 'TBD', '见决策日志。']) {
+    expect(check(source.replace('配套迁移：无。', `配套迁移：${body}`)).rows[0].placeholders).toContain('配套迁移');
+  }
+  expect(check(source.replace('配套调整：补测试。', '配套调整：无。')).rows[0].placeholders).toContain('配套调整');
+});
 
 test('P10 C table names an AC removed from its Phase coverage', () => {
   const coverage = p10Coverage(p10Log());
