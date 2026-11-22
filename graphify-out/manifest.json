@@ -846,9 +846,9 @@
     "semantic_hash": ""
   },
   "runtime/stage/stage-content-contracts.mjs": {
-    "mtime": 1795141337.0622365,
-    "seen": 1795184581.847489,
-    "ast_hash": "106b3c23bc4a151bcb14c5041eb0bd9e",
+    "mtime": 1795311655.1264272,
+    "seen": 1795318737.211586,
+    "ast_hash": "2d23defbbfa321afe7fd5d8f31c5f760",
     "semantic_hash": ""
   },
   "runtime/stage/stage-context.mjs": {
@@ -4056,10 +4056,10 @@
     "semantic_hash": ""
   },
   "tests/contract/task-topology-projection.test.mjs": {
-    "mtime": 1795055609.2605395,
-    "seen": 1795184581.847893,
-    "ast_hash": "ae67826646ca339fef0dcd7533f05f29",
-    "semantic_hash": "ae67826646ca339fef0dcd7533f05f29"
+    "mtime": 1795311634.3868928,
+    "seen": 1795318737.211593,
+    "ast_hash": "1a373d58eb3a88991e70a54aa2dbce29",
+    "semantic_hash": ""
   },
   "tests/contract/test-entry-grouping.test.mjs": {
     "mtime": 1795055609.2611818,
@@ -4134,10 +4134,10 @@
     "semantic_hash": "f6c191e432319813b61ff044ce9208e4"
   },
   "tests/e2e/card-10-current-consumer-e2e.test.mjs": {
-    "mtime": 1795055609.2661188,
-    "seen": 1795184581.847906,
-    "ast_hash": "8af356f542a88ac64ef9a83129ba31ff",
-    "semantic_hash": "8af356f542a88ac64ef9a83129ba31ff"
+    "mtime": 1795311668.4728305,
+    "seen": 1795318737.211595,
+    "ast_hash": "225a85f91dadb7f7a0e1e0526a20762b",
+    "semantic_hash": ""
   },
   "tests/e2e/card-10-current-contract-e2e.test.mjs": {
     "mtime": 1795055609.2666101,
@@ -18112,5 +18112,11 @@
     "seen": 1795184581.8488572,
     "ast_hash": "4446b2c059d736d605fc7a41674636eb",
     "semantic_hash": ""
+  },
+  "specs/archive/delivery-quality-reform-20261121/prd.md": {
+    "mtime": 1795318352.8145802,
+    "seen": 1795319265.16242,
+    "ast_hash": "",
+    "semantic_hash": "b9674df133d9e6e5371b0607f87a7034"
   }
 }

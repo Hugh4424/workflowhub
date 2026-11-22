@@ -12,70 +12,62 @@ function nonEmptyString(value) {
   return typeof value === "string" && value.trim() !== "";
 }
 
-function markdownSectionBody(markdown, headingPattern) {
-  const lines = String(markdown ?? "").split(/\r?\n/);
-  let latest = null;
-  for (let start = 0; start < lines.length; start += 1) {
-    const heading = lines[start].match(/^(#{1,3})(?:\s+|$)(.+?)\s*$/);
-    if (!heading || !headingPattern.test(heading[2])) continue;
-    const body = [];
-    for (let index = start + 1; index < lines.length; index += 1) {
-      const nextHeading = lines[index].match(/^(#{1,3})\s+/);
-      if (nextHeading && nextHeading[1].length <= heading[1].length) break;
-      body.push(lines[index]);
-    }
-    latest = body.join("\n");
-  }
-  return latest;
-}
-
 const TASK_TYPES = new Set(["规划任务", "普通任务"]);
 
-function cleanTaskTypeValue(value) {
-  return String(value ?? "")
-    .trim()
-    .replace(/^\*+|\*+$/g, "")
-    .replace(/^`+|`+$/g, "")
-    .trim();
+function plainTaskTypeCell(value) {
+  return value.trim().replace(/^(\*+)(.+?)\1$/, "$2").replace(/^(`+)(.+?)\1$/, "$2").trim();
+}
+
+function declaredTaskType(value) {
+  // The templates end the field with punctuation. Authors may also explain
+  // their selected value in parentheses; prose alone never selects a type.
+  const field = value.trim().replace(/[。.]$/, "").trim();
+  const match = /^([^（(]+?)(?:\s*(?:（([^（）]*)）|\(([^()]*)\)))?$/.exec(field);
+  if (!match) return "unknown";
+  const type = plainTaskTypeCell(match[1]);
+  const note = match[2] ?? match[3] ?? "";
+  if (!TASK_TYPES.has(type) || [...TASK_TYPES].some(other => other !== type && note.includes(other))) return "unknown";
+  return type;
 }
 
 export function readTaskTypeFromDecisionLog(decisionLogMarkdown) {
-  const text = String(decisionLogMarkdown ?? "");
-  const lines = text.split(/\r?\n/);
-  const identityHeading = /^(?:任务身份|task identity)$/i;
-  const identityHeadings = lines.filter((line) => {
-    const match = line.match(/^#{1,3}(?:\s+|$)(.+?)\s*$/);
-    return match && identityHeading.test(match[1]);
-  });
-  if (identityHeadings.length !== 1) return "unknown";
-
-  const body = markdownSectionBody(text, identityHeading);
-  if (body === null) return "unknown";
+  const lines = taskSourceLines(String(decisionLogMarkdown ?? ""), true);
+  let firstSection = true;
+  let inEntry = false;
+  let inIdentity = false;
+  let identityCount = 0;
   const declarations = [];
-  let fenced = false;
-  for (const line of body.split(/\r?\n/)) {
-    if (/^\s*```/.test(line)) {
-      fenced = !fenced;
+  for (const line of lines) {
+    if (line === null) continue;
+    const heading = /^(#{1,6})[ \t]+(.+?)\s*$/.exec(line);
+    if (heading) {
+      const [, marks, title] = heading;
+      if (marks.length <= 2) {
+        inEntry = marks === "##" && title === "1. 入口";
+        if (inEntry && !firstSection) return "unknown";
+        if (marks === "##") firstSection = false;
+      }
+      // A historical excerpt nested under another section is not a task identity.
+      const legacyLevel = marks.length <= 2 || (marks === "###" && firstSection);
+      const legacyIdentity = legacyLevel && /^(?:任务身份(?:：这是什么任务？)?|task identity)$/i.test(title);
+      inIdentity = legacyIdentity || (inEntry && marks === "###" && title === "这是什么任务");
+      if (inIdentity) identityCount += 1;
       continue;
     }
-    if (fenced) continue;
-
-    if (/^\s*\|/.test(line)) {
+    if (!inIdentity) continue;
+    if (/^ {0,3}\|/.test(line)) {
       const cells = line.split("|")
         .map((cell) => cell.trim())
         .filter((cell, index, all) => !(index === 0 && cell === "") && !(index === all.length - 1 && cell === ""));
-      if (/^任务类型$/i.test(cleanTaskTypeValue(cells[0])) && cells.length >= 2) {
-        declarations.push(cleanTaskTypeValue(cells[1]));
+      if (cells.length >= 2 && plainTaskTypeCell(cells[0]) === "任务类型") {
+        declarations.push(declaredTaskType(cells[1]));
       }
       continue;
     }
-
-    const bullet = line.match(/^\s*[-*]\s+\*\*任务类型\*\*\s*[:：]\s*(.*?)\s*$/i);
-    if (bullet) declarations.push(cleanTaskTypeValue(bullet[1]));
+    const bullet = /^ {0,3}[-*]\s+\*\*任务类型\*\*\s*[:：]\s*(.*?)\s*$/.exec(line);
+    if (bullet) declarations.push(declaredTaskType(bullet[1]));
   }
-
-  if (declarations.length !== 1 || !TASK_TYPES.has(declarations[0])) return "unknown";
-  return declarations[0];
+  return identityCount === 1 && declarations.length === 1 ? declarations[0] : "unknown";
 }
 
 const FIELD_LABEL_ALIASES = Object.freeze({
