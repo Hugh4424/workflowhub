@@ -5,6 +5,7 @@
     "SKILL.md",
     "templates/package-context.md",
     "templates/card.md",
+    "templates/card-human.md",
     "templates/cold-read.md",
     "templates/adversarial.md",
     "scripts/validate-card.mjs",
