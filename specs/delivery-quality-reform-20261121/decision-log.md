@@ -288,3 +288,10 @@
 - 审查质量：三域复核 6 条阻塞全部关闭；收口域 4 条、代码域 2 条、路由域 2 条阻塞全部关闭；不再用“0 阻塞”收口。
 - 未做：改代码、拆 PRD 具体任务、真实试点。
 - 交接：`quality/evidence/final-report.md`、`quality/evidence/stage-handoff.md`；七张卡在 `quality/evidence/decision-maker/`。
+
+### 步骤与细节审查状态（2026-11-22）
+
+- 七域均走完 make-decision 八步中的第 1–7 步：接包、调研、设计、真歧义才 Talk、机械自检、聊天卡、冷读、对抗、落日志。
+- 第 8 步“交下游 build-plan”未做；本任务没有拆 PRD 具体任务，也没有把七域卡交给 build-plan 消费。
+- 每个域都做了细节审查：一次首审，有阻塞的同人复读/关闭确认；跨七域的最后一次细节审查没有单独做，只有三源落点复核（它查落点，不逐条查重复、边界和编号）。
+- 参考索引：`模块优化/00-参考文件索引.md`；交接：`quality/evidence/stage-handoff.md`。
