@@ -111,7 +111,7 @@
     {
       "step_id": 7,
       "step_slug": "direction-advice",
-      "observable_result": "wh-review 独立方向建议及原始发现、真实执行者、失败和覆盖限制保存；建议不替用户选方向。审查方向与修订后大纲，不审细节；Kill 建议用于目标无效或方向违反硬约束，停止决定由用户作出；Recycle 建议用于可修补假设或证据缺口，回对应调研或方向 talk。两项权限与判据缺失时不记审查通过，审查事实不作机器门。 当前选择只指骨架级选择；被审大纲带可回读 ref＋sha256 作为材料身份，不作继续工作或问题身份的许可。 判定消费：SKILL.md#方法 第7步；原件：review原件、实际delivery与失败、用户处置。 方向审查时点：大纲确认后、逐模块收敛前回读独立方向建议或真实不可用。 留痕边界：reviews 目录不区分方向轨回执与其它审查。 方向包含调研结论与来源（`research_context`，不得含 proposed_solution）、大纲骨架（包划分、依赖与顺序、范围边界、每包验收草案或验收缺口）、已确认决定与非目标；缺当前选择、备选或否决理由任一项不记完成。方向审查按四问逐包给结论：原始需求能否被正确实现；功能是否都有真实接线；验收是否合理、可判、能证伪；范围、风险、依赖是否覆盖。答不出即 finding 并写明缺的证据与补件人；四问都无问题写比对范围，不造 finding。跳过不使下一步前移：本步无本步原件即保持当前步与 incomplete。",
+      "observable_result": "wh-review 独立方向建议及原始发现、真实执行者、失败和覆盖限制保存；建议不替用户选方向。审查方向与修订后大纲，不审细节；Kill 建议用于目标无效或方向违反硬约束，停止决定由用户作出；Recycle 建议用于可修补假设或证据缺口，回对应调研或方向 talk。两项权限与判据缺失时不记审查通过，审查事实不作机器门。 当前选择只指骨架级选择；被审大纲带可回读 ref＋sha256 作为材料身份，不作继续工作或问题身份的许可。 判定消费：SKILL.md#方法 第7步；原件：review原件、实际delivery与失败、用户处置。 方向审查时点：大纲确认后、逐模块收敛前回读独立方向建议或真实不可用。 留痕边界：reviews 目录不区分方向轨回执与其它审查。 方向包含调研结论与来源（`research_context`，不得含 proposed_solution）、大纲骨架（包划分、依赖与顺序、范围边界、每包验收草案或验收缺口）、已确认决定与非目标；缺当前选择、备选或否决理由任一项不记完成。方向审查按五问逐包给结论：原始需求能否被正确实现；功能是否都有真实接线；验收是否合理、可判、能证伪；范围、风险、依赖是否覆盖；谁观察到用户看到的实际效果、何时观察、凭什么证据、用户实际看到什么变化（只看格式、合同或退出码不算用户效果）。答不出即 finding 并写明缺的证据与补件人；五问都无问题写比对范围，不造 finding。每条 finding 带一个受控 lens（direction 五问依次 delivery／wiring／acceptance／scope_risk／user_effect，另可用 security／compatibility／performance／cost），不得以 provider 或 role 名冒充；同 lens 同问题保留每个贡献来源，不同 lens 不合并。跳过不使下一步前移：本步无本步原件即保持当前步与 incomplete。",
       "completion_evidence": [
         {
           "kind": "review",
@@ -162,7 +162,7 @@
     {
       "step_id": 10,
       "step_slug": "detail-advice",
-      "observable_result": "逐模块确认后，对整体做一次 wh-review 细节审查，逐项处置并完成确认前一致性准备与必要修复；Kill 建议用于整体目标或范围无法成立，由用户决定停止；Recycle 建议用于可修补的模块间缺口，回对应模块收敛。两项权限与判据缺失时不记审查通过，不拆模块审加整体审两级。 判定消费：SKILL.md#方法 第10步；原件：detail包delivery、coverage、原finding与处置。 细节审查前检查：先跑步骤检查器并读回台账；未收敛即停，记录缺项与owner，收敛后重跑。 留痕边界：reviews 目录不区分本次 detail 轨回执与其它审查。 detail 输入含 context_map.proposal_projection：每包四行投影 {scope, plan, acceptance, risk, source_ref}，缺一行即该包方案未交审。四问（方案成立吗／验收可判吗／范围越界吗／风险覆盖吗）逐包给结论，答不出即 finding。跳过不使下一步前移：本步无本步原件即保持当前步与 incomplete。 UI 包加设计审查镜头：核对 UI 需求是否收敛、设计源是否确认、验收是否可判；非 UI 包不加。",
+      "observable_result": "逐模块确认后，对整体做一次 wh-review 细节审查，逐项处置并完成确认前一致性准备与必要修复；Kill 建议用于整体目标或范围无法成立，由用户决定停止；Recycle 建议用于可修补的模块间缺口，回对应模块收敛。两项权限与判据缺失时不记审查通过，不拆模块审加整体审两级。 判定消费：SKILL.md#方法 第10步；原件：detail包delivery、coverage、原finding与处置。 细节审查前检查：先跑步骤检查器并读回台账；未收敛即停，记录缺项与owner，收敛后重跑。 留痕边界：reviews 目录不区分本次 detail 轨回执与其它审查。 detail 输入含 context_map.proposal_projection：每包四行投影 {scope, plan, acceptance, risk, source_ref}，缺一行即该包方案未交审。五问（方案成立吗／验收可判吗／范围越界吗／风险覆盖吗／谁观察到用户实际效果、何时观察、凭什么证据、用户看到什么变化）逐包给结论，答不出即 finding；每条 finding 带一个受控 lens（detail 五问依次 delivery／acceptance／scope／risk／user_effect，另可用 simplicity／plan_eng_review／ui_design），不得以 provider 或 role 名冒充。跳过不使下一步前移：本步无本步原件即保持当前步与 incomplete。 UI 包加设计审查镜头：核对 UI 需求是否收敛、设计源是否确认、验收是否可判；非 UI 包不加。",
       "completion_evidence": [
         {
           "kind": "review",

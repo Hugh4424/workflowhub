@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runSimpleReview } from '../../skills/wh-review/scripts/simple-review-runner.mjs';
+import { DETAIL_REVIEW_LENSES, DIRECTION_REVIEW_LENSES, REVIEW_LENSES } from '../../runtime/review/review-output.mjs';
 
 const BAD_PLAN = `# 受控方案样张（故意坏输入，不代表当前C07方案）
 ## 已确认要求
@@ -117,5 +118,34 @@ describe('review axes contract', () => {
     expect(result.findings[0].recommendation).toContain('confirmed action');
     expect(result.findings[0].evidence).toContain('覆盖范围：P1');
     expect(result.findings[0]).not.toHaveProperty('axis');
+  });
+});
+
+describe('review lens controlled vocabulary', () => {
+  const splitList = text => text.split(/[、／]/).map(value => value.trim()).filter(Boolean);
+  const pair = (regex, text, label) => {
+    const match = text.match(regex);
+    expect(match, `${label} lens list is missing`).not.toBeNull();
+    return splitList(`${match[1]}、${match[2]}`);
+  };
+  const sameSet = (actual, expected, label) => {
+    expect(new Set(actual).size, `${label} lens list repeats a value`).toBe(actual.length);
+    expect([...actual].sort(), `${label} lens list drifted`).toEqual([...expected].sort());
+  };
+
+  it('keeps code, schema, provider protocol and both step declarations on one value domain', () => {
+    const schema = JSON.parse(readFileSync(new URL('../../runtime/review/schemas/result.schema.json', import.meta.url), 'utf8'));
+    const schemaEnum = schema.$defs.reviewLens.enum;
+    expect(schemaEnum).toContain('unknown');
+    sameSet(schemaEnum.filter(value => value !== 'unknown'), REVIEW_LENSES, 'schema');
+
+    const protocol = readFileSync(new URL('../../skills/wh-review/contracts/provider-protocol.md', import.meta.url), 'utf8');
+    sameSet(pair(/direction 五问依次用 ([\s\S]*?)，[\s\S]*?分别用 ([\s\S]*?)；/, protocol, 'provider-protocol direction'), DIRECTION_REVIEW_LENSES, 'provider-protocol direction');
+    sameSet(pair(/detail 五问依次用 ([\s\S]*?)，[\s\S]*?分别用 ([\s\S]*?)。/, protocol, 'provider-protocol detail'), DETAIL_REVIEW_LENSES, 'provider-protocol detail');
+
+    const steps = JSON.parse(readFileSync(new URL('../../workflows/make-decision/steps.json', import.meta.url), 'utf8')).steps;
+    const stepText = id => steps.find(step => step.step_id === id).observable_result;
+    sameSet(pair(/direction 五问依次 ([\s\S]*?)，另可用 ([\s\S]*?)）/, stepText(7), 'steps step 7'), DIRECTION_REVIEW_LENSES, 'steps step 7');
+    sameSet(pair(/detail 五问依次 ([\s\S]*?)，另可用 ([\s\S]*?)）/, stepText(10), 'steps step 10'), DETAIL_REVIEW_LENSES, 'steps step 10');
   });
 });

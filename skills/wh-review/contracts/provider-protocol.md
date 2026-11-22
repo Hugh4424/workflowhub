@@ -75,6 +75,16 @@ evidence_kind 只用 direct、machine、inferred：direct 有直接源码/材料
 事实，inferred 是推断。代码面的直接证据含锚点处源码摘录，不把推断标成直接事实。
 缺证、无效锚点和未知严重度保留真实诊断或 discarded_facts，不凭品牌或耗时断定问题成立。
 
+make-decision direction/detail 的每条 finding 还必须声明一个受控 `lens`（关注角度）。
+direction 五问依次用 delivery、wiring、acceptance、scope_risk、user_effect，
+合同已有的安全、兼容、性能、成本镜头分别用 security、compatibility、performance、cost；
+detail 五问依次用 delivery、acceptance、scope、risk、user_effect，
+既有 simplicity-guard、plan-eng-review 与仅 UI 包设计镜头分别用 simplicity、plan_eng_review、ui_design。
+`lens` 由实际 reviewer 按本条发现的真实关注角度自报，宿主只校验；provider 或 role 名不是角度。
+同角度同问题的多个贡献保留各自 provider、role 与原输出引用；不同角度即使锚点和问题相同也不合并。
+新 direction/detail 输出缺 `lens` 或取值非法时按解析/合同失败保留原始输出与失败事实，不得自动补值或成为干净通过；
+历史记录缺 `lens` 读作 unknown，不回填。其它审查阶段不新增强制 `lens`。
+
 ## 聚合与审查面
 
 沿现owner的根因、路径、规范化 issue 规则归并。共同简洁发现处理时读 `skills/simplicity-guard/SKILL.md` Packet lens，消费三问与有源归并；保每路 attribution 和不同后果，不能以词近合并异根因。

@@ -8,6 +8,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import { aggregateCanonicalProviderResults } from "../../runtime/review/canonical-review-result.mjs";
+import { parseReviewerOutput } from "../../runtime/review/review-output.mjs";
+import { deriveSeriousReviewPause, validateReportableFindingDispositions } from "../../runtime/review/stage-review-disposition.mjs";
 const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
 async function fixture(){const root=realpathSync(mkdtempSync(join(tmpdir(),"ordinary-review-record-")));roots.push(root);const repo=join(root,"metadata-repo");mkdirSync(repo);const task=await createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"workflowhub",task_id:randomUUID(),created_at:"2026-10-03T00:00:00Z",target_repo_root:repo,activation_cohort:"post",record_model:"vnext-single-write",execution_mode:"per_invocation",issue_ids:[],inputs:{}}});return{root,task};}
 const request=(phase="P1")=>({stage:"build-code",review_scope:"phase",phase_id:phase,subject_kind:"phase",surface:"code",subject:{files:["README.md"]},materials:{approved_spec:"owned ordinary current specification"}});
@@ -106,4 +109,71 @@ describe("ordinary review request/result lifecycle",()=>{
    expect(value.error ?? null).toBeNull();
  });
 
+});
+
+describe("lens-scoped canonical identity", () => {
+ const lensFinding = (lens) => ({ severity: "major", path: "material.md", line: 7, issue: "The plan author receives the wrong package", recommendation: "Bind it", root_cause: "Pointer not bound", evidence_kind: "direct", evidence: "material.md:7", lens });
+ const lensMember = (provider, lens) => ({ provider, role: "red", status: "completed", parse_outcome: "ok", evidenceAnchors: [true], identity: { provider, adapter: provider.split("/")[0], source_id: `${provider}-source`, config_id: `${provider}-config` }, review: { findings: [lensFinding(lens)] } });
+ it("gives different lenses distinct cluster ids and keeps every disposition entry", () => {
+   const result = aggregateCanonicalProviderResults([lensMember("codex/owned", "user_effect"), lensMember("other/owned", "acceptance")], 1);
+   expect(result.findings).toHaveLength(2);
+   const ids = result.findings.map(finding => finding.id);
+   expect(new Set(ids).size).toBe(2);
+   expect(ids.every(id => /^F-[a-f0-9]{12}$/.test(id))).toBe(true);
+   const review = { task_id: "owned-task", stage: "build-code", status: "available", findings: result.findings };
+   const pause = deriveSeriousReviewPause({ taskId: "owned-task", stage: "build-code", reviewRef: "quality/reviews/owned.json", result: review });
+   expect(pause.findings).toHaveLength(2);
+   expect(new Set(pause.findings.map(finding => finding.finding_id)).size).toBe(2);
+   const dispositions = pause.findings.map(finding => ({ finding_id: finding.finding_id, status: "fixed", original_fact: "owned object", source: "owned source", consequence: "owned consequence", next_action: "owned next action" }));
+   const disposition = validateReportableFindingDispositions({ result: review, dispositions });
+   expect(disposition.missing_items).toEqual([]);
+   expect(disposition.facts.items).toHaveLength(2);
+ });
+ it("keeps unknown read-side only and never writes it into a record", async () => {
+   expect(() => parseReviewerOutput(JSON.stringify({ findings: [lensFinding("unknown")] }))).toThrow(/lens/i);
+   const historical = lensMember("codex/owned", "user_effect");
+   delete historical.review.findings[0].lens;
+   const aggregated = aggregateCanonicalProviderResults([historical], 1);
+   expect(aggregated.findings[0].lens).toBe("unknown");
+   const f = await fixture();
+   const claim = { ...finding("codex/owned") };
+   const { value } = await record(f, async () => result({ status: "available", provider_results: [member("codex/owned", { parse_outcome: "ok" })], findings: [claim] }));
+   expect(value.status).toBe("available");
+   expect(value.findings[0]).not.toHaveProperty("lens");
+ });
+});
+
+describe("out-of-vocabulary lens on the record route", () => {
+ it("records an optional-surface extra lens as dropped instead of failing the match", async () => {
+   const f = await fixture();
+   const claim = { ...finding("codex/owned"), lens: "codex" };
+   const { value } = await record(f, async () => result({ status: "available", provider_results: [member("codex/owned", { parse_outcome: "ok" })], findings: [claim] }));
+   expect(value.status).toBe("available");
+   expect(value.findings).toHaveLength(1);
+   expect(value.findings[0]).not.toHaveProperty("lens");
+ });
+ it("records a required-surface illegal lens as incomplete without throwing or writing the bad value", async () => {
+   const f = await fixture();
+   const claim = { ...finding("codex/owned"), lens: "codex" };
+   const input = { stage: "make-decision", review_track: "direction", materials: { raw_requirement: "Deliver the discussed package" } };
+   const { value } = await record(f, async () => result({ status: "available", provider_results: [member("codex/owned", { parse_outcome: "ok" })], findings: [claim] }), input);
+   expect(value.status).toBe("incomplete");
+   expect(value.error.code).toBe("REVIEW_LENS_INVALID");
+   expect(value.error.message).toContain("illegal=1");
+   expect(value.findings).toHaveLength(1);
+   expect(value.findings[0]).not.toHaveProperty("lens");
+ });
+});
+
+describe("cross-track lens on the record route", () => {
+ it.each([["detail", "wiring"], ["direction", "scope"]])("records %s with a legal-but-foreign %s lens as incomplete", async (track, lens) => {
+   const f = await fixture();
+   const claim = { ...finding("codex/owned"), lens };
+   const input = { stage: "make-decision", review_track: track, materials: { raw_requirement: "Deliver the discussed package" } };
+   const { value } = await record(f, async () => result({ status: "available", provider_results: [member("codex/owned", { parse_outcome: "ok" })], findings: [claim] }), input);
+   expect(value.status).toBe("incomplete");
+   expect(value.error.code).toBe("REVIEW_LENS_INVALID");
+   expect(value.error.message).toContain("illegal=1");
+   expect(value.findings[0]).not.toHaveProperty("lens");
+ });
 });

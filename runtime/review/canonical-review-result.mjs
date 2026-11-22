@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { parseReviewerOutput } from "./review-output.mjs";
+import { parseReviewerOutput, REVIEW_LENSES } from "./review-output.mjs";
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -61,11 +61,25 @@ function normalizedIssue(value) {
   return value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
 }
 function findingKey(finding) {
-  return `${finding.path}\u0000${finding.line ?? ""}\u0000${normalizedIssue(finding.issue).join(" ")}`;
+  // Two angles on the same anchor are different claims: the declared lens is
+  // part of the id so a disposition reader cannot collapse them. Historical
+  // findings without lens keep the pre-lens id, so re-authenticating stored
+  // records does not drift.
+  return `${finding.path}\u0000${finding.line ?? ""}\u0000${normalizedIssue(finding.issue).join(" ")}${finding.lens ? `\u0000${finding.lens}` : ""}`;
 }
+// Historical findings predate the controlled lens field. Read them as unknown
+// instead of dropping them or inventing a value; new outputs are validated by
+// the parser and the host before they reach this merge. This aggregate is a
+// read-side projection: `unknown` can appear in its clusters, while the only
+// record writer (review-record-route) drops out-of-vocabulary lenses and never
+// persists the sentinel.
+const lensOf = (finding) => finding.lens ?? "unknown";
 function sameCluster(cluster, candidate) {
   const seed = cluster.members[0];
   if (seed.finding.path !== candidate.finding.path) return false;
+  // The attention angle is part of the claim identity: equal paths, lines and
+  // issue text under different lenses are different findings and must not merge.
+  if (lensOf(seed.finding) !== lensOf(candidate.finding)) return false;
   // Corroboration needs the same concrete source line. A missing line cannot
   // act as a wildcard, because unrelated findings in one file would merge.
   if (!Number.isInteger(seed.finding.line) || !Number.isInteger(candidate.finding.line)
@@ -112,6 +126,7 @@ function clusterRecord(cluster, roleCoverage = []) {
   return {
     id: `F-${createHash("sha256").update(findingKey(finding)).digest("hex").slice(0, 12)}`,
     severity, path: finding.path, ...(finding.line ? { line: finding.line } : {}),
+    lens: lensOf(finding),
     // A serious finding must carry its own root cause.  Do not turn a missing
     // root cause into an apparently complete actionable finding by copying the
     // issue text; the provider contract treats that as invalid evidence.
@@ -123,7 +138,8 @@ function clusterRecord(cluster, roleCoverage = []) {
     finding_count: members.length, disposition, evidence_status: evidenceStatus, source_strength: sourceStrength,
     ...roleFacts,
     provider_findings: members.map(({ provider, adapter, role, finding: member, anchorValid }) => ({
-      provider, adapter, ...(role ? { role } : {}), severity: member.severity, evidence_kind: member.evidence_kind ?? "unspecified",
+      provider, adapter, ...(role ? { role } : {}), lens: lensOf(member),
+      severity: member.severity, evidence_kind: member.evidence_kind ?? "unspecified",
       evidence_anchor_valid: anchorValid === true,
     })),
   };
@@ -151,6 +167,7 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
       && typeof finding.path === "string" && finding.path.trim() !== ""
       && typeof finding.issue === "string" && finding.issue.trim() !== ""
       && typeof finding.recommendation === "string" && finding.recommendation.trim() !== ""
+      && (finding.lens === undefined || REVIEW_LENSES.includes(finding.lens))
       && (finding.severity === "minor" || (
         typeof finding.root_cause === "string" && finding.root_cause.trim() !== ""
         && ["direct", "inferred", "machine"].includes(finding.evidence_kind)
@@ -262,6 +279,32 @@ export function conservativelyAssessUnattestedAnchors(items) {
     evidenceAnchors: item.review.findings.map(() => false),
   }));
 }
+
+// Stored records written before the controlled lens field have no lens on
+// findings or clusters. Re-authentication must still read them; a missing
+// angle reads as unknown on both sides instead of being invented in the bytes.
+// Owner: the review-record read side (review-record consumers take this over
+// after P2 delivery). Replacement: delete this compatibility branch once every
+// record carries a lens. Deletion criterion: no readable historical record has
+// a finding without lens. The write side never persists the sentinel.
+const historicalFindings = (findings) => Array.isArray(findings)
+  ? findings.map((finding) => finding && typeof finding === "object" && !Array.isArray(finding)
+    ? { lens: "unknown", ...finding } : finding)
+  : findings;
+const historicalAdjudication = (adjudication) => adjudication && typeof adjudication === "object"
+  ? {
+      ...adjudication,
+      clusters: Array.isArray(adjudication.clusters) ? adjudication.clusters.map((cluster) => cluster && typeof cluster === "object"
+        ? {
+            lens: "unknown",
+            ...cluster,
+            provider_findings: Array.isArray(cluster.provider_findings)
+              ? cluster.provider_findings.map((member) => member && typeof member === "object" ? { lens: "unknown", ...member } : member)
+              : cluster.provider_findings,
+          }
+        : cluster) : adjudication.clusters,
+    }
+  : adjudication;
 
 function policyFacts(attempt, fallbackMinimumReviewers) {
   const policy = attempt.review_policy ?? null;
@@ -385,10 +428,13 @@ export function authenticateCanonicalReviewResult({
   const expectedFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
   const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };
   const legacyFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
+  // Historical compatibility comparison; same owner/replacement/deletion
+  // criteria as `historicalFindings` above (read side only, removed once every
+  // readable record carries a lens).
   const semanticMatches = result.adjudication === undefined
-    ? result.verdict !== undefined && isDeepStrictEqual(result.findings, legacyFindings)
-    : result.verdict === undefined && isDeepStrictEqual(result.findings, expectedFindings)
-      && isDeepStrictEqual(result.adjudication, expectedAdjudication);
+    ? result.verdict !== undefined && isDeepStrictEqual(historicalFindings(result.findings), historicalFindings(legacyFindings))
+    : result.verdict === undefined && isDeepStrictEqual(historicalFindings(result.findings), historicalFindings(expectedFindings))
+      && isDeepStrictEqual(historicalAdjudication(result.adjudication), historicalAdjudication(expectedAdjudication));
   if (!semanticMatches || !isDeepStrictEqual(result.provider_results, expectedProviderResults)) {
     invalid("semantic result does not exactly match completed provider evidence and aggregation");
   }

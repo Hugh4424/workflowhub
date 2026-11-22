@@ -5,7 +5,7 @@ import { withLock } from "../interface/record-lock.mjs";
 import { appendRecord } from "../interface/safe-write.mjs";
 import { createTaskDiskWriteExecutor } from "../evidence/disk-budget.mjs";
 import { reviewIdentityFromInput, TERMINAL_REVIEW_SCOPE } from "./review-policy.mjs";
-import { parseReviewerOutput } from "./review-output.mjs";
+import { parseReviewerOutput, reviewLensRequirement } from "./review-output.mjs";
 import { deriveTerminalConclusion } from "./canonical-review-result.mjs";
 import { redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
@@ -211,16 +211,34 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     for(const key of ["stage","review_scope","review_track","review_kind","subject_kind","phase_id","surface"]) if(result[key]!==undefined && result[key]!==tuple[key]) throw coded("REVIEW_SUBJECT_MISMATCH",`runner result differs in ${key}`);
     if (Array.isArray(result.findings) && Array.isArray(result.provider_results)) result={...result,findings:result.findings.filter(finding=>!result.provider_results.some(member=>member.provider===finding.provider && member.identity_authenticated===false))};
     let findings=[];
+    // The record writer owns the last word on lens. It keeps the pre-lens
+    // whitelist behaviour (an optional extra key is dropped) and then rejects a
+    // clean available make-decision direction/detail result that has no legal
+    // angle. Historical records without lens are never rewritten here.
+    const lensRequirement=reviewLensRequirement(tuple.stage,tuple.review_track);
+    const droppedIllegalLens=[];
+    let missingLens=0;
     const partialFindings=["unavailable","incomplete"].includes(result.status) && Array.isArray(result.findings) && result.findings.length>0;
     if(["available","available-with-failures"].includes(result.status) || partialFindings) {
       if(!Array.isArray(result.provider_results) || result.provider_results.length===0) throw coded("PROVIDER_RESULT_INVALID","semantic result has no provider provenance");
       if(partialFindings && result.findings.some(finding=>typeof finding?.provider!=="string" || !result.provider_results.some(member=>member?.provider===finding.provider))) throw coded("PROVIDER_RESULT_INVALID","partial finding is not bound to an observed provider");
-      const parsed=parseReviewerOutput(JSON.stringify({findings:result.findings}),{requireEvidence:true});
+      const parsed=parseReviewerOutput(JSON.stringify({findings:result.findings}),{requireEvidence:true,lensPolicy:"ignore"});
       // Normalization keeps finding order. Consume each submitted finding once
       // so identical findings from different providers retain their own source.
-      const originals=result.findings.filter(original=>parseReviewerOutput(JSON.stringify({findings:[original]}),{requireEvidence:true}).findings.length>0);
-      findings=parsed.findings.map(normalized=>{const index=originals.findIndex(f=>f.path===normalized.path&&f.issue===normalized.issue&&(f.line ?? null)===(normalized.line ?? null));if(index<0) throw coded("REVIEW_RESULT_INVALID","normalized finding has no submitted source");const [original]=originals.splice(index,1);return {...original,...normalized};});
+      // Match on the normalized form, not the raw submission: an out-of-
+      // vocabulary lens is dropped by the same `ignore` policy, so comparing a
+      // normalized finding against a raw one would never match and would turn a
+      // harmless extra key into REVIEW_RESULT_INVALID. The declared lens stays
+      // part of the match key because two angles on one anchor are distinct.
+      const originals=result.findings.map(raw=>({raw,normalized:parseReviewerOutput(JSON.stringify({findings:[raw]}),{requireEvidence:true,lensPolicy:"ignore"}).findings[0]})).filter(item=>item.normalized!==undefined);
+      findings=parsed.findings.map(normalized=>{const index=originals.findIndex(item=>item.normalized.path===normalized.path&&item.normalized.issue===normalized.issue&&(item.normalized.line ?? null)===(normalized.line ?? null)&&(item.normalized.lens ?? null)===(normalized.lens ?? null));if(index<0) throw coded("REVIEW_RESULT_INVALID","normalized finding has no submitted source");const [{raw}]=originals.splice(index,1);const merged={...raw,...normalized};if(normalized.lens===undefined){if(raw.lens===undefined)missingLens+=1;else droppedIllegalLens.push(raw.lens);delete merged.lens;}else if(lensRequirement && !lensRequirement.includes(merged.lens)){droppedIllegalLens.push(merged.lens);delete merged.lens;}return merged;});
       result={...result,discarded_facts:[...(result.discarded_facts ?? []),...(parsed.discarded_facts ?? [])]};
+    }
+    if(lensRequirement && ["available","available-with-failures"].includes(result.status)) {
+      const missing=missingLens;
+      const illegal=droppedIllegalLens.length;
+      if(missing+illegal>0) result={...result,status:"incomplete",...(result.outcome!==undefined?{outcome:"incomplete"} : {}),
+        error:{code:"REVIEW_LENS_INVALID",message:`new ${tuple.stage}/${tuple.review_track} finding has a contract-invalid lens: missing=${missing}, illegal=${illegal}; allowed: ${lensRequirement.join(", ")}`}};
     }
     const providers=[];
     const uniqueProviders=new Map();
