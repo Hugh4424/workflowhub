@@ -530,6 +530,20 @@ it("ORACLE-PHASE-READINESS: 材料侧按 stage 判无表，build-code 非零而 
   expect.soft(buildCode.stdout).toMatch(/missing readiness table/i);
 });
 
+it("ORACLE-PHASE-READINESS: 缺原件时仅显式 build-code 失败，build-plan 和推断阶段只诊断", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  for (const stage of ["build-plan", "infer"]) {
+    const run = runChecks(fixture, stage);
+    expect.soft(run.status, `${stage}: ${run.stdout.slice(-600)} ${run.stderr.slice(-200)}`).toBe(0);
+    expect.soft(run.stdout).toMatch(/readiness result missing: phase=P1.*diagnostic only/i);
+  }
+  const buildCode = runChecks(fixture, "build-code");
+  expect.soft(buildCode.status).toBe(1);
+  expect.soft(buildCode.stdout).toMatch(/readiness result missing: phase=P1/i);
+  expect.soft(buildCode.stdout).not.toMatch(/readiness result missing: phase=P1.*diagnostic only/i);
+  expect(readinessFiles(fixture)).toEqual([]);
+});
+
 it("ORACLE-PHASE-READINESS: 人判行在前时材料侧仍按机器探针对齐", () => {
   const fixture = entryFixture({ probe: PASSING_PROBE, humanFirst: true });
   const run = fixture.runEntry(cursorInput());

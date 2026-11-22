@@ -505,17 +505,16 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
   const phases = facts?.readiness?.phases ?? [];
   if (phases.length === 0) return [];
   const errors = [];
-  // A synthesized/omitted stage is a read-back, not a dispatch gate: every
-  // readiness gap stays a named warning so old materials keep their historical
-  // exit code. Only an explicit --stage (build-code) rejects readiness gaps.
-  const inferred = !explicit;
+  // Only explicit build-code enforces readiness. Earlier stages may declare
+  // probes before the build-code entry has recorded their originals.
+  const enforce = explicit && stage === "build-code";
   const fail = (message) => {
-    if (inferred) console.log(`[run-checks][material] ${message} (diagnostic only: --stage was omitted; rerun with --stage=build-code to enforce)`);
-    else errors.push(message);
+    if (enforce) errors.push(message);
+    else console.log(`[run-checks][material] ${message} (diagnostic only: ${explicit ? `stage=${stage}` : "--stage was omitted"}; rerun with --stage=build-code to enforce)`);
   };
   const declared = phases.filter((phase) => phase.declared);
   for (const phase of phases.filter((entry) => !entry.declared)) {
-    if (stage === "build-code" && explicit) {
+    if (enforce) {
       // The material-side build-code check is a dispatch gate too: deleting the
       // five columns must not turn into a green result here.
       errors.push(`${root} ${phase.path} missing readiness table `
