@@ -54,6 +54,17 @@ S/M 快速反馈不替代最终完整数据与验收；独立测试面按各自 
 空间检查消费当前策略及原 task handle 预算，不恢复历史库大小倍数门。
 保存、比较与保留仍以本文件「证据只留原始件」为唯一执行底座。
 
+### 安装态发布检查
+
+真实装好的运行器根（`runner/`）用 `node tools/cli/run-checks.mjs` 做聚合自检：
+逐项报告跑过、具名未跑与失败；成功只证明这些检查真实跑过，不证明业务或发布通过。
+裸 `runner` + `skill-bundle` 安装根缺 `skills/catalog.yaml` 时，两项源码登记检查打印具名 `NOT RUN`，命令仍 exit 0；
+完整 `buildRelease` 根会把 catalog 复制进 `runner/`，两项真实运行。
+删除任一随包门禁检查器后同一命令必须 exit 1 并点名该检查器，恢复同字节后回到 exit 0。
+advisory 的 `check-decision-log-chain` 只打印警告，不进失败清单。
+检查器清单、数据依赖与七类入口的当前覆盖唯一读 [发布支持矩阵](release-support-matrix.md)「安装态覆盖域」，
+本文件不复制第二份清单。
+
 ### 三审查点与结论真实性
 
 审查投入按真实范围/大小/影响说明：认证工作区同一具名基准用 `git diff --name-only` 列路径、`git diff --numstat` 分列增删，逐项纳入未提交/未跟踪交付物；二进制等不可量化项记不可核，+100/-100不以净0抵消。按目录职责实读直接 caller/显式 reader，列路径/符号/依据；move-map仅导航，目录名/传递猜测不证影响。
