@@ -37,7 +37,7 @@ import { captureReviewSource, readScopedReviewMaterial } from "../../skills/wh-r
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 import { validateAcceptanceEvidence } from "../../runtime/evidence/acceptance-evidence-validator.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptance } from "../../runtime/review/stage-review-disposition.mjs";
+import { buildRiskAcceptance, deriveSeriousReviewPause, validateRiskAcceptance } from "../../runtime/review/stage-review-disposition.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -1986,31 +1986,42 @@ function terminalAssessmentQuality(context, row) {
       const accepted=d.status==="accepted_risk";
       let acceptedResolved=false;
       if(accepted){
+        // accepted_risk is consumed from the authoritative terminal input field
+        // risk_acceptances. Each entry is the existing risk-acceptance shape
+        // (finding_id, selected_option, reply, reply_ref, accepted_at,
+        // authorized_risk_finding_ids); the reply_ref must be a current task
+        // confirmation original whose verbatim reply contains this reply.
         const acceptances=Array.isArray(a.risk_acceptances)?a.risk_acceptances:null;
-        const authorized=Array.isArray(a.authorized_risk_finding_ids)?a.authorized_risk_finding_ids:[];
-        const reply=a.user_reply;
-        if(!acceptances||!reply||!authorized.includes(id)){
-          gaps.push(`finding ${id}: standard defect — the public terminal contract has no accepted_risk binding field (risk_acceptances/authorized_risk_finding_ids/user_reply); owner=审查域+合同 owner; recovery=contract adds authoritative finding ids and the verbatim user reply`);
+        if(!acceptances){
+          gaps.push(`finding ${id}: missing risk_acceptances; a serious risk cannot be accepted by declaration alone`);
         }else{
-          try{
-            const pause=deriveSeriousReviewPause({taskId:context.identity.taskId,stage:"build-code",reviewRef:a.review.ref,result:review});
-            const acceptance=acceptances.find(v=>v?.finding_id===id);
-            requireFact(acceptance,`finding ${id}: missing risk acceptance fact`);
-            if(acceptance){
+          const matches=acceptances.filter(v=>v?.finding_id===id);
+          if(matches.length!==1){gaps.push(`finding ${id}: risk acceptance denominator differs (${matches.length})`);}
+          else{
+            const acceptance=matches[0];
+            try{
+              const pause=deriveSeriousReviewPause({taskId:context.identity.taskId,stage:"build-code",reviewRef:a.review.ref,result:review});
+              buildRiskAcceptance({pause,findingId:id,selectedOption:acceptance.selected_option,replyRef:acceptance.reply_ref,reply:acceptance.reply,acceptedAt:acceptance.accepted_at});
               validateRiskAcceptance({acceptance,pause});
-              requireFact(reply.finding_id===id&&typeof reply.reply==="string"&&reply.reply.trim().length>0&&typeof reply.reply_ref==="string"&&reply.reply_ref.trim().length>0,`finding ${id}: risk acceptance requires the verbatim current user reply and ref`);
+              const authorized=Array.isArray(acceptance.authorized_risk_finding_ids)?acceptance.authorized_risk_finding_ids:[];
+              requireFact(authorized.includes(id),`finding ${id}: risk acceptance is not authorized by the current decision`);
+              requireFact(typeof acceptance.reply==="string"&&acceptance.reply.trim().length>0,`finding ${id}: risk acceptance reply is empty`);
+              const replyRef=acceptance.reply_ref;
+              requireFact(typeof replyRef==="string"&&replyRef.startsWith("quality/evidence/human-confirmations/")&&!replyRef.includes("\\")&&!replyRef.split("/").some(part=>!part||part==="."||part===".."),`finding ${id}: risk acceptance reply_ref must name a task confirmation original`);
+              const original=JSON.parse(context.task.readRecordBytes(replyRef).toString("utf8"));
+              requireFact(original?.stage==="build-code"&&typeof original.reply==="string"&&original.reply.includes(acceptance.reply),`finding ${id}: risk acceptance reply differs from the actual user original`);
               acceptedResolved=true;
-            }
-          }catch(error){gaps.push(`finding ${id}: ${error.message}`);}
+            }catch(error){gaps.push(`finding ${id}: ${error.message}`);}
+          }
         }
       }
       requireFact(d.status==="fixed"||rejected||acceptedResolved,`finding ${id}: unresolved; risk acceptance not inferred`);
-      if(!rejected)readRefs(d.fix_refs,`finding ${id} fix`);
-      const verifications=readRefs(d.verification_refs,`finding ${id} independent verification`);
+      if(!rejected&&!accepted)readRefs(d.fix_refs,`finding ${id} fix`);
+      const verifications=accepted?[]:readRefs(d.verification_refs,`finding ${id} independent verification`);
       const paths=list(d.affected_paths,`finding ${id} affected paths`);
       const originalPaths=Array.isArray(f.affected_paths)?f.affected_paths:typeof f.file==="string"?[f.file]:typeof f.path==="string"?[f.path]:typeof f.location?.path==="string"?[f.location.path]:[];
-      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(originalPath(p)))&&(rejected||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
-      requireFact(verifications.some(({raw,ref})=>{if(raw===null)return false;let proof;try{proof=JSON.parse(raw);}catch{return false;}
+      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(originalPath(p)))&&(rejected||accepted||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
+      if(!accepted)requireFact(verifications.some(({raw,ref})=>{if(raw===null)return false;let proof;try{proof=JSON.parse(raw);}catch{return false;}
         if(!identity(proof)||!locatorMatches(proof,f,index)||proof.result!=="pass"||!sameReference(proof.original_review_ref,a.review)||!independent(proof.reader,`finding ${id} verifier`,ref,id))return false;
         if(rejected&&!requireFact(proof.disposition==="rejected_invalid"&&typeof proof.reason==="string"&&proof.reason.trim().length>0,`finding ${id}: invalidity not independently explained`))return false;
         readRefs(proof.refs,`finding ${id} proof execution`);checkPaths(proof.implementation,`finding ${id} proof`,paths);return true;

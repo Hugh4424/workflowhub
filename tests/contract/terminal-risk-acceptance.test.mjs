@@ -8,6 +8,7 @@ import { createTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { validateAcceptanceEvidence } from "../../runtime/evidence/acceptance-evidence-validator.mjs";
+import { buildRiskAcceptance, deriveSeriousReviewPause } from "../../runtime/review/stage-review-disposition.mjs";
 
 const roots = [], taskId = "terminal-risk-oracle";
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -124,6 +125,29 @@ async function terminalFixture() {
   return { f, raw, publish, run, save, review };
 }
 
+async function acceptedRiskFixture() {
+  const x = await terminalFixture();
+  const reviewValue = JSON.parse(readFileSync(join(x.f.task.taskPath, x.review.ref), "utf8"));
+  const pause = deriveSeriousReviewPause({ taskId, stage: "build-code", reviewRef: x.review.ref, result: reviewValue });
+  mkdirSync(join(x.f.task.taskPath, "quality/evidence/human-confirmations"), { recursive: true });
+  const replyText = "I accept the owned risk for F1.";
+  const replyOriginal = x.save("human-confirmations/2026-11-23-002-closeout-decisions.json", {
+    stage: "build-code", decision: "approved", reply: `User decision: ${replyText}`,
+    scope: [], material_refs: [], head: "a".repeat(40), created_at: "2026-11-23T18:55:00.000Z",
+  });
+  const acceptance = {
+    ...buildRiskAcceptance({ pause, findingId: "F1", selectedOption: "accept-risk",
+      replyRef: replyOriginal.ref, reply: replyText, acceptedAt: "2026-11-23T18:55:00.000Z" }),
+    authorized_risk_finding_ids: ["F1"],
+  };
+  x.raw.finding_dispositions = [{ finding_id: "F1", original_review_ref: x.review, status: "accepted_risk",
+    original_fact: "Owned before repair returns 0 instead of 42", source: "review",
+    consequence: "Incorrect delivery", next_action: "Accept the owned risk",
+    affected_paths: ["answer.mjs"], coverage_limits: [] }];
+  x.raw.risk_acceptances = [acceptance];
+  return { x, acceptance };
+}
+
 describe("ORACLE-TERMINAL-EVIDENCE validator and real terminal consumer", () => {
   it("accepts canonical quality/reviews and quality/tests evidence references", () => {
     for (const ref of ["quality/reviews/current.json", "quality/tests/current.output"]) {
@@ -171,11 +195,40 @@ describe("ORACLE-TERMINAL-EVIDENCE validator and real terminal consumer", () => 
     expect(result.value.quality_status, "an AC-shaped original without schema_version must not bypass validation").toBe("incomplete");
   });
 
-  it.skip("fail: the public terminal contract has no accepted_risk binding field, so a valid risk acceptance cannot be driven without inventing one", () => {
-    // terminalAssessmentQuality now calls deriveSeriousReviewPause/validateRiskAcceptance
-    // when a.risk_acceptances, a.authorized_risk_finding_ids and a.user_reply exist,
-    // but the public terminal contract names none of them. This is a standard defect
-    // (owner: review/contract owner), not an environment-unavailable fact.
-    // AC-EVID-001 is recorded as fail until the contract defines the binding.
+  // Historical lineage: this skip was removed on 2026-11-23 when the user
+  // decided to add the accepted_risk binding field. It is kept verbatim only as
+  // history, not as an executable skip:
+  //   it.skip("fail: the public terminal contract has no accepted_risk binding field, so a valid risk acceptance cannot be driven without inventing one", () => {
+  //     // terminalAssessmentQuality now calls deriveSeriousReviewPause/validateRiskAcceptance
+  //     // when a.risk_acceptances, a.authorized_risk_finding_ids and a.user_reply exist,
+  //     // but the public terminal contract names none of them. This is a standard defect
+  //     // (owner: review/contract owner), not an environment-unavailable fact.
+  //     // AC-EVID-001 is recorded as fail until the contract defines the binding.
+  //   });
+  it("accepts a risk acceptance bound to the current review and the real user original", async () => {
+    const { x } = await acceptedRiskFixture();
+    const published = x.publish();
+    expect(x.run(published).ok).toBe(true);
+    const result = status(x.f);
+    expect(result.ok, JSON.stringify(result.value?.quality?.terminal_assessment?.gaps)).toBe(true);
+    expect(result.value.quality_status, "a bound accepted_risk is a real terminal acceptance").toBe("pass");
   });
+
+  it("rejects forged, wrong-finding, empty or unbound risk acceptances", async () => {
+    const variants = {
+      forged: (a) => ({ ...a, reply: "Forged risk acceptance not in the user original" }),
+      "wrong finding": (a) => ({ ...a, finding_id: "F2" }),
+      "empty reply": (a) => ({ ...a, reply: "   " }),
+      "missing reply_ref": (a) => ({ ...a, reply_ref: undefined }),
+    };
+    for (const [name, mutate] of Object.entries(variants)) {
+      const { x, acceptance } = await acceptedRiskFixture();
+      x.raw.risk_acceptances = [mutate(structuredClone(acceptance))];
+      const published = x.publish();
+      expect(x.run(published).ok, name).toBe(true);
+      const result = status(x.f);
+      expect(result.ok, name).toBe(true);
+      expect(result.value.quality_status, name).toBe("incomplete");
+    }
+  }, 30000);
 });
