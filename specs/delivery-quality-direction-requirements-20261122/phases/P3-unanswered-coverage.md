@@ -90,6 +90,12 @@
 真实绑定、独立审查、环境的纯等待分列，不计上述活动分钟。
 无界面验收：不改、不读、不驱动页面、路由、组件或样式。
 
+### 本 Phase 自带判据小结
+
+- 验了什么：覆盖组 10/10 与终末组 2/2 真实通过；真实链 exit 0 并给出逐条 incomplete；无 spec 走 unavailable；第二差集未建、现役对账保留。
+- 没验什么：两条 AC 均为 incomplete（真实包级绑定与退役依据缺）；独立读者语义首判未做。
+- 未验项条件与 owner：真实逐包答复由用户产生；独立首判由未参与写作的读者执行；退役动作原件由质量负责人补。
+
 ## 为什么现在做，依据是什么？
 
 原日志与规格对得上编号，仍可能掩盖真实需求断线。
@@ -266,4 +272,4 @@ node tools/cli/check-decision-log-chain.mjs --file /Users/Hugh/Hugh/Knowledge/Pr
 - **evidence_path**: planned: `quality/tests/p03-coverage.readback.md`
 - **STOP**: 绑定不到只停真实包级首判及退役，通用实施、验证与交回继续，回质量负责人核真实包三卡与逐包答复；误判原写主撤本段修改块，保人工对账和原失败并定向复验；改原判据回决定人，其它路径继续。
 - **覆盖 AC**: AC-P3-001、AC-P3-002
-- **Done**: 前置（不作完成条件）：两组合约可读；真实包另核绑定与真实链。完成条件（只写效果）：AC-P3-001 双向、正确关联、错绑和扫描负控须独立可读；AC-P3-002 同一首判时单独核不建、现役保留和替代负例；真实绑定或退役依据未取得仍 incomplete，通用交件不作包级通过，计划 `quality/tests/p03-coverage.readback.md`。
+- **Done**: 前置（不作完成条件）：两组合约可读；真实包另核绑定与真实链。完成条件（只写效果，按 8 值档位逐条承接两条 AC）：AC-P3-001：incomplete；证据 quality/tests/p03-coverage.green3.output（覆盖组 10/10）、quality/tests/p03-coverage.readback.md（真实链读回）；未通过原因：包 3 真实逐包答复未取得，独立语义首判未做。AC-P3-002：incomplete；证据 quality/tests/p03-final-chain.green2.output（终末双扫回归）、decision-log.md 的「退役与不建清单」；未通过原因：退役动作执行人、时点、输入未取得，真实坏例对照未跑。通用交件不作包级通过。

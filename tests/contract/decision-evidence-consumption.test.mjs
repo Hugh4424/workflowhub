@@ -1712,3 +1712,292 @@ describe("ORACLE-COMMITMENT-SOURCE 需索引指针：待定空段", () => {
     expect(result.status, result.output).toBe(1);
   });
 });
+
+// P03 ORACLE-BIDIRECTIONAL-COVERAGE: the decision log declares the unique
+// coverage matrix with `覆盖核对：<ref>` next to its requirement-index pointer.
+// The checker reads both originals from the authenticated task root and reports
+// requirement <-> acceptance coverage, unanswered binding and addition basis.
+// Contract used by the three named cases below (the implementation reads these
+// labels from each 「7. 验收」 entry):
+//   - 判据编号 starts one acceptance entry; 判定来源, 未答绑定, 未答负责人,
+//     恢复条件 are read per entry; a new acceptance needs either 替换对象 or
+//     all of 真实新增承诺 / 批准者 / 影响 / 不可替代理由.
+//   - stdout summary line:
+//     `coverage reconciliation: requirements <covered>/<total> covered;
+//      acceptances <n>; complete <ids>; incomplete <ids> (owner=<who>;
+//      recovery=<condition>)`
+//   - named advisory codes (exit stays 0, as the existing advisory contract):
+//     coverage_requirement_missing, coverage_acceptance_without_source,
+//     coverage_addition_basis_missing.
+//   - no sibling spec.md: `AC reconciliation unavailable: no spec.md next to the
+//     decision log; no set difference is claimed` instead of an empty diff.
+const P03_INDEX = [
+  "# 需求索引",
+  "",
+  "## 1. 当前任务原始请求",
+  "",
+  "| 编号 | 分类 | 逐字原文 | 来源与位置 | 工作包落点 | 验收去向 |",
+  "| --- | --- | --- | --- | --- | --- |",
+  "| R-004 | 需求原话 | 未答只限制对应验收。 | batch#L1 | 包3 | AC-P9-001、AC-P9-002 |",
+  "",
+  "## 2. 归档需求来源",
+  "",
+  "| 编号 | 分类 | 文档逐字原文 | 来源与位置 | 候选工作包 | 验收去向 |",
+  "| --- | --- | --- | --- | --- | --- |",
+  "| R-009 | 文档转述 | 替代可核后才退重复检查。 | A/prd.md:1 | 包3 | AC-P9-003 |",
+  "",
+].join("\n");
+
+const P03_COVERAGE = [
+  "# 需求与答复覆盖矩阵",
+  "",
+  "| 来源 | 分类 | 当前落点 | 决定与边界 | 初步验收与反例 | 缺口与owner |",
+  "| --- | --- | --- | --- | --- | --- |",
+  "| R-004 | 当前用户原话 | AC-P9-001、AC-P9-002 | 未答只挂对应验收 | 删确认件应失败 | 无；主会话 |",
+  "| R-009 | 归档文档 | AC-P9-003 | 替代可核才退 | 旧回执冒当前应失败 | 无；主会话 |",
+  "",
+].join("\n");
+
+const P03_SPEC = [
+  "# 受控规格",
+  "",
+  "- **AC-P9-000** 旧验收。",
+  "- **AC-P9-001** 替换旧验收。",
+  "- **AC-P9-002** 合法新增。",
+  "- **AC-P9-003** 绑定未答。",
+  "",
+].join("\n");
+
+const p03Entry = (id, fields) => [`- 判据编号：${id}`, ...fields].join("\n");
+
+function p03CoverageLog(base, { ac1, ac2, ac3 } = {}) {
+  return [
+    "# 受控覆盖日志",
+    `- 基准目录：${base}`,
+    "- 需求索引：quality/evidence/decision-log-refs/requirement-index.md",
+    "- 覆盖核对：quality/evidence/decision-log-refs/coverage-matrix-5d.md",
+    "",
+    "### D-901 — 受控决定",
+    "- 做什么：只读核对。",
+    "- 不做什么：不猜来源。",
+    "- 风险：误挡。",
+    "- 改动：只改读取。",
+    "",
+    "### 包 1：受控包",
+    "",
+    "#### 7. 验收",
+    "",
+    ac1 ?? p03Entry("AC-P9-001", ["- 判定来源：R-004", "- 替换对象：AC-P9-000"]),
+    "",
+    ac2 ?? p03Entry("AC-P9-002", [
+      "- 判定来源：R-004",
+      "- 真实新增承诺：U-014 确认七包方向",
+      "- 批准者：用户",
+      "- 影响：只增一条覆盖读取",
+      "- 不可替代理由：现有编号对账读不到需求落点",
+    ]),
+    "",
+    ac3 ?? p03Entry("AC-P9-003", [
+      "- 判定来源：R-009",
+      "- 未答绑定：包3 没有真实逐包答复",
+      "- 未答负责人：材料作者",
+      "- 恢复条件：用户给出包3逐包答复",
+    ]),
+    "",
+    "## 未决项",
+    "无真实未知。",
+    "",
+  ].join("\n");
+}
+
+function p03Write(base, ref, text) {
+  const path = join(base, ref);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text);
+  return path;
+}
+
+function p03CoverageFixture({ spec = true, coverage = P03_COVERAGE, entries = {} } = {}) {
+  const base = taskBase();
+  p03Write(base, "quality/evidence/decision-log-refs/requirement-index.md", P03_INDEX);
+  p03Write(base, "quality/evidence/decision-log-refs/coverage-matrix-5d.md", coverage);
+  const log = p03Write(base, "specs/p9-fixture/decision-log.md", p03CoverageLog(base, entries));
+  if (spec) p03Write(base, "specs/p9-fixture/spec.md", P03_SPEC);
+  return { base, log };
+}
+
+it("P03 coverage accepts sourced additions and limits only bound acceptance", () => {
+  const { log } = p03CoverageFixture();
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const coverage = result.output.split("\n").find((line) => line.includes("coverage reconciliation"));
+  expect(coverage, result.output).toBeTruthy();
+  expect(coverage).toContain("requirements 2/2 covered");
+  expect(coverage).toContain("complete AC-P9-001、AC-P9-002");
+  expect(coverage).toContain("incomplete AC-P9-003");
+  expect(coverage).toContain("owner=材料作者");
+  expect(coverage).toContain("recovery=用户给出包3逐包答复");
+  expect(result.output).not.toMatch(/coverage_requirement_missing|coverage_acceptance_without_source|coverage_addition_basis_missing/);
+});
+
+it("P03 coverage rejects missing source and incomplete addition basis", () => {
+  const missingSource = p03Entry("AC-P9-001", ["- 替换对象：AC-P9-000"]);
+  const incompleteBasis = p03Entry("AC-P9-002", [
+    "- 判定来源：R-004",
+    "- 真实新增承诺：U-014 确认七包方向",
+  ]);
+  const coverage = P03_COVERAGE.split("\n").filter((line) => !line.startsWith("| R-009 |")).join("\n");
+  const { log } = p03CoverageFixture({
+    coverage,
+    entries: { ac1: missingSource, ac2: incompleteBasis },
+  });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const lineWith = (code, id) => result.output.split("\n").find((line) => line.includes(code) && line.includes(id));
+  const noSource = lineWith("coverage_acceptance_without_source", "AC-P9-001");
+  expect(noSource, result.output).toBeTruthy();
+  const basis = lineWith("coverage_addition_basis_missing", "AC-P9-002");
+  expect(basis, result.output).toBeTruthy();
+  expect(basis).toContain("批准者");
+  expect(basis).toContain("不可替代理由");
+  const requirement = lineWith("coverage_requirement_missing", "R-009");
+  expect(requirement, result.output).toBeTruthy();
+});
+
+it("P03 coverage keeps AC reconciliation unavailable without spec", () => {
+  const { log } = p03CoverageFixture({ spec: false });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  expect(result.output).toContain("AC reconciliation unavailable");
+  expect(result.output).toContain("no spec.md");
+  expect(result.output).toContain("no set difference");
+  expect(result.output).not.toMatch(/AC reconciliation: spec \d+ distinct/);
+  expect(result.output).toContain("coverage reconciliation");
+});
+
+// P03 coverage incremental cases (independent acceptance findings):
+//  - `无` means the field is absent: `未答绑定：无` is not an unanswered binding,
+//    `替换对象：无` is not a replacement, and `未取得` is never a valid value.
+//  - requirement rows are read by header, not by a fixed first column;
+//  - `判定来源` must resolve in the requirement index and a coverage landing must
+//    be an acceptance the log declares;
+//  - requirement-like rows inside a fenced example are not declarations.
+// New named advisory codes: coverage_source_unknown, coverage_landing_unknown.
+function p03DeltaFixture({ index = P03_INDEX, coverage = P03_COVERAGE, spec = P03_SPEC, entries = {} } = {}) {
+  const base = taskBase();
+  p03Write(base, "quality/evidence/decision-log-refs/requirement-index.md", index);
+  p03Write(base, "quality/evidence/decision-log-refs/coverage-matrix-5d.md", coverage);
+  const log = p03Write(base, "specs/p9-fixture/decision-log.md", p03CoverageLog(base, entries));
+  if (spec) p03Write(base, "specs/p9-fixture/spec.md", spec);
+  return { base, log };
+}
+
+const p03Line = (output, ...parts) => output.split("\n").find((line) => parts.every((part) => line.includes(part)));
+
+it("P03 coverage treats 无 placeholders as absent and keeps a clean acceptance complete", () => {
+  const clean = p03Entry("AC-P9-001", ["- 判定来源：R-004", "- 替换对象：AC-P9-000", "- 未答绑定：无", "- 未答负责人：无", "- 恢复条件：无"]);
+  const bound = p03Entry("AC-P9-003", ["- 判定来源：R-009", "- 未答绑定：包3 没有真实逐包答复", "- 未答负责人：材料作者", "- 恢复条件：用户给出包3逐包答复"]);
+  const { log } = p03DeltaFixture({ entries: { ac1: clean, ac3: bound } });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const summary = p03Line(result.output, "coverage reconciliation");
+  expect(summary, result.output).toBeTruthy();
+  expect(summary).toContain("complete AC-P9-001");
+  expect(summary).not.toMatch(/incomplete[^\n]*AC-P9-001/);
+  expect(p03Line(result.output, "incomplete", "AC-P9-003"), result.output).toBeTruthy();
+});
+
+it("P03 coverage rejects 替换对象：无 when the addition basis is incomplete", () => {
+  const noReplacement = p03Entry("AC-P9-002", ["- 判定来源：R-004", "- 替换对象：无", "- 真实新增承诺：U-014 确认七包方向"]);
+  const { log } = p03DeltaFixture({ entries: { ac2: noReplacement } });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const basis = p03Line(result.output, "coverage_addition_basis_missing", "AC-P9-002");
+  expect(basis, result.output).toBeTruthy();
+  expect(basis).toContain("批准者");
+  expect(basis).toContain("不可替代理由");
+});
+
+it("P03 coverage does not accept 未取得 as a valid source or addition basis", () => {
+  const placeholder = p03Entry("AC-P9-004", [
+    "- 判定来源：未取得",
+    "- 替换对象：无",
+    "- 真实新增承诺：未取得",
+    "- 批准者：未取得",
+    "- 影响：未取得",
+    "- 不可替代理由：未取得",
+  ]);
+  const spec = P03_SPEC.replace("- **AC-P9-003** 绑定未答。", "- **AC-P9-003** 绑定未答。\n- **AC-P9-004** 未取得样例。");
+  const coverage = P03_COVERAGE.replace("| R-009 | 归档文档 | AC-P9-003 |", "| R-009 | 归档文档 | AC-P9-003、AC-P9-004 |");
+  const bound = p03Entry("AC-P9-003", ["- 判定来源：R-009", "- 未答绑定：包3 没有真实逐包答复", "- 未答负责人：材料作者", "- 恢复条件：用户给出包3逐包答复"]);
+  const { log } = p03DeltaFixture({ spec, coverage, entries: { ac3: `${bound}\n\n${placeholder}` } });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const summary = p03Line(result.output, "coverage reconciliation");
+  expect(summary, result.output).toBeTruthy();
+  expect(summary.slice(summary.indexOf("incomplete"))).toContain("AC-P9-004");
+  expect(p03Line(result.output, "coverage_acceptance_without_source", "AC-P9-004"), result.output).toBeTruthy();
+  const basis = p03Line(result.output, "coverage_addition_basis_missing", "AC-P9-004");
+  expect(basis, result.output).toBeTruthy();
+  expect(basis).toContain("批准者");
+});
+
+it("P03 coverage reads requirement rows by header rather than the first column", () => {
+  const index = [
+    "# 需求索引",
+    "",
+    "| 分类 | 编号 | 逐字原文 | 来源与位置 | 工作包落点 | 验收去向 |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| 需求原话 | R-004 | 未答只限制对应验收。 | batch#L1 | 包3 | AC-P9-001 |",
+    "| 文档转述 | R-009 | 替代可核后才退重复检查。 | A/prd.md:1 | 包3 | 未取得 |",
+    "",
+  ].join("\n");
+  const coverage = [
+    "# 需求与答复覆盖矩阵",
+    "",
+    "| 来源 | 分类 | 当前落点 | 决定与边界 | 初步验收与反例 | 缺口与owner |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| R-004 | 当前用户原话 | AC-P9-001 | 未答只挂对应验收 | 删确认件应失败 | 无；主会话 |",
+    "",
+  ].join("\n");
+  const spec = "# 受控规格\n\n- **AC-P9-000** 旧验收。\n- **AC-P9-001** 替换旧验收。\n";
+  const { log } = p03DeltaFixture({ index, coverage, spec, entries: { ac2: "", ac3: "" } });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const missing = p03Line(result.output, "coverage_requirement_missing", "R-009");
+  expect(missing, result.output).toBeTruthy();
+  const summary = p03Line(result.output, "coverage reconciliation");
+  expect(summary, result.output).toBeTruthy();
+  expect(summary).toContain("requirements 1/2 covered");
+});
+
+it("P03 coverage names a 判定来源 that the requirement index does not declare", () => {
+  const unknownSource = p03Entry("AC-P9-001", ["- 判定来源：R-999", "- 替换对象：AC-P9-000"]);
+  const { log } = p03DeltaFixture({ entries: { ac1: unknownSource } });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const unknown = p03Line(result.output, "coverage_source_unknown", "AC-P9-001", "R-999");
+  expect(unknown, result.output).toBeTruthy();
+});
+
+it("P03 coverage names a landing acceptance that the log does not declare", () => {
+  const coverage = P03_COVERAGE.replace("| R-004 | 当前用户原话 | AC-P9-001、AC-P9-002 |", "| R-004 | 当前用户原话 | AC-P9-999 |");
+  const { log } = p03DeltaFixture({ coverage });
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const unknown = p03Line(result.output, "coverage_landing_unknown", "AC-P9-999");
+  expect(unknown, result.output).toBeTruthy();
+});
+
+it("P03 coverage ignores requirement-like rows inside a fenced example", () => {
+  const { log } = p03DeltaFixture();
+  const original = readFileSync(log, "utf8");
+  const fenced = ["```md", "| 来源 | 当前落点 |", "| --- | --- |", "| R-777 | 验收 1 |", "```", "", "#### 7. 验收"].join("\n");
+  writeFileSync(log, original.replace("#### 7. 验收", fenced));
+  const result = run(log);
+  expect(result.status, result.output).toBe(0);
+  const summary = p03Line(result.output, "coverage reconciliation");
+  expect(summary, result.output).toBeTruthy();
+  expect(summary).toContain("requirements 2/2 covered");
+  expect(result.output).not.toContain("R-777");
+});

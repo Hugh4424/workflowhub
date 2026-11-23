@@ -780,7 +780,266 @@ function reconcileAcs(markdown, spec_markdown) {
   };
 }
 
-export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source, log_path, index_path, spec_markdown, read_blob } = {}) {
+// P3 bidirectional coverage: one acceptance entry starts with `判据编号：AC-…`
+// under a `7. 验收` heading, and the log declares the unique coverage matrix
+// with `覆盖核对：<ref>` beside its requirement-index pointer. The checker reads
+// three current originals: the log's acceptance entries, the requirement index
+// and the coverage matrix. It reports, as facts, which index requirements have
+// no coverage landing, which acceptances have no 判定来源, and which new
+// acceptances lack both a 替换对象 and the four-part addition basis. The
+// unanswered binding only limits the acceptance it is attached to; it does not
+// make unrelated acceptances incomplete. Placeholder spellings (`无`, `未取得`,
+// `N/A`, `—`, empty) mean the field is absent, never a real answer.
+const COVERAGE_FIELD = {
+  source: "判定来源",
+  replacement: "替换对象",
+  commitment: "真实新增承诺",
+  approver: "批准者",
+  impact: "影响",
+  irreplaceable: "不可替代理由",
+  unanswered: "未答绑定",
+  owner: "未答负责人",
+  recovery: "恢复条件",
+};
+const COVERAGE_ADDITION_BASIS = [
+  COVERAGE_FIELD.commitment,
+  COVERAGE_FIELD.approver,
+  COVERAGE_FIELD.impact,
+  COVERAGE_FIELD.irreplaceable,
+];
+const COVERAGE_ACCEPTANCE_HEADING = /^(?:\d+[.、]\s*)?7[.、]\s*验收\s*$/;
+
+// Same convention as run-checks.mjs `none()`: a placeholder is not a value.
+// A placeholder may be followed by its own explanation (`无。本槽位……`); the
+// explanation does not turn it into a real answer.
+function none(value) {
+  const text = String(value ?? "").replace(/[*_`。；;，,\s]/g, "");
+  const raw = String(value ?? "").trim();
+  return text === ""
+    || /^(?:无|没有|none|未取得|未知|n\/a|—|-{1,2})$/i.test(text)
+    || /^(?:无|没有|未取得|未知|none|n\/a|—)(?=[。；;，,、：:]|\s|$)/i.test(raw);
+}
+
+// `未答绑定` is different: only an explicit `无`/`没有`/`none`/`n/a`/`—`/empty
+// says "no unanswered binding". `未取得`/`未知` mean the binding itself is not
+// yet known, so the acceptance stays limited and must keep an owner/recovery.
+function noBinding(value) {
+  const text = String(value ?? "").replace(/[*_`。；;，,\s]/g, "");
+  const raw = String(value ?? "").trim();
+  return text === ""
+    || /^(?:无|没有|none|n\/a|—|-{1,2})$/i.test(text)
+    || /^(?:无|没有|none|n\/a|—)(?=[。；;，,、：:]|\s|$)/i.test(raw);
+}
+
+// A `7. 验收` section is scoped by its heading depth; entries inside it start
+// with 判据编号 and carry labelled lines. Fenced examples are not declarations.
+function readAcceptanceEntries(markdown) {
+  const entries = [];
+  let fence = null;
+  let sectionDepth = null;
+  let current = null;
+  for (const line of String(markdown).split(/\r?\n/)) {
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
+    if (fence) continue;
+    const heading = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+    if (heading) {
+      if (COVERAGE_ACCEPTANCE_HEADING.test(heading[2].trim())) { sectionDepth = heading[1].length; current = null; continue; }
+      if (sectionDepth !== null && heading[1].length <= sectionDepth) { sectionDepth = null; current = null; }
+      continue;
+    }
+    if (sectionDepth === null) continue;
+    const id = /^(?:[-*+]\s+)?(?:\*\*)?判据编号(?:\*\*)?\s*[:：]\s*(.*?)\s*$/.exec(line);
+    if (id) { current = { id: id[1].trim(), fields: {} }; entries.push(current); continue; }
+    if (!current) continue;
+    const field = /^(?:[-*+]\s+)?(?:\*\*)?([^:*：\n]+?)(?:\*\*)?\s*[:：]\s*(.*?)\s*$/.exec(line);
+    if (field) current.fields[field[1].trim()] = field[2].trim();
+  }
+  return entries.filter((entry) => entry.id);
+}
+
+// Markdown tables are read by header, never by column position: the current
+// index and coverage matrix add and drop columns between versions. Fenced
+// examples are not tables.
+function readTables(markdown) {
+  const visible = [];
+  let fence = null;
+  for (const line of String(markdown ?? "").split(/\r?\n/)) {
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
+    if (fence) continue;
+    visible.push(line);
+  }
+  const tables = [];
+  for (let index = 0; index < visible.length - 1; index += 1) {
+    if (!/^\s*\|/.test(visible[index])) continue;
+    if (!/^\s*\|?\s*:?-{3,}/.test(visible[index + 1])) continue;
+    const header = tableCells(visible[index]);
+    const rows = [];
+    let cursor = index + 2;
+    while (cursor < visible.length && /^\s*\|/.test(visible[cursor])) { rows.push(tableCells(visible[cursor])); cursor += 1; }
+    tables.push({ header, rows });
+    index = cursor - 1;
+  }
+  return tables;
+}
+
+function columnIndex(header, pattern) {
+  return header.findIndex((cell) => pattern.test(cell));
+}
+
+function readRequirementIds(requirement_index_markdown) {
+  const ids = [];
+  if (typeof requirement_index_markdown !== "string" || !requirement_index_markdown.trim()) return { ids, readable: false };
+  let readable = false;
+  for (const { header, rows } of readTables(requirement_index_markdown)) {
+    const idColumn = columnIndex(header, /编号/);
+    if (idColumn < 0) continue;
+    readable = true;
+    for (const row of rows) {
+      const id = (row[idColumn] ?? "").replace(/[*`]/g, "").trim();
+      if (REQUIREMENT_ID.test(id) && !ids.includes(id)) ids.push(id);
+    }
+  }
+  return { ids, readable };
+}
+
+function readCoverageLandings(coverage_markdown) {
+  const landings = new Map();
+  if (typeof coverage_markdown !== "string" || !coverage_markdown.trim()) return landings;
+  for (const { header, rows } of readTables(coverage_markdown)) {
+    const sourceColumn = columnIndex(header, /来源/);
+    if (sourceColumn < 0) continue;
+    const landingColumn = columnIndex(header, /落点|去向/);
+    for (const row of rows) {
+      const id = (row[sourceColumn] ?? "").replace(/[*`]/g, "").trim();
+      if (!REQUIREMENT_ID.test(id)) continue;
+      landings.set(id, landingColumn >= 0 ? (row[landingColumn] ?? "").trim() : "");
+    }
+  }
+  return landings;
+}
+
+function reconcileCoverage({ markdown, requirement_index_markdown, coverage_markdown } = {}) {
+  if (typeof coverage_markdown !== "string") return null;
+  const requirementKnown = typeof requirement_index_markdown === "string" && Boolean(requirement_index_markdown.trim());
+  const { ids: requirements, readable: requirementReadable } = readRequirementIds(requirement_index_markdown);
+  const requirementUnavailable = requirementKnown && !requirementReadable
+    ? "the declared requirement index has no 编号 column" : null;
+  const requirementSet = new Set(requirements);
+  const landings = readCoverageLandings(coverage_markdown);
+  const warnings = [];
+  // One acceptance identity is normalized before it is counted: AC-P3-1 and
+  // AC-P3-001 are the same acceptance, and an unreadable id is named instead of
+  // silently skipped.
+  const entries = [];
+  const rawEntries = readAcceptanceEntries(markdown);
+  for (const raw of rawEntries) {
+    const id = normalizeAcId(raw.id);
+    if (!id) {
+      warnings.push(warning("coverage_acceptance_id_unreadable", raw.id, "判据编号",
+        `${raw.id} is not a readable acceptance id; its coverage cannot be reconciled`));
+      continue;
+    }
+    if (entries.some((entry) => entry.id === id)) continue;
+    entries.push({ id, fields: raw.fields });
+  }
+  // A coverage landing may name any acceptance the log cites, not only one that
+  // has its own 「7. 验收」 entry yet.
+  const declared = new Set(designAcs(markdown));
+  const complete = [];
+  const incomplete = [];
+  const owners = [];
+  const recoveries = [];
+  for (const entry of entries) {
+    const sourceText = entry.fields[COVERAGE_FIELD.source];
+    const sourceIds = [...String(sourceText ?? "").matchAll(/R-\d+[a-z]?/g)].map((match) => match[0]);
+    // An unreadable requirement index cannot disprove a cited requirement, so
+    // the unknown-source check only runs when the index was actually read.
+    const sourceCheckable = requirementKnown && requirementReadable;
+    const unknownSources = sourceCheckable ? sourceIds.filter((id) => !requirementSet.has(id)) : [];
+    const sourceMissing = none(sourceText);
+    const sourceValid = !sourceMissing && sourceIds.length > 0 && unknownSources.length === 0;
+    const replacement = entry.fields[COVERAGE_FIELD.replacement];
+    const hasReplacement = !none(replacement);
+    const unansweredText = entry.fields[COVERAGE_FIELD.unanswered];
+    const isBound = !noBinding(unansweredText);
+    const missingBasis = isBound ? [] : COVERAGE_ADDITION_BASIS.filter((label) => none(entry.fields[label]));
+    if (sourceMissing) {
+      warnings.push(warning("coverage_acceptance_without_source", entry.id, COVERAGE_FIELD.source,
+        `${entry.id} has no ${COVERAGE_FIELD.source}; this acceptance does not trace back to a requirement`));
+    } else if (sourceIds.length === 0) {
+      warnings.push(warning("coverage_source_unknown", entry.id, COVERAGE_FIELD.source,
+        `${entry.id} names 「${String(sourceText).trim()}」 as ${COVERAGE_FIELD.source}, but it names no requirement id`));
+    } else if (unknownSources.length > 0) {
+      warnings.push(warning("coverage_source_unknown", entry.id, COVERAGE_FIELD.source,
+        `${entry.id} names ${unknownSources.join("、")} as ${COVERAGE_FIELD.source}, but the requirement index does not declare it`));
+    }
+    if (!isBound && !hasReplacement && missingBasis.length > 0) {
+      warnings.push(warning("coverage_addition_basis_missing", entry.id, COVERAGE_FIELD.replacement,
+        `${entry.id} has neither ${COVERAGE_FIELD.replacement} nor the full addition basis; missing ${missingBasis.join("、")}`));
+    }
+    if (sourceValid && !isBound && (hasReplacement || missingBasis.length === 0)) { complete.push(entry.id); continue; }
+    incomplete.push(entry.id);
+    if (isBound) {
+      const owner = none(entry.fields[COVERAGE_FIELD.owner]) ? "未取得" : entry.fields[COVERAGE_FIELD.owner].trim();
+      const recovery = none(entry.fields[COVERAGE_FIELD.recovery]) ? "未取得" : entry.fields[COVERAGE_FIELD.recovery].trim();
+      if (!owners.includes(owner)) owners.push(owner);
+      if (!recoveries.includes(recovery)) recoveries.push(recovery);
+    }
+  }
+  // A declared coverage file that cannot be read as a matrix, and a log with no
+  // acceptance entries, have no current basis for a coverage claim: report
+  // unavailability instead of an empty set difference.
+  const unavailable = !coverage_markdown.trim()
+    ? "the declared coverage matrix is empty"
+    : entries.length === 0
+      ? rawEntries.length > 0
+        ? "acceptance entries exist but none carries a readable 判据编号"
+        : "no 「7. 验收」 acceptance entries in the decision log"
+      : null;
+  const requirementCount = requirementKnown && !requirementUnavailable ? requirements.length : null;
+  if (unavailable) {
+    return { reading: {
+      unavailable,
+      acceptances: [], complete_ids: [], incomplete_ids: [], owners: [], recoveries: [],
+      requirement_count: requirementCount, covered_count: null, requirement_unavailable: requirementUnavailable,
+    }, warnings };
+  }
+  let covered = 0;
+  // The index is declared but its 编号 column cannot be located: name the
+  // missing reading instead of claiming an empty requirement set.
+  if (!requirementUnavailable) {
+    for (const id of requirements) {
+      const landing = landings.get(id);
+      if (landing === undefined || none(landing)) {
+        warnings.push(warning("coverage_requirement_missing", id, "覆盖矩阵",
+          `${id} is declared by the requirement index but has no coverage landing in the declared coverage matrix`));
+        continue;
+      }
+      covered += 1;
+      for (const ac of designAcs(landing)) {
+        if (!declared.has(ac)) {
+          warnings.push(warning("coverage_landing_unknown", id, "覆盖矩阵",
+            `${id} lands on ${ac}, but the decision log declares no such acceptance`));
+        }
+      }
+    }
+  }
+  return { reading: {
+    unavailable: null,
+    acceptances: entries.map((entry) => entry.id),
+    complete_ids: complete,
+    incomplete_ids: incomplete,
+    owners,
+    recoveries,
+    requirement_count: requirementCount,
+    covered_count: requirementKnown && !requirementUnavailable ? covered : null,
+    requirement_unavailable: requirementUnavailable,
+  }, warnings };
+}
+
+export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source, log_path, index_path, spec_markdown, coverage_markdown, read_blob } = {}) {
   if (typeof markdown !== "string") {
     return {
       schema_version: "decision-log-chain-warning.v1",
@@ -821,6 +1080,12 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
       warnings.push(warning("spec_ac_uncovered", ac, "验收", `the spec declares ${ac}, but no log text cites it; design and acceptance are not reconciled`));
     }
   }
+  // P3 coverage keeps its own reading: requirement -> acceptance -> source and
+  // the unanswered binding of each acceptance. It is advisory like the rest of
+  // the chain report and never changes the exit code by itself.
+  const coverage = reconcileCoverage({ markdown, requirement_index_markdown, coverage_markdown });
+  if (coverage) warnings.push(...coverage.warnings);
+  const coverageReconciliation = coverage?.reading ?? null;
   let recognizedFields = 0;
 
   for (const { label, line } of unmapped) {
@@ -997,6 +1262,7 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     recognized_fields: recognizedFields,
     design_packages: designPackages.map(pkg => ({ id: pkg.id, name: pkg.name, line: pkg.line, acs: pkg.acs, missing_items: pkg.missingItems })),
     ac_reconciliation: acReconciliation,
+    coverage_reconciliation: coverageReconciliation,
     blob_bindings: answerSources.bindings,
     warnings,
     failures: [],
@@ -1115,7 +1381,25 @@ export function requirementIndexPointers(markdown) {
   return [...found];
 }
 
-function resolveIndexPointer(pointer, base, read) {
+// P3 declares one unique coverage matrix next to the requirement-index pointer.
+// A fenced example is not a declaration; two distinct declarations stay an
+// input error instead of one being picked.
+function coveragePointers(markdown) {
+  const found = new Set();
+  let fence = null;
+  for (const line of String(markdown).split(/\r?\n/)) {
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
+    if (fence) continue;
+    if (!/^\s*(?:\|\s*|[-*+]\s+)?(?:\*\*)?覆盖核对(?:\*\*)?\s*[：:]/.test(line)) continue;
+    for (const match of line.matchAll(/`([^`\s]+\.md)`/g)) found.add(match[1]);
+    const bare = /覆盖核对\s*[：:]\s*([^\s|`]+\.md)/.exec(line)?.[1];
+    if (bare) found.add(bare);
+  }
+  return [...found];
+}
+
+function resolveIndexPointer(pointer, base, read, kind = "requirement index") {
   const candidates = isAbsolute(pointer)
     ? [resolve(pointer)]
     : [resolve(base, pointer), resolve(base, "quality/evidence/decision-log-refs", pointer)];
@@ -1124,8 +1408,8 @@ function resolveIndexPointer(pointer, base, read) {
     catch { return false; }
   });
   if (readable.length === 1) return readable[0];
-  if (readable.length === 0) throw Object.assign(new Error(`declared requirement index ${pointer} is not readable under the task root or decision-log-refs`), { code: "INDEX_NOT_READABLE" });
-  throw Object.assign(new Error(`declared requirement index ${pointer} matches more than one readable file`), { code: "INDEX_AMBIGUOUS" });
+  if (readable.length === 0) throw Object.assign(new Error(`declared ${kind} ${pointer} is not readable under the task root or decision-log-refs`), { code: "INDEX_NOT_READABLE" });
+  throw Object.assign(new Error(`declared ${kind} ${pointer} matches more than one readable file`), { code: "INDEX_AMBIGUOUS" });
 }
 
 function authenticatedTaskBase(value) {
@@ -1254,30 +1538,38 @@ export function main(args = process.argv.slice(2)) {
     // the blob reader is bound to the worktree this input lives in.
     const side = { spec_markdown: readSpecSibling(input.path), read_blob: createGitBlobReader({ worktree: worktreeRootOf(input.path) }) };
     if (values.file) {
-      const declared = declaresAnswerSource(markdown) || declaresCommitment(markdown);
+      const sourceDeclared = declaresAnswerSource(markdown) || declaresCommitment(markdown);
+      const coverageRefs = coveragePointers(markdown);
+      const declared = sourceDeclared || coverageRefs.length > 0;
       const pointers = declared ? requirementIndexPointers(markdown) : [];
       if (!declared) {
         result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, ...side });
-      } else if (pointers.length > 1) {
-        console.error(`[check-decision-log-chain] ${input.source_ref} declares ${pointers.length} requirement-index pointers; expected one`);
+      } else if (pointers.length > 1 || coverageRefs.length > 1) {
+        console.error(`[check-decision-log-chain] ${input.source_ref} declares ${pointers.length} requirement-index pointer(s) and ${coverageRefs.length} coverage pointer(s); expected at most one each`);
         hadReadError = true; continue;
-      } else if (pointers.length === 1) {
-        let base, indexText, read_source, indexPath;
-        try {
-          base = authenticatedTaskBase(declaredTaskBase(markdown));
-          read_source = createSourceReader({ base, worktree: worktreeRootOf(input.path), sourceRoots: values.sourceRoots });
-          const indexRef = resolveIndexPointer(pointers[0], base, read_source);
-          indexText = read_source(indexRef);
-          indexPath = read_source.resolve(indexRef);
-        } catch (error) {
-          console.error(`[check-decision-log-chain] cannot read declared requirement index in ${input.source_ref}: ${error.code ?? error.message}`);
-          hadReadError = true; continue;
-        }
-        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, read_source,
-          log_path: realpathSync(input.path), index_path: indexPath, ...side });
-      } else {
+      } else if (sourceDeclared && pointers.length === 0) {
         console.error(`[check-decision-log-chain] ${input.source_ref} declares source_id or 承诺 but has no requirement-index pointer; source, tone and commitment cannot be checked`);
         hadReadError = true; continue;
+      } else {
+        let indexText, indexPath, coverageText, read_source;
+        try {
+          const base = authenticatedTaskBase(declaredTaskBase(markdown));
+          read_source = createSourceReader({ base, worktree: worktreeRootOf(input.path), sourceRoots: values.sourceRoots });
+          if (pointers.length === 1) {
+            const indexRef = resolveIndexPointer(pointers[0], base, read_source);
+            indexText = read_source(indexRef);
+            indexPath = read_source.resolve(indexRef);
+          }
+          if (coverageRefs.length === 1) {
+            const coverageRef = resolveIndexPointer(coverageRefs[0], base, read_source, "coverage matrix");
+            coverageText = read_source(coverageRef);
+          }
+        } catch (error) {
+          console.error(`[check-decision-log-chain] cannot read declared coverage originals in ${input.source_ref}: ${error.code ?? error.message}`);
+          hadReadError = true; continue;
+        }
+        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, coverage_markdown: coverageText, read_source,
+          log_path: realpathSync(input.path), index_path: indexPath, ...side });
       }
     } else {
       result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, ...side });
@@ -1292,6 +1584,22 @@ export function main(args = process.argv.slice(2)) {
     if (result.ac_reconciliation) {
       const rec = result.ac_reconciliation;
       console.log(`[check-decision-log-chain] AC reconciliation: spec ${rec.spec_count} distinct, log ${rec.log_acs.length} distinct; unresolved ${rec.unresolved.join("、") || "none"}; uncovered ${rec.uncovered.join("、") || "none"}`);
+    } else {
+      const reason = side.spec_markdown === undefined
+        ? "no spec.md next to the decision log"
+        : "spec.md next to the decision log declares no acceptance criteria";
+      console.log(`[check-decision-log-chain] AC reconciliation unavailable: ${reason}; no set difference is claimed`);
+    }
+    if (result.coverage_reconciliation) {
+      const cov = result.coverage_reconciliation;
+      if (cov.unavailable) {
+        console.log(`[check-decision-log-chain] coverage reconciliation unavailable for ${input.source_ref}: ${cov.unavailable}; no coverage claim is made`);
+      } else {
+        const requirementReading = cov.requirement_unavailable
+          ? `unavailable (${cov.requirement_unavailable})`
+          : `${cov.covered_count ?? "unknown"}/${cov.requirement_count ?? "unknown"} covered`;
+        console.log(`[check-decision-log-chain] coverage reconciliation: requirements ${requirementReading}; acceptances ${cov.acceptances.length}; complete ${cov.complete_ids.join("、") || "none"}; incomplete ${cov.incomplete_ids.join("、") || "none"} (owner=${cov.owners.join("、") || "none"}; recovery=${cov.recoveries.join("、") || "none"})`);
+      }
     }
     for (const binding of result.blob_bindings ?? []) {
       console.log(`[check-decision-log-chain] blob binding ${binding.source_id} ${binding.commit}:${binding.path}#${binding.blob}#L${binding.line_start}-L${binding.line_end} verified`);
