@@ -78,6 +78,16 @@
 真实答复、独立审查和环境纯等待分列，均不计活动分钟。
 无界面验收：不改、不读、不驱动页面、路由、组件或样式。
 
+## 本 Phase 自带判据小结
+
+自己验了什么：本 Phase 的 `gate_cmd` 已在 worktree 根真跑并留原件
+`quality/tests/2026-11-23-112-p1-fix-card-validate.output`，退出 0、JSON `ok=true`；
+两份方法文档只增文字，无新增运行行为，不造代码红测，故没有行为级通过可报。
+没验什么：AC-P1-001 记 `incomplete`，缺真实第 9 步批次、当批四列、P2/P3/P6 同批首读、
+错批与遮落点负控；本条只能人读，判定方式与时点按[规格附录 A](../spec.md#appendix-a--验收判据唯一权威)。
+未验项条件与 owner：真实批次与四列由本任务材料主会话产生，首读由 P2、P3、P6
+三个接手者同批完成，复验由本 Phase 原独立读者执行；同批读数齐前不补签。
+
 ## 为什么现在做，依据是什么？
 
 先把能自己查的事实分走，后续作者才不会把缺记录误当成用户没答。
@@ -211,4 +221,4 @@ node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path /Users/Hu
 - **evidence_path**: planned: `quality/tests/p01-question-routing.readback.md`
 - **STOP**: 错分回原写主恢复文字块；落点冲突由材料主会话修源；保失败并复读原坏例。没有真实批次或同批实读，验收保持未完成，不挡允许的技术交回；改原判据回决定人。
 - **覆盖 AC**: AC-P1-001
-- **Done**: 前置（不作完成条件）：卡和步骤原输出可读。完成条件（只写效果）：AC-P1-001 按同批次三处首次读取及错批、遮落点反例独立复读才可 pass，未执行为 incomplete；计划原件 `quality/tests/p01-question-routing.readback.md`。
+- **Done**: 前置（不作完成条件）：卡和步骤原输出可读。完成条件（只写效果）：AC-P1-001：incomplete；证据 `quality/tests/2026-11-23-128-p1-test-010-round2-readback.md`（独立测试判定）；审查 `quality/reviews/2026-11-23-201-p1-code-review.md`（三轮复验，无 open finding）；未通过原因：真实第 9 步批次、当批四列与 P2/P3/P6 同批首读尚未发生。
