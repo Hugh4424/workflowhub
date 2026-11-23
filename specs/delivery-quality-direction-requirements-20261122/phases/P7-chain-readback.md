@@ -292,6 +292,38 @@ git status --porcelain=v1 --untracked-files=all
 | 验收 11 | 本阶段；任务一真实三链及 `quality/tests/p07-final-acceptance.readback.md` |
 | 验收 12 | 本阶段；完整范围、逐路径与 `quality/tests/p07-final-acceptance.readback.md` |
 
+## 本 Phase 自带判据小结
+
+自己验了什么：仓内 7 个提交、21 个路径逐条对账，全部落在各 Phase 声明写入集、
+该 Phase 自己的卡和 build-plan 计划材料的并集内，没有越界；
+上游 `d48f6572..ad1f8c30` 的 98 个文件与本任务分开；
+工作树三处既有改动与早期补丁同形，未混入本任务交付；
+`run-checks` 真实读数退出 1、`chain_state=unverified`、7 个包未收敛、27 个步骤 `unavailable`。
+
+没验什么：三条验收都记 `incomplete`，原因各不相同。
+验收 10 缺质询与真实逐包答复，最终首卡不存在，最终交接未发布；
+验收 11 同包链只有夹具旁证，效果链无 P5 改动后的审查记录，写集对账字段 `unavailable`；
+验收 12 仓内面 `pass`，外置写入面无回执，该面 `unknown`。
+三条都只能人读，判定方式与时点按[规格附录 A](../spec.md#appendix-a--验收判据唯一权威)。
+
+未验项条件与 owner：逐包真实答复由用户给出、材料作者登记为有效索引行；
+质询由包 5 设计者补齐；最终首卡由独立计划作者在五件齐后重走正式入口；
+任务一三链的行为原件由原写主交回；外置写入清单由本任务主会话补回执。
+条件满足后由独立验证者重做整链串读与抽件负控，不补签上游。
+
+### 终末复核留下哪三条记录
+
+P6 的机器写入集写 `none`，但提交 `535381` 含 `phases/P6-first-card.md`。
+这是收口时写 Done 档位的材料动作，不判越界，也不隐瞒。
+
+两处申报了却没改：P3 的 `quality/evidence/decision-log-refs/coverage-matrix-5d.md` 在任务根，实际未改；
+P5 的 `tests/contract/check-stage-steps.test.mjs` 由 P4 改，P5 未改。
+两处都属 `listed_not_changed`，不是越界，对账时如实留空行。
+
+`tests/contract/make-decision-flow.test.mjs` 有一个改前既有失败。
+用任务起点 `ad1f8c30` 的检查器复跑同一夹具，gaps 逐字相同，不是本任务引入；
+本任务未修，记为待另开的包，不静默略过。
+
 ## 每张任务卡怎么写？
 
 一张卡完成本地三条验收与独立整链读回，不改先前工作的判定所有者。
@@ -341,4 +373,8 @@ git status --porcelain=v1 --untracked-files=all
 - **evidence_path**: planned: `quality/tests/p07-final-acceptance.readback.md`
 - **STOP**: 缺上游首判或实际行为原件由本任务主会话安排原阶段或正常入口恢复；只停对应判定与整链完成声明；汇总漂白回本阶段主会话；范围或验收变化回决定人。
 - **覆盖 AC**: AC-P1-001、AC-P2-001、AC-P3-001、AC-P3-002、AC-P4-001、AC-P4-002、AC-P5-001、AC-P6-001、AC-P6-002、AC-P7-001、AC-P7-002、AC-P7-003
-- **Done**: 前置（不作完成条件）：辅助命令和实际输入有真实回执。完成条件（只写效果）：各原 AC 的阶段、原件和档位依本阶段末验表实际读回；AC-P7-001、AC-P7-002、AC-P7-003 在 `quality/tests/p07-final-acceptance.readback.md` 首判。无读回留 incomplete，真实供件不可用留 unavailable，由本任务主会话记恢复条件并安排复验；不得预填通过或补签。
+- **Done**: 前置（不作完成条件）：辅助命令和实际输入有真实回执。完成条件（只写效果）：
+  - `AC-P7-001：incomplete；证据 quality/tests/p07-final-acceptance.readback.md（整链串读）；未通过原因：五件缺质询与真实逐包答复、最终首卡不存在、交接未发布。`
+  - `AC-P7-002：incomplete；证据 同上；未通过原因：同包链只有夹具旁证、效果链无 P5 改动后的 review 记录、写集对账字段 unavailable。`
+  - `AC-P7-003：incomplete；证据 同上；仓内 21/21 路径合规（此面 pass），外置写入无回执（该面 unknown）。`
+  - 无读回留 incomplete，真实供件不可用留 unavailable，由本任务主会话记恢复条件并安排复验；不得预填通过或补签。
