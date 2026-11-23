@@ -311,11 +311,16 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, i
 // A direction change records which steps this supersede invalidated and must be
 // re-done. Every current line counts; slugs and 1-based step numbers are both
 // accepted. Deleting the line is a material-history responsibility boundary,
-// not a machine fact this report can reconstruct.
+// not a machine fact this report can reconstruct. The six responsibility labels
+// are read for the report only: a missing label becomes a named report gap and
+// never an error, a different scope or a changed 待重做 verdict.
+const INVALIDATION_FIELDS = ['标注人', '修改权', '理由', '新依据', '受影响位置', '接手人'];
 function invalidatedSteps(markdown) {
   const records = [];
   let fence = null;
+  let lineNumber = 0;
   for (const line of String(markdown ?? '').split(/\r?\n/)) {
+    lineNumber += 1;
     const marker = /^\s*(`{3,}|~{3,})/.exec(line);
     if (marker) {
       if (!fence) fence = marker[1];
@@ -328,9 +333,29 @@ function invalidatedSteps(markdown) {
     // The first separator ends the step list; the rest may name the stage.
     const parts = match[1].split(/[；;]/);
     const idsPart = parts.shift();
-    const rest = parts.join('；');
-    const rawScope = rest.match(/(?:阶段|stage|重做范围)\s*[:：]\s*([^\s；;，,、]+)/i)?.[1]?.replace(/[`*]/g, '').trim() ?? null;
+    // Scope is read only from the start of a `；` segment, never by scanning the
+    // joined line: a 理由 value that mentions another stage must not become the
+    // scope. The first 阶段/stage/重做范围 segment wins, as before.
+    let rawScope = null;
+    for (const part of parts) {
+      const scoped = /^\s*(?:阶段|stage|重做范围)\s*[:：]\s*([^\s；;，,、]+)/i.exec(part);
+      if (!scoped) continue;
+      rawScope = scoped[1].replace(/[`*]/g, '').trim() || null;
+      break;
+    }
     const scope = rawScope && stages.includes(rawScope) ? rawScope : null;
+    // Labels are per-`；` segment and must start the segment, so a value that
+    // mentions another label or stage name cannot re-open parsing.
+    const fields = {};
+    let rework = null;
+    for (const part of parts) {
+      const labeled = /^\s*(阶段|stage|重做范围|标注人|修改权|理由|新依据|受影响位置|接手人)\s*[:：]\s*([\s\S]*)$/i.exec(part);
+      if (!labeled) continue;
+      const key = labeled[1] === 'stage' ? '阶段' : labeled[1];
+      const value = labeled[2].replace(/[`*]/g, '').trim();
+      if (key === '重做范围') { rework = value || null; continue; }
+      if (INVALIDATION_FIELDS.includes(key) && value && fields[key] === undefined) fields[key] = value;
+    }
     const slugs = new Set(), ranges = [];
     for (const token of idsPart.split(/[、，,\s]+/)) {
       const clean = token.replace(/[`*]/g, '').trim();
@@ -342,7 +367,7 @@ function invalidatedSteps(markdown) {
       const start = Number(range[1]), end = Number(range[2]);
       if (Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 1 && end >= start) ranges.push({ from: start, to: end });
     }
-    records.push({ scope, rawScope, slugs, ranges });
+    records.push({ scope, rawScope, slugs, ranges, fields, rework, line: lineNumber });
   }
   return records;
 }
@@ -650,10 +675,12 @@ function chatReceiptOk({ id, block, taskPath, batch }) {
     return true;
   } catch { return false; }
 }
-function discussionBindingOk({ id, block, taskPath, batch }) {
+function boundDiscussionRef(block) {
   const line = String(block ?? '').split(/\r?\n/).find(value => /就地讨论|讨论原件/.test(value) && /`[^`]+`/.test(value));
-  if (!line) return false;
-  const ref = /`([^`]+)`/.exec(line)?.[1];
+  return /`([^`]+)`/.exec(line ?? '')?.[1] ?? null;
+}
+function discussionBindingOk({ id, block, taskPath, batch }) {
+  const ref = boundDiscussionRef(block);
   if (!ref) return false;
   try {
     const text = readTaskOriginal(taskPath, ref.split('#')[0]);
@@ -667,10 +694,40 @@ function discussionBindingOk({ id, block, taskPath, batch }) {
 function p5StrictGaps({ id, block, taskPath, batch }) {
   const gaps = [];
   if (!/真实问答/.test(block ?? '')) gaps.push('缺真实问答指针');
-  if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) gaps.push('冷读五问未绑定');
+  const discussionBound = Boolean(batch) && discussionBindingOk({ id, block, taskPath, batch });
+  if (!discussionBound) gaps.push('冷读五问未绑定');
+  // The bound discussion original carries this package's 质询 line. Only the
+  // tagged line's existence is machine-read; its wording, in-original order,
+  // the applicable object and whether the reply really answers stay AC-P5-001
+  // human-read. This gap is report-only: it is absent from the failure lists,
+  // and the exit predicates drop it before matching (a row name may itself
+  // contain failure words like 复读/轮次). A missing/misbound 质询 original still
+  // fails through the five-original declaration path, never through this hint.
+  else if (!discussionGrillOk({ block, taskPath })) gaps.push('讨论原件缺质询');
   if (!chatReceiptOk({ id, block, taskPath, batch })) gaps.push('聊天呈现未取得');
   if (!/(先设计|先给设计|设计先于|先展示后提问|设计后提问)/.test(block ?? '')) gaps.push('先设计后提问缺证');
   return gaps;
+}
+// Same placeholder convention as run-checks/check-decision-log-chain none():
+// 无 / 没有 / 未取得 / 未知 are not content, even with a trailing explanation.
+function placeholderOnly(value) {
+  const text = String(value ?? '').replace(/[*_`。；;，,\s]/g, '');
+  return text === ''
+    || /^(?:无|没有|none|未取得|未知|n\/a|—|-{1,2})$/i.test(text)
+    || /^(?:无|没有|未取得|未知|none|n\/a|—)(?=[。；;，,、：:]|\s|$)/i.test(String(value ?? '').trim());
+}
+function discussionGrillOk({ block, taskPath }) {
+  const ref = boundDiscussionRef(block);
+  if (!ref) return false;
+  try {
+    const text = readTaskOriginal(taskPath, ref.split('#')[0]);
+    // Literal line shape is defined by steps.json step 9 (identity of the line,
+    // not just a word): a line beginning 质询： (optionally behind a list bullet).
+    // Placeholders use the repository's none() convention, so 质询：无 / 未取得 do
+    // not pass. The content itself stays human-read.
+    const match = /^\s*(?:[-*]\s*)?质询\s*[：:]\s*(.*)$/m.exec(String(text));
+    return Boolean(match) && !placeholderOnly(match[1]);
+  } catch { return false; }
 }
 function coldReadGaps({ id, body, taskPath, taskName }) {
   const gaps = [], errors = [];
@@ -875,10 +932,19 @@ const CONVERGENCE_FAILURE_PATTERNS = Object.freeze([
   /方案卡形状不可读/, /缺一卡一次冷读/, /缺一次冷读/, /轻档缺收敛清单/, /小改/,
   /UI设计源首问/, /证据标签非原件/, /证据缺当前原件/, /引用旧清单/,
 ]);
+// A package row is named by its own text (for example "5 复读对照"), so a
+// report-only hint can contain failure-looking words. The hint is dropped here
+// before any failure pattern reads the string; it never names an evidence or
+// direction failure on its own. Real gaps keep their own entries and still fail.
+const REPORT_ONLY_GAP_PATTERN = /讨论原件缺质询/;
 export function isConvergenceEvidenceFailure(gap) {
-  return CONVERGENCE_FAILURE_PATTERNS.some(pattern => pattern.test(String(gap)));
+  const text = String(gap);
+  if (REPORT_ONLY_GAP_PATTERN.test(text)) return false;
+  return CONVERGENCE_FAILURE_PATTERNS.some(pattern => pattern.test(text));
 }
 function isDirectionMaterialFailure(gap) {
+  const text = String(gap);
+  if (REPORT_ONLY_GAP_PATTERN.test(text)) return false;
   return [
     // Direction-only material failures. The shared evidence list below is the
     // same one both public exits use, so this predicate cannot drift from them.
@@ -2252,6 +2318,20 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   if (pointers.length > 1) gaps.push(`收敛清单指针候选数：${pointers.length}`);
   const convergence = { source: convergenceRef, expected_modules: expected, complete: gaps.length === 0 && expected.length > 0, gaps };
   const invalidatedList = invalidated.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]);
+  // Per-line readable record values, plus one named gap per missing label. Both
+  // stay in the report: named field gaps never enter errors or the exit code.
+  const invalidatedRecords = invalidated.map(record => ({
+    line: record.line,
+    scope: record.scope,
+    raw_scope: record.rawScope,
+    rework: record.rework,
+    steps: [...record.slugs],
+    ranges: record.ranges.map(range => ({ from: range.from, to: range.to })),
+    fields: { ...record.fields },
+  }));
+  const invalidationGaps = invalidated.flatMap(record => INVALIDATION_FIELDS
+    .filter(field => !record.fields[field])
+    .map(field => `第${record.line}行缺${field}`));
   const unscopedInvalidations = invalidated.filter(record => !record.scope);
   if (unscopedInvalidations.length) errors.push(`失效步骤未写可识别阶段：${unscopedInvalidations.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]).join('、')}；未应用，不跨 stage 推断`);
   for (const value of unmatchedInvalidations) errors.push(`失效步骤未匹配当前阶段步骤表：${value}；未应用`);
@@ -2344,7 +2424,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   return { stages: reports, ...(card ? { card: currentCard } : {}), skip_gap: skipGap,
     closeout: { state: skipGaps.length || errors.some(error => error.startsWith('跳过缺口不可读')) ? 'incomplete' : 'unavailable', gaps: skipGaps,
       reason: '收口必须逐项消费未清缺口；无跳过缺口也不证明步骤或阶段完成。' },
-    modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList }, errors,
+    modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList, records: invalidatedRecords, gaps: invalidationGaps }, errors,
     limits: [`收敛清单版本：${convergenceRef ? `当前声明的唯一指针是 ${convergenceRef}` : '当前没有取得唯一清单指针'}；${!convergenceRef ? '未取得唯一清单指针，未判版本' : checklistDerivation === null ? '清单不可读，未判版本' : checklistDerivation.declared ? `清单自述派生来源，已把其声明的 decision-log sha256 与本次读到的字节比对，不一致即「引用旧清单」具名 gap；自述里的日期与批次只记录、不当判据（清单没有机器可读的版本时间线）` : '清单未自述派生来源，本检查判不出旧版：AC 需收窄为「清单自述派生来源 sha256 与当前 decision-log 字节一致」。可选方案：A 清单头部写派生来源（工作树提交＋decision-log sha256），检查器机检（已实现）；B 清单头登记版本号并由日志指针命名该版本；C 接受不判旧版并把 AC 文字收窄。裁决前该边界保持公开，不静默保留。'}。`, '只报告映射、声明原件的可读性、既有 producer 判定与模块结构；不证明步骤完成或模块语义。未留痕只表示机检未读到声明原件，不证明步骤未执行；无持久原件的方法交既有 decision/GLOSSARY/ADR 原件由独立读者判断。失效步骤只按当前 decision-log 行读取，删行不重建历史。每步完成都要求本次 --current-read-receipt 绑定的命令捕获原件：缺当次回执、无任何加载记录、旧回执或内联输出均记未判定；校验重算原输出并与当前声明技能字节三方比对，改自洽的正文也不能通过。回执只绑技能字节 sha256 与任务/阶段/步骤身份；捕获里的 --commit 只记录，不与实时 HEAD 比较，代码快照变化本身不使回执 stale。同 task/stage/step/技能字节的多份回执，本检查在存在更晚同步骤捕获时拒绝传入的更早件，不按时间挑最新；没有更晚件也没有会话标识时，单份旧回执与本次读取物理不可区分，记该能力边界。每步必需子技能清单未在本卡声明，本检查只覆盖该步声明的技能文件。读取动作按当前卡投影定位声明技能，依赖同一次只读检查报告；该依赖不写状态，影响是读取成本与同一路由，不建新抽象。', ...(invalidationLimit ? [invalidationLimit] : []), ...producerLimits] };
 }
 
@@ -2376,12 +2456,30 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const inputErrors = [];
   let json = false;
   let skipStep, reason, owner, recovery, readStepSkillRef;
-  for (const arg of process.argv.slice(2)) {
+  // Stage cards use both `--task-path <dir>` and `--task-path=<dir>` (P1–P3
+  // cards use spaces, this card uses `=`), so both forms are accepted. An
+  // unknown flag stays a named error, and a real value is never silently
+  // consumed as another flag.
+  const VALUE_FLAGS = new Set(['task-path', 'material-root', 'repo-root', 'stage', 'step', 'run-id', 'phase', 'commit', 'read-step-skill', 'current-read-receipt', 'skip-with-gap', 'reason', 'owner', 'recovery']);
+  const argv = process.argv.slice(2);
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
     if (arg === '--json') { json = true; continue; }
     if (arg === '--card') { options.card = true; continue; }
-    const match = /^--(task-path|material-root|repo-root|stage|step|run-id|phase|commit|read-step-skill|current-read-receipt|skip-with-gap|reason|owner|recovery)=(.+)$/.exec(arg);
-    if (!match) { inputErrors.push(`不支持参数：${arg}`); continue; }
-    const [ , key, value] = match;
+    let key, value;
+    const equals = /^--([a-z0-9-]+)=(.*)$/.exec(arg);
+    if (equals) {
+      [, key, value] = equals;
+      if (!VALUE_FLAGS.has(key)) { inputErrors.push(`不支持参数：${arg}`); continue; }
+      if (!value) { inputErrors.push(`参数缺值：--${key}`); continue; }
+    } else if (/^--[a-z0-9-]+$/.test(arg)) {
+      key = arg.slice(2);
+      if (!VALUE_FLAGS.has(key)) { inputErrors.push(`不支持参数：${arg}`); continue; }
+      const next = argv[index + 1];
+      if (next === undefined || /^--/.test(next)) { inputErrors.push(`参数缺值：${arg}`); continue; }
+      index += 1;
+      value = next;
+    } else { inputErrors.push(`不支持参数：${arg}`); continue; }
     if (key === 'skip-with-gap') skipStep = Number(value);
     else if (key === 'reason') reason = value.trim();
     else if (key === 'owner') owner = value.trim();
@@ -2460,6 +2558,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`失效步骤：${report.supersede.invalidated.length ? report.supersede.invalidated.join('、') : '无'}（${report.supersede.source}）`);
+    // Same report source as --json: the default text keeps the responsibility
+    // values visible so the first-card author does not need --json.
+    for (const record of report.supersede.records) {
+      const values = INVALIDATION_FIELDS.map(field => `${field}=${record.fields[field] ?? '缺'}`).join('；');
+      console.log(`失效行 ${record.line}：${values}`);
+    }
+    if (report.supersede.gaps.length) console.log(`失效行缺口（只进报告，不改退出码）：${report.supersede.gaps.join('；')}`);
     for (const row of report.modules) {
       if (!row.fields.length) console.log(`${row.name}：${row.state ?? '未判'}；5列状态表（按状态列判定）；${row.source}`);
       else {
@@ -2468,7 +2573,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps。');
+    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps；「讨论原件缺质询」只报告、不改退出码。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));

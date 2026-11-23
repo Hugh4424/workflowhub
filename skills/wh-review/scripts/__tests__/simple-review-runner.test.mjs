@@ -1067,10 +1067,17 @@ describe("simple material-only review", () => {
     expect(parsed.findings[0]).toHaveProperty("evidence_kind");
   });
 
-  it("RESULT_PROMPT detects bundle/ before reading the packet root", async () => {
+  it("RESULT_PROMPT matches packet layouts and keeps the read-only shell exception Codex-only", async () => {
     const source = readFileSync(new URL("../simple-review-runner.mjs", import.meta.url), "utf8");
-    expect(source).toContain("Read bundle/review-instructions.md and bundle/manifest.json first");
-    expect(source).toContain("read review-instructions.md and manifest.json at the packet root");
+    expect(source).toContain("Locate review-instructions.md and manifest.json in the delivered packet");
+    expect(source).toContain("a broker may use a bundle/ delivery prefix");
+    expect(source).toContain("native transport presents them directly at the packet root");
+    expect(source).not.toContain("Read bundle/review-instructions.md and bundle/manifest.json first");
+    expect(source).toContain("Do not run shell commands, list directories, or read any other path");
+    expect(source).toContain("Codex only when the host transport has demonstrated native hard packet filesystem, tool and environment boundaries");
+    expect(source).toContain("read-only file-view commands such as cat, sed or rg may read manifest-listed paths in this packet");
+    expect(source).toContain("This is not general shell permission");
+    expect(source).toContain("Writes, Git, network, parent/host materials, Agent/subagent and wait/poll remain prohibited");
   });
 
   it("returns a recordable unavailable result when route loading fails", async () => {

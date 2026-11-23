@@ -1815,3 +1815,89 @@ it('rejects stale direct PR merge facts when a later Task commit reaches only th
  const merge=spawnSync('git',['merge','--no-ff',current,'-m','Local only; original delivery facts untouched'],{cwd:f.primary,encoding:'utf8'});expect(merge.status,merge.stderr).toBe(0);
  const before=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8');expect(ringAt(await report(f),10).state).not.toBe('completed');expect(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8')).toBe(before);
 });
+
+// P03 ORACLE-FINAL-COVERAGE-SCAN: the current terminal entry accepts the
+// decision-log scan plus exactly the two non-log scans classified by their real
+// first heading: a requirement index (`# …需求索引`) and a coverage matrix
+// (`# …覆盖表/覆盖矩阵`). Each receipt must carry the current
+// `[check-decision-log-chain] scanned {input_path,input_sha256,checker_sha256}`
+// signature for its own bytes and checker bytes. Order matters: the decision-log
+// scan is captured first, then the two sources, so the reversed reader reaches
+// both before the log. A legacy coverage title ("需求与答复覆盖核对") is not
+// classified and must not be counted as the second scan; a receipt whose
+// checker_sha256 no longer matches the installed checker is rejected as
+// unavailable. These two behaviours already exist in the current runner and are
+// recorded as regressions, not fabricated target failures.
+async function p03DoubleScanFixture() {
+  const f = await boundDecisionScanFixture();
+  const indexPath = put(f.taskPath, 'quality/evidence/decision-log-refs/requirement-index.md', '# 需求索引\n\n| 编号 | 验收去向 |\n| --- | --- |\n| R-001 | 验收 1 |\n');
+  const coveragePath = put(f.taskPath, 'quality/evidence/decision-log-refs/coverage-matrix-5d.md', '# 需求与答复覆盖矩阵\n\n| 来源 | 当前落点 |\n| --- | --- |\n| R-001 | 验收 1 |\n');
+  // The existing scan helper keeps one make-decision row, so three scans would
+  // overwrite each other. Capture each input with a distinct slug, then record
+  // the three real receipts as one stage row.
+  const capture = async (slug, target) => {
+    const r = await captureCommand({cwd: f.repo, recordDir: join(f.taskPath, 'quality/tests'), slug, argv: [process.execPath, join(ROOT, 'tools/cli/check-decision-log-chain.mjs'), '--file', target]});
+    return {r, command: JSON.stringify(r.argv), exit_code: r.exit_code, receipt_ref: r.receipt_ref, output_ref: r.output_ref, failure_signature: 'Actual advisory input ' + target};
+  };
+  const record = async (entries) => {
+    await writeStageRow(f.taskPath, {stage: 'make-decision', source: 'receipt: ' + entries[0].receipt_ref + '; output: ' + entries[0].output_ref, evidence: {value: entries.map(({r, ...entry}) => entry)}});
+  };
+  return {...f, indexPath, coveragePath, capture, record};
+}
+
+it('P03 final chain counts declared requirement and coverage scans', async () => {
+  const f = await p03DoubleScanFixture();
+  const scans = [
+    await f.capture('p03-decision-log', f.decision),
+    await f.capture('p03-requirement-index', f.indexPath),
+    await f.capture('p03-coverage-matrix', f.coveragePath),
+  ];
+  await f.record(scans);
+  const value = await report(f), ring = ringAt(value, 2);
+  expect(ring.state, JSON.stringify([ring, value.limits])).toBe('completed');
+  // evaluateRing publishes the adopted basis, not the raw scan_count: both
+  // non-log inputs must appear there with the hash of their own bytes, which
+  // only happens when the reversed reader actually adopted both scans.
+  const basis = JSON.stringify(ring.basis);
+  expect(basis).toContain(f.indexPath);
+  expect(basis).toContain(f.coveragePath);
+  expect(basis).toContain(hash(readFileSync(f.indexPath)));
+  expect(basis).toContain(hash(readFileSync(f.coveragePath)));
+});
+
+it('P03 final chain rejects legacy coverage title and stale checker binding', async () => {
+  // A legacy title is not classified as a coverage scan, so the terminal keeps
+  // the legal current single-scan path instead of counting two scans.
+  const legacy = await p03DoubleScanFixture();
+  const legacyPath = put(legacy.taskPath, 'quality/evidence/decision-log-refs/legacy-coverage.md', '# 需求与答复覆盖核对\n\n| 来源 | 当前落点 |\n| --- | --- |\n| R-001 | 验收 1 |\n');
+  await legacy.record([
+    await legacy.capture('p03-legacy-decision-log', legacy.decision),
+    await legacy.capture('p03-legacy-requirement-index', legacy.indexPath),
+    await legacy.capture('p03-legacy-coverage', legacyPath),
+  ]);
+  const legacyRing = ringAt(await report(legacy), 2);
+  expect(legacyRing.state, JSON.stringify(legacyRing)).toBe('completed');
+  const legacyBasis = JSON.stringify(legacyRing.basis);
+  expect(legacyBasis).not.toContain('需求与答复覆盖核对');
+  expect(legacyBasis).not.toContain(legacyPath);
+  // The legal single-scan return carries only the decision-log command, so the
+  // unclassified legacy input and the already-collected index are not adopted.
+  expect(legacyBasis).not.toContain(legacy.indexPath);
+
+  // A captured signature from another checker version no longer binds the
+  // current bytes, so the coverage input makes ring 2 unavailable instead of
+  // being adopted.
+  const stale = await p03DoubleScanFixture();
+  const staleScans = [
+    await stale.capture('p03-stale-decision-log', stale.decision),
+    await stale.capture('p03-stale-requirement-index', stale.indexPath),
+    await stale.capture('p03-stale-coverage', stale.coveragePath),
+  ];
+  const coverageScan = staleScans[2].r;
+  const captured = readFileSync(coverageScan.output_ref, 'utf8');
+  writeFileSync(coverageScan.output_ref, captured.replace(/"checker_sha256":"[0-9a-f]{64}"/, `"checker_sha256":"${'0'.repeat(64)}"`));
+  await stale.record(staleScans);
+  const staleValue = await report(stale), staleRing = ringAt(staleValue, 2);
+  expect(staleRing.state, JSON.stringify([staleRing, staleValue.limits])).toBe('unavailable');
+  expect(staleValue.limits.join(' ')).toMatch(/binding|绑定|扫描|scan|signature|签名/i);
+});
