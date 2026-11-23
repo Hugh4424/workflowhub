@@ -85,6 +85,12 @@
 未见已确认执行预算，主会话回原决定人；单位为分钟或命令数。
 用户真实答复、独立审查与本任务内部交回的纯等待分别计，不并入活动估算。
 
+### 本 Phase 自带判据小结
+
+- 验了什么：受阻首卡五段齐（改什么、不做什么、怎样验、依赖谁、退路），每条有来源或具名缺口（类别、责任人、复验条件），没有拿 U-014 或批次转录代包级答复，没有自造验收编号或把缺口写成「不适用」；首位作者自检后，第二位独立读者（独立上下文、未参与写卡）判 AC-P6-001 内容 pass。
+- 没验什么：AC-P6-002 记 unavailable——同版五件（方案卡卡节、质询、冷读、对抗、真实答复）不存在，受阻卡不能代最终首卡；正常入口在本任务的真实调用读数也未取得。
+- 未验项条件与 owner：质询由包 5 设计者补；逐包真实答复由材料作者＋用户补；卡节与批次身份由方向卡作者与 p02-review 补；最终接包由独立计划作者在五件齐后走正式入口执行。
+
 ## 为什么现在做，依据是什么？
 
 及早试写真正的受阻首卡，可以在最终接包前让补件责任明确。
@@ -255,4 +261,6 @@ npx --no-install vitest run tests/contract/package-material-consumption.test.mjs
 - **evidence_path**: planned: `quality/tests/p06-blocked-first-card.readback.md`；`quality/tests/p06-final-first-card.readback.md`
 - **STOP**: 缺真实供件只停最终；人选、入口与五件由本任务主会话组织恢复，改卡回独立计划作者；方向或验收变更回决定人。
 - **覆盖 AC**: AC-P6-001、AC-P6-002
-- **Done**: 前置（不作完成条件）：实际只读命令及输出可回读。完成条件（只写效果）：AC-P6-001 独立判受阻卡与缺件恢复，未实施读回时 incomplete；AC-P6-002 独立判最终首卡、入口与反例，同版五件或真实包答缺口未恢复时 unavailable，由本任务主会话组织补件和复验。见两份独立读回路径，均不预填通过。
+- **Done**: 前置（不作完成条件）：实际只读命令及输出可回读。完成条件（只写效果）：
+  - `AC-P6-001：pass；证据 quality/testing 首卡 quality/evidence/build-plan/first-card.md（sha256 c72455dd9450a048f30a82f49b447ae2992e1d62c62cbe2989f5cc0b3d699c01）、quality/tests/p06-blocked-first-card.readback.md（含第二位独立读者结论）、quality/tests/2026-11-24-058-p6-reader-independent-verdict.output。`
+  - `AC-P6-002：unavailable；证据同目录读回件的「八、独立读者复核」与收敛清单包 2 段；恢复条件：取得同版五件（方案卡卡节、质询、冷读、对抗、真实答复）后，由独立计划作者走正式入口重读并更新同一首卡，再由另一独立读者写 p06-final-first-card.readback.md。`
