@@ -36,7 +36,7 @@ make-decision 最终确认＝阶段收口，具体动作沿其方法与决策日
 
 ### 长任务与证据边界
 
-执行策略沿 make-decision 已确认答复，开工记录 execution_budget 及重试预留。
+执行策略沿 make-decision 已确认答复；execution_budget 仅可选人读，retry_reserve 并入可选执行策略。
 操作细则唯一读 [长任务怎么控制](../workflows/build-code/SKILL.md#长任务怎么控制)：
 检查点覆盖 Phase 边界、长命令前后和阻塞；等待用事件通知，不 sleep/轮询。
 墙钟、活动、用户等待、provider 审查等待和真实环境纯等待分别记录。

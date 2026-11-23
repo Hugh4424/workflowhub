@@ -288,9 +288,9 @@ S 是合成或种子，M 是真实子集，L 是完整数据；选择来自已�
 阈值只帮助复盘与展示，不建立机器退出门或全任务轮次上限。
 实现执行成本由后续执行方法另算，不与本节验收成本混账。
 
-本 Phase 的执行预算另写
-`execution_budget={window_minutes,command_cap,wait_cap,retry_reserve}`。
-每项注明真实来源与单位，不把验收活动估算当作已发生活动账。
+本 Phase 的执行预算仅供参考，`execution_budget` 只作可选人读，
+window_minutes、command_cap、wait_cap 按真实来源与单位记，
+retry_reserve 并入可选执行策略，不强制成必填对象，也不把验收活动估算当作已发生活动账。
 执行策略只消费 make-decision 的真实答复；未知回原 owner，不在计划补默认值。
 检查点、事件等待、停扩/复盘、并行测试面与大件证据指针，
 沿 `workflows/build-code/SKILL.md#长任务怎么控制`，不复制第二套规则。

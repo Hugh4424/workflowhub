@@ -20,8 +20,12 @@ C6 对 `runtime/schemas/quality-verify.v1.json` 作了明确例外：它与 acti
 `quality/verify.json`、`product_release`、`status_groups` graph 同批移除；
 `specs/archive/**` 与 `docs/research/**` 仍只读保留。
 
-同时，PRD 原本点名的三项（`stage-outcome-proofs/**`、`workflow-evolution.mjs`、
-protocol-error 白名单）实测**都有活的生产消费者**，不能删。
+同时，PRD 原本点名的三项中，`stage-outcome-proofs/**` 与 protocol-error 白名单实测
+**都有活的生产消费者**，不能删；`workflow-evolution.mjs` 的判断已被后续实测推翻：
+交付质量基础任务 P6 复核生产 importer 为 0，该文件连同其悬空的技能合同行退役
+（业务仓 `evolution-candidates.jsonl` 原字节保留、人能读；仓内不再有按 `schema_version`
+回放历史经验候选的机器 reader，且不新增替代 reader）。逐对象现状与其删除条件以
+`docs/architecture/move-map.json` 的该条目为准，本句只同步判断，不改本 ADR 的删除边界。
 
 ## 决定
 

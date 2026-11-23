@@ -14,7 +14,7 @@
       "disposition": "retain",
       "replacement": null,
       "delete_condition": "经过审查的 canonical research reader 替代",
-      "evidence": "tests/contract/research-report.test.mjs"
+      "evidence": "tests/contract/research-report-current.test.mjs（原写的 research-report.test.mjs 实测不存在，更正为当前真实等效测试；无旧路径副本）"
     },
     {
       "id": "stage-handoff",
@@ -40,14 +40,14 @@
     },
     {
       "id": "review-result-deduplication",
-      "producer": "runtime/review/review-record-route.mjs#readCanonicalReviewHistory + #findReusableReview",
-      "consumer": "recordSimpleReviewRequest canonical result reuse",
-      "owner": "review route",
-      "effect": "immutable same-track review result reference prevents accidental repeat dispatch",
-      "disposition": "retain",
+      "producer": "（已移除）原 runtime/review/review-record-route.mjs#readCanonicalReviewHistory + #findReusableReview，b31d202e「refactor(review): retire hash-bound review control」同批移除；全仓当前无这两个符号",
+      "consumer": "无当前消费者：tests/review/review-record-route.test.mjs:93 的追加用例证明显式请求一律新增结果、没有 retry/head/reuse 门，与本控件“同轨道复用”语义相反；原 consumer 语句已不成立",
+      "owner": "review route（原 owner；ADR-0028 的处置另归该 ADR owner，本 Phase 写集不含它）",
+      "effect": "（已退役）原意：同轨道复用已有审查结果以避免重复派发；当前真实行为是每次显式请求追加一条新结果",
+      "disposition": "removed",
       "replacement": null,
-      "delete_condition": "经过审查的 canonical review reference reader 替代且同轨道复用语义不变",
-      "evidence": "tests/contract/review-budget-deletion.test.mjs"
+      "delete_condition": "已执行：语义随 b31d202e 移除。决定=退役，不恢复复用门；未决=ADR-0028 的条文同步归其 owner（具名缺口）；理由与来源=b31d202e 提交说明与 tests/review/review-record-route.test.mjs:93 的追加断言；本 Phase 不改 ADR，不新增等效测试",
+      "evidence": "无当前等效测试：原证明件已删且实测不存在同名副本；现无测试覆盖“同轨道复用”语义，review-record-route.test.mjs:93 断言的正是相反行为，故不编造替代测试"
     },
     {
       "id": "review-packet-identity",

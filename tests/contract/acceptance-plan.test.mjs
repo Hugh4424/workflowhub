@@ -378,11 +378,12 @@ function readEvidenceReuse(records, currentRun) {
 describe('ORACLE-P3-CONTROL', () => {
   it('exposes execution budget, stop, heartbeat and evidence rules at their method seams', () => {
     const buildCode = read('workflows/build-code/SKILL.md');
-    for (const term of ['execution_budget', 'window_minutes', 'command_cap', 'wait_cap', 'retry_reserve', '1.5', 'awaiting_user', '空心跳', 'provenance']) {
+    for (const term of ['window_minutes', 'command_cap', 'wait_cap', '1.5', 'awaiting_user', '空心跳', 'provenance']) {
       expect(buildCode, term).toContain(term);
     }
-    expect(read('skills/spec-plan/templates/phase-template.md')).toContain('execution_budget');
-    expect(read('workflows/build-code/steps.json')).toContain('execution_budget');
+    for (const path of ['skills/spec-plan/templates/phase-template.md', 'workflows/build-code/steps.json']) {
+      expect(read(path), path).toMatch(/execution_budget[^\n]{0,60}可选|可选[^\n]{0,60}execution_budget/);
+    }
     const standard = read('docs/standard-workflow.md');
     for (const term of ['同字节', 'provenance', '旧运行']) expect(standard, term).toContain(term);
   });
@@ -495,7 +496,7 @@ describe('ORACLE-P3-CONTROL actual method negative controls', () => {
   const template=read('skills/spec-plan/templates/phase-template.md');
   expect(template).toContain('workflows/build-code/SKILL.md#长任务怎么控制');
   const steps=JSON.parse(read('workflows/build-code/steps.json')).steps;
-  expect(steps.find(step=>step.step_id===1).observable_result).toContain('execution_budget');
+  expect(steps.find(step=>step.step_id===1).observable_result).toContain('等待分账');
   expect(steps.find(step=>step.step_id===9).observable_result).toContain('独立oracle面并行只读测试');
   expect(steps.find(step=>step.step_id===9).observable_result).toContain('provider/broker排除域');
   const standard=read('docs/standard-workflow.md');

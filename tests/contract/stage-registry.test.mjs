@@ -9,16 +9,20 @@ const registryPath = join(root, 'runtime/stage/stage-registry.mjs');
 // Independent pre-migration contract values, never derived from the registry under test.
 const formal = ['make-decision', 'build-plan', 'build-code'];
 const workflow = ['make-decision', 'build-plan', 'build-code', 'build-prd'];
+// 17 static importers; run-checks.mjs loads the same registry through a dynamic
+// import at :831, so it is asserted separately instead of weakening this static check.
 const readers = [
  'runtime/stage/stage-context.mjs', 'runtime/task/task-store.mjs',
  'runtime/review/review-policy.mjs', 'runtime/task/final-chain.mjs',
- 'runtime/task/final-chain-runner.mjs', 'runtime/evidence/workflow-evolution.mjs',
+ 'runtime/task/final-chain-runner.mjs',
+ 'runtime/distribution/config-bootstrap.mjs', 'runtime/distribution/runner-release.mjs',
  'runtime/distribution/skill-bundle-release.mjs', 'runtime/review/stage-review-disposition.mjs',
  'tools/cli/stage-runtime.mjs', 'tools/cli/check-skill-consistency.mjs',
  'tools/cli/check-stage-steps.mjs', 'tools/cli/measure-main-agent-cost.mjs',
- 'tools/cli/n11-pairwise-judge.mjs', 'tools/cli/smoke-local-skill-dispatch.mjs',
+ 'tools/cli/n11-pairwise-judge.mjs', 'tools/cli/build-release.mjs',
  'core/task-close.mjs', 'skills/wh-review/scripts/third-review-host-config.mjs',
 ];
+const dynamicReaders = ['tools/cli/run-checks.mjs'];
 const source = path => readFileSync(join(root, path), 'utf8');
 // Scoped list scanner: individual semantic branches are deliberately not stage-list definitions.
 function assertNoStageCopies(text, label) {
@@ -33,14 +37,17 @@ async function registry() {
  expect(existsSync(registryPath), 'ORACLE-STAGE-REGISTRY: stage registry must exist before import').toBe(true);
  return import(registryPath);
 }
-test('ORACLE-STAGE-REGISTRY: one registry preserves six exports plus one passive retired identity and all 16 readers import it', async () => {
+test('ORACLE-STAGE-REGISTRY: one registry preserves six exports plus one passive retired identity and all 18 readers import it (17 static + 1 dynamic)', async () => {
  const values = await registry();
  expect(Object.keys(values).sort()).toEqual(['STAGE','FORMAL_DEVELOPMENT_STAGES','WORKFLOW_STAGES','FORMAL_DEVELOPMENT_STAGE_SET','WORKFLOW_STAGE_SET','RETIRED_STAGE_BUILD_SPEC','RETIRED_STAGE_VERIFY_CODE'].sort());
  expect(source('runtime/stage/stage-registry.mjs')).not.toMatch(/\b(?:import|export)\s[^;]*\bfrom\s|\bimport\s*\(/);
  for (const reader of readers) {
   expect(source(reader), `${reader}: registry import`).toMatch(/import\s*\{[^}]+\}\s*from\s*["'][^"']*stage-registry\.mjs["']/);
-  assertNoStageCopies(source(reader), reader);
  }
+ for (const reader of dynamicReaders) {
+  expect(source(reader), `${reader}: dynamic registry import`).toMatch(/import\(\s*["'][^"']*stage-registry\.mjs["']\s*\)/);
+ }
+ for (const reader of [...readers, ...dynamicReaders]) assertNoStageCopies(source(reader), reader);
 });
 test('formal three, workflow four and retired identity preserve current write and historical-read boundaries', async () => {
  const values = await registry();

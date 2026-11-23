@@ -197,10 +197,6 @@ export function inspectReleaseVersion({ packageRoot, sourceVersion, sourcePackag
   return checkForUpdate({ installedVersion, sourceVersion, source: typeof sourceVersion === "string" && sourceVersion !== "" ? "--source-version" : null });
 }
 
-function scopeBase({ target, home }) {
-  return target === undefined ? home : target;
-}
-
 /** Compute the single action plan shared by check, dry-run and apply. */
 export function planOnboarding({ packageRoot, target, env = process.env, home, requestedStage = "build-code", requestedTrack = null, requestedReviewKind = null, probe = "static", sourceVersion, sourcePackage } = {}) {
   if (typeof home !== "string" || !isAbsolute(home)) throw new TypeError("home must be an absolute path");
