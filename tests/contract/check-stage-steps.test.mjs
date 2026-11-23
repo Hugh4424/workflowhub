@@ -515,7 +515,18 @@ describe('ten-column status table names unconverged packages', () => {
     expect(report.convergence.gaps.some(gap => gap.includes('冷读原件未绑定卡摘要'))).toBe(true);
   }));
   it('reports a cold-read original digest mismatch and exits 1', () => evidenceGap(tail => tail.replace(coldSha(coldDoc('1', 'subagent:controlled-reader-1')), '0'.repeat(64)), '冷读原件摘要不符'));
-  it('reports a revised card that was not re-read by a new reader and exits 1', () => evidenceGap(tail => tail.replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |'), '修订未复读'));
+  it('accepts a legacy revised card re-read by a new reader', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, put, task }) => {
+    put(task, firstColdRef('1'), coldDoc('1', 'subagent:legacy-new-1'));
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+  }, tail => {
+    const legacyFirst = coldSha(coldDoc('1', 'subagent:legacy-new-1'));
+    return tail
+      .replace(`| 首轮冷读 | \`${coldRef('1')}\`；sha256 \`${coldSha(coldDoc('1', 'subagent:controlled-reader-1'))}\`；读者 subagent:controlled-reader-1 |`,
+        `| 首轮冷读 | \`${firstColdRef('1')}\`；sha256 \`${legacyFirst}\`；读者 subagent:legacy-new-1 |`)
+      .replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |');
+  }));
+  it('reports a revised card whose cold-read original did not change and exits 1', () => evidenceGap(tail => tail.replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |'), '修订未复读'));
   it('restores the same check after the controlled break is reverted', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, ref, put, original }) => {
     put(task, ref, original.replace(coldSha(cardSection('2')), '0'.repeat(64)));
     expect(invoke(true).status).toBe(1);
@@ -544,9 +555,9 @@ describe('method-shape cold read is accepted without inventing a third shape', (
       put(task, 'quality/evidence/decision-log-refs/controlled-module-details.md', detailsBody);
       put(task, COLD_CARDS, ['1', '2'].map(cardSection).join('\n'));
       put(task, coldRef('1'), coldDoc('1', 'subagent:method-reader-1', answers));
-      put(task, firstColdRef('1'), coldDoc('1', 'subagent:method-first-1'));
+      put(task, firstColdRef('1'), coldDoc('1', 'subagent:method-reader-1', answers));
       put(task, coldRef('2'), coldDoc('2', 'subagent:controlled-reader-2'));
-      put(task, ref, header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛') + '\n' + methodSection('1', 'subagent:method-reader-1', 'subagent:method-first-1', answers) + '\n' + coldSection('2', 'subagent:controlled-reader-2'));
+      put(task, ref, header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛') + '\n' + methodSection('1', 'subagent:method-reader-1', 'subagent:method-reader-1', answers) + '\n' + coldSection('2', 'subagent:controlled-reader-2'));
       check({ invoke });
     } finally { rmSync(root, { recursive:true, force:true }); }
   }
@@ -2167,5 +2178,162 @@ describe('P1 same-package five originals through the real CLI', () => {
     expect(status, `${variant} must fail the direction check`).toBe(1);
     expect(report.convergence.complete, `${variant} must not leave a complete package`).toBe(false);
     expect(report.convergence.gaps.join('\n')).toMatch(pattern);
+  });
+});
+
+// P3 ORACLE-CONVERGENCE-VERSION negatives and the small-route boundary. The
+// current version is the bare `### 包 N` block plus a `轮次` field; the P1
+// `### 包 N 五件同包原件` block remains the historical shape. Every case runs
+// the real public CLI and records an exit code, not only an in-memory gap list.
+describe('P3 current convergence version: rounds, six/nine and same reviewer', () => {
+  const P3_TASK = 'controlled-p3';
+  function fixture(variant) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p3-current-')));
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    const put = (base, path, bytes) => { const file = join(base, path); mkdirSync(dirnameOf(file), { recursive: true }); writeFileSync(file, bytes); };
+    const rows = [
+      ['一句话结果', '受控结果'], ['对应需求', '同包默认'], ['现状缺口', '旧版冒绿'], ['方案与取舍', '最小方案'],
+      ['边界', '不新增步骤'], ['数据与状态', '同包同批'], ['验收', '通过、失败、反例、证据均可读'],
+      ['风险与回退', '缺件回 owner'], ['未决', '无'], ['白话复述', '读者能判假'], ['配套与影响', '调整、迁移、移除、影响范围均明确'],
+    ];
+    const tableCard = revision => `## 工作包 1：受控包 1\n\n| 格 | 内容 |\n| --- | --- |\n${rows.map(([key, value]) => `| ${key} | ${value}${key === '一句话结果' ? `，修订 ${revision}` : ''} |`).join('\n')}\n`;
+    const headingCard = (revision, count = 11, numbered = false) => `## 工作包 1：受控包 1\n\n${rows.slice(0, count).map(([key, value], index) => `${numbered ? `${index + 1}.` : '###'} ${key}：${value}${key === '一句话结果' ? `，修订 ${revision}` : ''}`).join('\n')}\n`;
+    const currentCard = variant === 'heading-card' || variant === 'heading-card-missing' || variant === 'heading-card-numbered'
+      ? headingCard(2, variant === 'heading-card-missing' ? 10 : 11, variant === 'heading-card-numbered')
+      : tableCard(2);
+    const previousCard = variant === 'heading-card' || variant === 'heading-card-missing' || variant === 'heading-card-numbered'
+      ? headingCard(1, variant === 'heading-card-missing' ? 10 : 11, variant === 'heading-card-numbered')
+      : tableCard(1);
+    const digest = createHash('sha256').update(currentCard.trim()).digest('hex');
+    const previousDigest = createHash('sha256').update(previousCard.trim()).digest('hex');
+    const reread = variant === 'reread' || variant === 'reread-changed-reader';
+    const round = variant === 'third-round' ? 3 : reread ? 2 : 1;
+    const coldCount = variant === 'missing-sixth' || variant === 'old-five-current' ? 5 : 6;
+    const adversarialCount = variant === 'missing-ninth' ? 8 : 9;
+    const role = (kind, count, { digest: cardDigest = digest, round: roleRound = round, reviewer = 'same-reviewer', conclusion = '六问全答出' } = {}) => {
+      const answers = Array.from({ length: count }, (_, index) => `${['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨'][index]} 回答 ${index + 1}`).join('\n');
+      const numbered = variant === 'template-literal' ? answers.replace(/^([①②③④⑤⑥⑦⑧⑨])/gm, (_m, mark) => `${['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨'].indexOf(mark) + 1}. `) : answers;
+      return [
+        'agent: rev', 'dispatched_at: 2026-11-23T07:00:00+08:00',
+        `- reviewer: ${reviewer}`, '- designer: designer',
+        `- reviewed_card_sha256: ${cardDigest}`, `- round: ${roleRound}`,
+        `任务=${P3_TASK}；包=1；批次=batch-1；卡节sha256=${cardDigest}`, '',
+        kind === '冷读' ? `## 六问原文\n${numbered}` : `## 九问原文\n${numbered}`,
+        kind === '冷读' ? `- 结论：${conclusion}` : '## 阻塞项\n\n- 无',
+      ].join('\n');
+    };
+    const line = (cls, file, extra = '') => `- 当前${cls}：\`quality/evidence/decision-maker/p01/${file}\`；任务=${P3_TASK}；包=1；批次=batch-1；卡节sha256=${digest}${extra}`;
+    const light = variant === 'light' || variant === 'light-no-cold' || variant === 'light-no-marker';
+    const taskLight = variant === 'light' || variant === 'light-no-cold';
+    const roundField = variant === 'missing-round' || variant === 'legacy-mixed' ? '' : `；轮次=${round}`;
+    const bullets = light
+      ? [...(variant === 'light-no-marker' ? [] : ['- 路线：小改']), line('方案卡', 'card.md#工作包-1'), ...(variant === 'light-no-cold' ? [] : [line('冷读', 'cold-read.md', roundField)])]
+      : [
+        line('方案卡', 'card.md#工作包-1'),
+        line('质询', 'discussion.md'),
+        line('冷读', 'cold-read.md', roundField),
+        line('对抗', 'adversarial.md', roundField),
+        line('真实答复', 'answer.md'),
+      ];
+    if (reread) bullets.push(
+      `- 首轮冷读：\`quality/evidence/decision-maker/p01/cold-read-first.md\`；任务=${P3_TASK}；包=1；批次=batch-1；卡节sha256=${previousDigest}；轮次=1`,
+      `- 首轮对抗：\`quality/evidence/decision-maker/p01/adversarial-first.md\`；任务=${P3_TASK}；包=1；批次=batch-1；卡节sha256=${previousDigest}；轮次=1`,
+    );
+    const fiveColumn = variant === 'five-column-no-block' || variant === 'five-column-current';
+    const tableHeader = fiveColumn ? '| 包 | 状态 | 五段表位置 | 证据 | 未决 |\n| --- | --- | --- | --- | --- |\n' : '';
+    const row = fiveColumn
+      ? '| 1 controlled | 已收敛 | details§1 | 无 | 无 |\n'
+      : '| 1 controlled | D-001 做什么 | D-001 不做什么 | details§1 | AC-01 | D-001 风险 | 无 | controlled consumer | OI-001 | 已收敛 |\n';
+    const heading = variant === 'legacy-mixed' ? '### 包 1 五件同包原件' : '### 包 1';
+    const versionMarker = variant === 'legacy-mixed' ? '\n版本：当前；轮次=1\n' : '';
+    const checklist = `${tableHeader}${row}${variant === 'five-column-no-block' ? '' : `\n${heading}\n${bullets.join('\n')}\n${versionMarker}`}`;
+    try {
+      put(task, 'task.json', JSON.stringify({ schema_version: '1.0.0', task_id: P3_TASK, target_repo_root: resolve('.'), baseline_commit: 'HEAD', activation_cohort: 'post', record_model: 'vnext-single-write' }));
+      put(task, 'facts.jsonl', '');
+      put(materials, 'decision-log.md', `# Controlled\n## 级别与路线\n- 推荐级别：${taskLight ? '轻档' : '复杂'}\n#### WP1 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读。\n- **不做什么**：不写。\n- **风险**：误。\n| AC-01 | 受控 | 明确 |\n| OI-001 | 待核 | owner：受控 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`quality/evidence/decision-log-refs/current-convergence-checklist.md\`\n`);
+      put(materials, 'phases/index.md', '# Index\n');
+      put(task, 'quality/evidence/convergence/cards.md', currentCard);
+      put(task, 'quality/evidence/decision-maker/p01/card.md', currentCard);
+      put(task, 'quality/evidence/decision-maker/p01/discussion.md', `# 质询\n\n任务=${P3_TASK}；包=1；批次=batch-1；卡节sha256=${digest}\n讨论前展示：当前卡\n复述＋用户原话：确认本包\n`);
+      put(task, 'quality/evidence/decision-maker/p01/cold-read.md', role('冷读', coldCount, { conclusion: variant === 'old-five-current' ? '五问全答出' : '六问全答出' }));
+      put(task, 'quality/evidence/decision-maker/p01/adversarial.md', role('对抗', adversarialCount, { reviewer: variant === 'changed-reader' ? 'other-reviewer' : 'same-reviewer' }));
+      put(task, 'quality/evidence/decision-maker/p01/answer.md', `# 真实答复\n\n任务=${P3_TASK}；包=1；批次=batch-1；卡节sha256=${digest}\n用户原文：确认本包\n`);
+      if (reread) {
+        const firstReviewer = variant === 'reread-changed-reader' ? 'other-reviewer' : 'same-reviewer';
+        put(task, 'quality/evidence/decision-maker/p01/cold-read-first.md', role('冷读', 6, { digest: previousDigest, round: 1, reviewer: firstReviewer }));
+        put(task, 'quality/evidence/decision-maker/p01/adversarial-first.md', role('对抗', 9, { digest: previousDigest, round: 1, reviewer: firstReviewer }));
+      }
+      put(task, 'quality/evidence/decision-log-refs/controlled-module-details.md', '## 1 第一模块\n实现只读报告。\n');
+      put(task, 'quality/evidence/decision-log-refs/current-convergence-checklist.md', checklist);
+      const result = spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, '--json'], { encoding: 'utf8' });
+      const report = (() => { try { return JSON.parse(result.stdout); } catch { return null; } })();
+      return { status: result.status, report, output: `${result.stdout}${result.stderr}` };
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  it('accepts the current one-round package', () => {
+    const { status, report } = fixture('normal');
+    expect(status).toBe(0);
+    expect(report.convergence.complete).toBe(true);
+  });
+  it('accepts a current same-reviewer round-two re-read', () => {
+    const { status } = fixture('reread');
+    expect(status).toBe(0);
+  });
+  it('accepts a template-literal six/nine review (numbered questions, dashed reviewer)', () => {
+    const { status } = fixture('template-literal');
+    expect(status).toBe(0);
+  });
+  it('accepts a heading-style eleven-cell card', () => {
+    const { status } = fixture('heading-card');
+    expect(status).toBe(0);
+  });
+  it('accepts a numbered heading-style card', () => {
+    const { status } = fixture('heading-card-numbered');
+    expect(status).toBe(0);
+  });
+  it('rejects a heading-style card missing the eleventh cell', () => {
+    const { status, report } = fixture('heading-card-missing');
+    expect(status).toBe(1);
+    expect(report.convergence.gaps.some(gap => /十一格|配套与影响/.test(gap))).toBe(true);
+  });
+  it('rejects an old five-question package in the current bare block', () => {
+    const { status, report } = fixture('old-five-current');
+    expect(status).toBe(1);
+    expect(report.convergence.gaps.join('\n')).toMatch(/冷读六问不全|六问全答出/);
+  });
+  it('rejects a current five-column row that tries to skip the current block', () => {
+    const { status } = fixture('five-column-no-block');
+    expect(status).toBe(1);
+  });
+  it('rejects a legacy-title block without rounds inside a current checklist', () => {
+    const { status, report } = fixture('legacy-mixed');
+    expect(status).toBe(1);
+    expect(report.convergence.gaps.join('\n')).toMatch(/缺轮次/);
+  });
+  it('rejects a light block without an explicit small-route marker', () => {
+    const { status } = fixture('light-no-marker');
+    expect(status).toBe(1);
+  });
+  it.each([
+    ['missing-sixth', /冷读六问不全/],
+    ['missing-ninth', /对抗九问不全/],
+    ['changed-reader', /同一审查者/],
+    ['reread-changed-reader', /换读者/],
+    ['third-round', /第三轮/],
+    ['missing-round', /缺轮次/],
+  ])('rejects %s with a named gap and exit 1', (variant, pattern) => {
+    const { status, report } = fixture(variant);
+    expect(status).toBe(1);
+    expect(report.convergence.gaps.join('\n')).toMatch(pattern);
+  });
+  it('accepts the small-route one-card one-cold-read thin convergence', () => {
+    const { status, report } = fixture('light');
+    expect(status).toBe(0);
+    expect(report.convergence.complete).toBe(true);
+  });
+  it('rejects a small-route package with no cold read', () => {
+    const { status, report } = fixture('light-no-cold');
+    expect(status).toBe(1);
+    expect(report.convergence.gaps.join('\n')).toMatch(/缺一次冷读/);
   });
 });

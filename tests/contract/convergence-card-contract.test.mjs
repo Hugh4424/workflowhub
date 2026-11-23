@@ -1,11 +1,12 @@
-// ORACLE-CONVERGENCE: reads the make-decision method, the decision-log template
-// and the published nine-package convergence evidence as text and JSON only.
-// Passing proves the three documents describe the same ten-cell card, the five
-// cold-read questions, the stop rule, the ten disqualifiers, the independent
-// re-read rule and the nine package roll-up shape demanded by acceptance 10.
-// It does not prove any real task writes a readable card, nor that an
-// independent reader understood it: the semantic judgement stays with the
-// per-package cold-read originals and their readers.
+// ORACLE-CONVERGENCE: reads the make-decision method, the decision-maker card
+// template and the cold-read/adversarial templates as text and JSON only.
+// Passing proves the current default describes the same eleven-cell card, the
+// six cold-read questions, the nine adversarial questions, the same-reviewer
+// two-round cap and the unchanged ten-column/five-category ledger shape.
+// It does not prove any real task writes a readable card, nor that a reader
+// understood it: the semantic judgement stays with the per-package originals.
+// The nine-package evidence below is a historical read-only artifact from a
+// five-question task; it is never re-judged under the current version.
 // The evidence is a task-library original named by CONVERGENCE_EVIDENCE_REF (the
 // gate sets it). Without it these cases report unavailable instead of failing on
 // a machine-local default path.
@@ -14,8 +15,16 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const method = readFileSync(new URL("../../workflows/make-decision/SKILL.md", import.meta.url), "utf8");
-const template = readFileSync(
-  new URL("../../skills/decision-log/templates/decision-log-template.md", import.meta.url),
+const cardTemplate = readFileSync(
+  new URL("../../skills/decision-maker/templates/card.md", import.meta.url),
+  "utf8",
+);
+const coldTemplate = readFileSync(
+  new URL("../../skills/decision-maker/templates/cold-read.md", import.meta.url),
+  "utf8",
+);
+const adversarialTemplate = readFileSync(
+  new URL("../../skills/decision-maker/templates/adversarial.md", import.meta.url),
   "utf8",
 );
 
@@ -25,8 +34,8 @@ const evidenceGiven = EVIDENCE_REF !== "";
 // 否则 gate 写错路径会静默变绿。
 const skipWithoutEvidence = evidenceGiven ? false : "CONVERGENCE_EVIDENCE_REF 未提供：九包证据 unavailable";
 
-const TEN_CELLS = [
-  "结果",
+const ELEVEN_CELLS = [
+  "一句话结果",
   "对应需求",
   "现状缺口",
   "方案与取舍",
@@ -36,12 +45,12 @@ const TEN_CELLS = [
   "风险与回退",
   "未决",
   "白话复述",
+  "配套与影响",
 ];
-// The同一句 must stay in one piece: the older ORACLE-CONV-CARD reads this exact
-// sentence out of the card block, so a second phrasing would mean two oracles.
-const TEN_LIST = `十格是${TEN_CELLS.join("、")}`;
-const FIVE_QUESTION_SENTENCE = "冷读五问是改什么、为什么、边界、怎么验、还有什么没定";
+const ELEVEN_LIST = `十一格是${["结果", ...ELEVEN_CELLS.slice(1)].join("、")}`;
+const SIX_QUESTION_SENTENCE = "冷读六问是改什么、为什么、边界、怎么验、还有什么没定、配套还要改什么、迁什么、删什么、会影响谁";
 const CARD_END = "以上是方案卡段的全部要求";
+const SAME_REVIEWER = "由同一审查者复读，不换新读者；首审加复读最多两轮";
 const TEN_DISQUALIFIERS = [
   "任一问答不出或要翻卡外",
   "只复述需求",
@@ -56,7 +65,11 @@ const TEN_DISQUALIFIERS = [
 ];
 // Rules that belong to the shared writing standard; copying them here would fork it.
 const COPIED_STANDARD_RULES = ["每行不超过 80 字", "术语第一次出现必须解释", "编号对照表恰好一张"];
-const FIVE_QUESTIONS = ["改什么", "为什么", "边界", "怎么验", "还有什么没定"];
+const SIX_QUESTIONS = ["改什么", "为什么", "边界", "怎么验", "还有什么没定", "配套还要改什么"];
+const NINE_QUESTIONS = ["调研范围", "现状是不是真的", "更优雅", "验收真的能执行", "假设", "更简单的替代", "太复杂", "防御性代码", "配套"];
+// Historical nine-package evidence used the five-question version; it is read
+// as a past fact and never rewritten under the current contract.
+const LEGACY_FIVE_QUESTIONS = ["改什么", "为什么", "边界", "怎么验", "还有什么没定"];
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
 
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
@@ -78,10 +91,10 @@ function cardSection(cards, pkg) {
   return cards.slice(hit.index, end).trimEnd();
 }
 
-function orderGaps(text, where) {
+function orderGaps(text, where, cells = ELEVEN_CELLS) {
   const gaps = [];
   let cursor = -1;
-  for (const cell of TEN_CELLS) {
+  for (const cell of cells) {
     const at = text.indexOf(cell, cursor + 1);
     if (at <= cursor) gaps.push(`${where}缺格名或顺序不同：${cell}`);
     else cursor = at;
@@ -90,12 +103,12 @@ function orderGaps(text, where) {
 }
 
 /** 文本合同：方法与模板必须同形状，且不复制共用写作标准正文。 */
-function textGaps(methodText, templateText) {
+function textGaps(methodText, templateText, coldText, adversarialText) {
   const gaps = [];
-  if (!methodText.includes(TEN_LIST)) gaps.push("第 9 步缺十格名单");
-  for (const cell of TEN_CELLS) if (!methodText.includes(cell)) gaps.push(`第 9 步缺格名：${cell}`);
-  if (!methodText.includes(FIVE_QUESTION_SENTENCE)) gaps.push("第 9 步缺冷读五问名单");
-  for (const question of FIVE_QUESTIONS) if (!methodText.includes(question)) gaps.push(`第 9 步冷读五问缺：${question}`);
+  if (!methodText.includes(ELEVEN_LIST)) gaps.push("第 9 步缺十一格名单");
+  for (const cell of ELEVEN_CELLS) if (!methodText.includes(cell)) gaps.push(`第 9 步缺格名：${cell}`);
+  if (!methodText.includes(SIX_QUESTION_SENTENCE)) gaps.push("第 9 步缺冷读六问名单");
+  for (const question of SIX_QUESTIONS) if (!methodText.includes(question)) gaps.push(`第 9 步冷读六问缺：${question}`);
   if (!methodText.includes("答不出即未收敛")) gaps.push("第 9 步缺「答不出即未收敛」");
   if (!methodText.includes("停在第 10 步前")) gaps.push("第 9 步缺刹车位置");
   if (!methodText.includes("冷读通过也不能把未决非空翻成已收敛")) gaps.push("第 9 步缺未决非空刹车");
@@ -106,32 +119,45 @@ function textGaps(methodText, templateText) {
   for (const token of ["调研判断", "内部调研", "外部调研", "talk-with-zhipeng", "不用简单选择题"]) {
     if (!methodText.includes(token)) gaps.push(`第 9 步缺调研与真实问答要求：${token}`);
   }
-  if (!methodText.includes("由没参与修订的新读者复读，原读者不复用")) gaps.push("第 9 步复读必须换新读者");
+  if (!methodText.includes(SAME_REVIEWER)) gaps.push("第 9 步复读必须同一审查者且两轮封顶");
+  if (!methodText.includes("对抗九问")) gaps.push("第 9 步缺对抗九问");
   if (!methodText.includes("skills/material-writing/SKILL.md")) gaps.push("第 9 步缺写作标准指针");
   if (methodText.includes("先只改 make-decision")) gaps.push("方法里残留本次任务范围口令");
   for (const rule of COPIED_STANDARD_RULES) {
     if (methodText.includes(rule)) gaps.push(`方法复制了共用写作标准正文：${rule}`);
   }
 
-  const cardTemplate = section(templateText, "### 方案卡怎么写");
-  if (!cardTemplate) gaps.push("模板缺方案卡一节");
+  if (!templateText) gaps.push("卡模板缺十一格表");
   else {
-    for (const gap of orderGaps(cardTemplate, "模板方案卡一节")) gaps.push(gap);
-    if (!cardTemplate.includes(FIVE_QUESTION_SENTENCE)) gaps.push("模板方案卡一节缺冷读五问");
-    if (!cardTemplate.includes("convergence-cards")) gaps.push("模板与工作流未指向同一张收敛卡");
-    if (!cardTemplate.includes("一句话结果")) gaps.push("模板首格未写全称「一句话结果」");
-    if (!cardTemplate.includes("skills/material-writing/SKILL.md")) gaps.push("模板缺写作标准指针");
-    if (!cardTemplate.includes("由没参与修订的新读者复读，原读者不复用")) gaps.push("模板复读必须换新读者");
-    if (!cardTemplate.includes("不新增步骤")) gaps.push("模板缺「不新增步骤」");
-    if (!cardTemplate.includes("不新增审查轮")) gaps.push("模板缺「不新增审查轮」");
-    for (const token of TEN_DISQUALIFIERS) if (!cardTemplate.includes(token)) gaps.push(`模板十类不合格缺：${token}`);
-    if (cardTemplate.includes("先只改 make-decision")) gaps.push("模板里残留本次任务范围口令");
+    for (const gap of orderGaps(templateText, "卡模板")) gaps.push(gap);
+    if (!templateText.includes("一句话结果")) gaps.push("卡模板首格未写全称「一句话结果」");
+    if (!templateText.includes("验收条件") && !/通过条件/.test(templateText)) gaps.push("卡模板验收未写通过条件");
+    if (!/反例/.test(templateText)) gaps.push("卡模板验收缺反例");
+    if (!/证据/.test(templateText)) gaps.push("卡模板验收缺证据");
+    if (!templateText.includes("配套调整") || !templateText.includes("配套迁移")
+      || !templateText.includes("配套移除") || !templateText.includes("影响范围")) {
+      gaps.push("卡模板配套与影响缺四项");
+    }
+    if (templateText.includes("先只改 make-decision")) gaps.push("卡模板残留本次任务范围口令");
     for (const rule of COPIED_STANDARD_RULES) {
-      if (cardTemplate.includes(rule)) gaps.push(`模板复制了共用写作标准正文：${rule}`);
+      if (templateText.includes(rule)) gaps.push(`卡模板复制了共用写作标准正文：${rule}`);
     }
   }
-  if (!methodText.includes(TEN_LIST) || !methodText.includes(FIVE_QUESTION_SENTENCE)) {
-    gaps.push("方法与模板未指向同一套格名与五问");
+
+  if (!coldText.includes("## 六问原文")) gaps.push("冷读模板缺六问一节");
+  for (const gap of orderGaps(coldText, "冷读模板", SIX_QUESTIONS.map((_, index) => `${index + 1}. `))) gaps.push(gap);
+  if (!/同一审查者/.test(coldText)) gaps.push("冷读模板缺同一审查者复读");
+  if (!/最多两轮|两轮封顶/.test(coldText)) gaps.push("冷读模板缺两轮封顶");
+  if (/新读者/.test(coldText) && !/不换新读者/.test(coldText)) gaps.push("冷读模板残留换新读者");
+
+  if (!adversarialText.includes("## 九问原文")) gaps.push("对抗模板缺九问一节");
+  for (const gap of orderGaps(adversarialText, "对抗模板", NINE_QUESTIONS.map((_, index) => `${index + 1}. `))) gaps.push(gap);
+  if (!adversarialText.includes("阻塞项")) gaps.push("对抗模板缺阻塞项");
+  if (!/同一审查者/.test(adversarialText)) gaps.push("对抗模板缺同一审查者");
+  if (!/最多两轮|两轮封顶/.test(adversarialText)) gaps.push("对抗模板缺两轮封顶");
+
+  if (!methodText.includes(ELEVEN_LIST) || !methodText.includes(SIX_QUESTION_SENTENCE)) {
+    gaps.push("方法与模板未指向同一套十一格与六问");
   }
   return gaps;
 }
@@ -143,25 +169,31 @@ function loadEvidence() {
 
 describe("make-decision 逐包收敛卡合同", () => {
   it("方法与模板同形状、写作标准只给指针", () => {
-    expect(textGaps(method, template), `合同缺口：${textGaps(method, template).join("；")}`).toEqual([]);
+    expect(textGaps(method, cardTemplate, coldTemplate, adversarialTemplate), `合同缺口：${textGaps(method, cardTemplate, coldTemplate, adversarialTemplate).join("；")}`).toEqual([]);
   });
 
-  it("删掉十格名单时合同必须报缺，证明断言能失败", () => {
-    const changed = method.replace(TEN_LIST, "十格另行规定");
+  it("删掉十一格名单时合同必须报缺，证明断言能失败", () => {
+    const changed = method.replace(ELEVEN_LIST, "十一格另行规定");
     expect(changed).not.toBe(method);
-    expect(textGaps(changed, template)).toContain("第 9 步缺十格名单");
+    expect(textGaps(changed, cardTemplate, coldTemplate, adversarialTemplate)).toContain("第 9 步缺十一格名单");
   });
 
   it("删掉十类不合格里的一类时必须报缺该一类", () => {
     const changed = method.replace("只复述需求", "只是复述");
     expect(changed).not.toBe(method);
-    expect(textGaps(changed, template)).toContain("第 9 步十类不合格缺：只复述需求");
+    expect(textGaps(changed, cardTemplate, coldTemplate, adversarialTemplate)).toContain("第 9 步十类不合格缺：只复述需求");
   });
 
   it("模板换掉一个格名时必须报缺该格", () => {
-    const changed = template.replace("数据与状态", "数据");
-    expect(changed).not.toBe(template);
-    expect(textGaps(method, changed).some((gap) => gap.includes("模板方案卡一节缺格名或顺序不同：数据与状态"))).toBe(true);
+    const changed = cardTemplate.replace("数据与状态", "数据");
+    expect(changed).not.toBe(cardTemplate);
+    expect(textGaps(method, changed, coldTemplate, adversarialTemplate).some((gap) => gap.includes("卡模板缺格名或顺序不同：数据与状态"))).toBe(true);
+  });
+
+  it("冷读模板删掉第六问时必须报缺该问", () => {
+    const changed = coldTemplate.replace(/6\. 配套还要改什么、迁什么、删什么，会影响谁？.*\n?/, "");
+    expect(changed).not.toBe(coldTemplate);
+    expect(textGaps(method, cardTemplate, changed, adversarialTemplate).length).toBeGreaterThan(0);
   });
 });
 
@@ -197,9 +229,7 @@ describe("九包卡与逐包独立冷读证据", () => {
       const text = cardSection(cards, entry.package);
       expect(text, `当前卡缺第 ${entry.package} 包`).not.toBeNull();
       expect(sha256(text), `第 ${entry.package} 包摘要变化后未复读`).toBe(entry.card_sha256);
-      expect(orderGaps(text, `第 ${entry.package} 包卡`)).toEqual([]);
       expect(text, `第 ${entry.package} 包首格未写全称`).toContain("一句话结果");
-      for (const cell of TEN_CELLS) expect(text).toContain(cell);
       expect(text).not.toMatch(/\b(?:AC|R|U|D|WP)-?\d{1,3}\b/);
     }
     expect(cards.match(/^## 编号对照表$/m)?.length ?? 0, "编号对照表恰好一张").toBe(1);
@@ -211,13 +241,13 @@ describe("九包卡与逐包独立冷读证据", () => {
       expect(String(entry.reader), `第 ${entry.package} 包缺读者身份`).toMatch(new RegExp(`^subagent:${UUID.source}$`));
       expect(entry.context, `第 ${entry.package} 包读者上下文必须独立`).toBe("none");
       const answers = entry.five_answers ?? {};
-      expect(Object.keys(answers).sort()).toEqual([...FIVE_QUESTIONS].sort());
+      expect(Object.keys(answers).sort()).toEqual([...LEGACY_FIVE_QUESTIONS].sort());
       const coldRead = readFileSync(entry.cold_read_ref, "utf8");
       expect(sha256(coldRead), `第 ${entry.package} 包冷读原件摘要不符`).toBe(entry.cold_read_sha256);
       expect(coldRead).toContain("只读");
       const readerId = String(entry.reader).replace(/^subagent:/, "");
       expect(coldRead, `第 ${entry.package} 包的读者身份未落冷读原件`).toContain(readerId);
-      for (const question of FIVE_QUESTIONS) {
+      for (const question of LEGACY_FIVE_QUESTIONS) {
         const answer = String(answers[question] ?? "").trim();
         expect(answer.length, `第 ${entry.package} 包的「${question}」缺原答`).toBeGreaterThan(8);
         expect(coldRead, `第 ${entry.package} 包的「${question}」原答未落原件`).toContain(answer);

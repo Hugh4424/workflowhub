@@ -35,6 +35,11 @@ function cardSection(id, revision = 1, omitLast = false) {
   return `## 工作包 ${id}\n\n| 格 | 内容 |\n| --- | --- |\n${visible.map(([key, value]) => `| ${key} | ${value} |`).join("\n")}\n`;
 }
 
+// TCR-P3-01 (2026-11-23): the P1 five-material identity contract requires every
+// declaration and original to bind task, package, batch and card-section sha256.
+// The frozen fixture predated that contract and only bound package/batch/digest
+// on the declaration. This adds the same identity fields to the originals; no
+// assertion is weakened.
 function roleBytes({ id, kind, digest, round, reviewer = "same-reviewer" }) {
   const count = kind === "cold" ? 6 : 9;
   const answers = Array.from({ length: count }, (_unused, index) => `${["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"][index]} 受控回答 ${index + 1}`).join("\n");
@@ -42,7 +47,8 @@ function roleBytes({ id, kind, digest, round, reviewer = "same-reviewer" }) {
     "agent: same-reviewer", "dispatched_at: 2026-11-22T20:00:00+08:00",
     "reviewer: same-reviewer", "designer: controlled-designer",
     `reviewed_card_sha256: ${digest}`, `round: ${round}`, `package: ${id}`,
-    `batch: batch-${id}`, `reviewer: ${reviewer}`, "",
+    `batch: batch-${id}`, `reviewer: ${reviewer}`,
+    `任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${digest}`, "",
     kind === "cold" ? "# 冷读六问" : "# 对抗九问", answers,
     kind === "cold" ? "- 结论：六问全答出" : "## 阻塞项\n\n- 无",
   ].join("\n");
@@ -91,20 +97,20 @@ async function fixture(kind) {
     const cold = `${base}/cold-read.md`, adversarial = `${base}/adversarial.md`;
     put(TASK, cold, roleBytes({ id, kind: "cold", digest: currentDigestForRoles, round: currentRound }));
     put(TASK, adversarial, roleBytes({ id, kind: "adversarial", digest: currentDigestForRoles, round: currentRound }));
-    put(TASK, `${base}/discussion.md`, `# 质询\n\n工作包 ${id}\n讨论前展示：当前卡\n复述＋用户原话：确认本包\n批次：batch-${id}\n`);
-    put(TASK, `${base}/answer.md`, `# 真实答复\n\n包=${id}；批次=batch-${id}\n用户原文：确认本包\n`);
+    put(TASK, `${base}/discussion.md`, `# 质询\n\n工作包 ${id}\n讨论前展示：当前卡\n复述＋用户原话：确认本包\n批次：batch-${id}\n任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}\n`);
+    put(TASK, `${base}/answer.md`, `# 真实答复\n\n任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}\n用户原文：确认本包\n`);
     if (secondRound) {
       put(TASK, `${base}/cold-read-first.md`, roleBytes({ id, kind: "cold", digest: previousDigest, round: 1 }));
       put(TASK, `${base}/adversarial-first.md`, roleBytes({ id, kind: "adversarial", digest: previousDigest, round: 1 }));
     }
     const refs = [
-      `- 当前方案卡：\`quality/evidence/convergence/cards.md#工作包-${id}\`；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}`,
-      `- 当前质询：\`${base}/discussion.md\`；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}`,
-      `- 当前冷读：\`${cold}\`；包=${id}；批次=batch-${id}；卡节sha256=${currentDigestForRoles}；轮次=${currentRound}`,
-      `- 当前对抗：\`${adversarial}\`；包=${id}；批次=batch-${id}；卡节sha256=${currentDigestForRoles}；轮次=${currentRound}`,
-      `- 真实答复：\`${base}/answer.md\`；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}`,
+      `- 当前方案卡：\`quality/evidence/convergence/cards.md#工作包-${id}\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}`,
+      `- 当前质询：\`${base}/discussion.md\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}`,
+      `- 当前冷读：\`${cold}\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigestForRoles}；轮次=${currentRound}`,
+      `- 当前对抗：\`${adversarial}\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigestForRoles}；轮次=${currentRound}`,
+      `- 当前真实答复：\`${base}/answer.md\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${currentDigest}`,
     ];
-    if (secondRound) refs.push(`- 首轮冷读：\`${base}/cold-read-first.md\`；卡节sha256=${previousDigest}；轮次=1`, `- 首轮对抗：\`${base}/adversarial-first.md\`；卡节sha256=${previousDigest}；轮次=1`);
+    if (secondRound) refs.push(`- 首轮冷读：\`${base}/cold-read-first.md\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${previousDigest}；轮次=1`, `- 首轮对抗：\`${base}/adversarial-first.md\`；任务=convergence-defaults；包=${id}；批次=batch-${id}；卡节sha256=${previousDigest}；轮次=1`);
     sections.push(`### 包 ${id}\n${refs.join("\n")}`);
   }
   put(TASK, "quality/evidence/convergence/cards.md", cards.join("\n"));

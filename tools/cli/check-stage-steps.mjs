@@ -451,7 +451,8 @@ function coldCardBinding(text) {
   if (!line) return null;
   const ref = /`([^`]+)`/.exec(line)?.[1] ?? null;
   if (!ref) return null;
-  const digest = /sha256\s*`?([0-9a-f]{64})`?/i.exec(line)?.[1] ?? null;
+  const digest = /sha256\s*`?([0-9a-f]{64})`?/i.exec(line)?.[1]
+    ?? /卡节\s*sha256\s*[:：]?\s*`?([0-9a-f]{64})`?/i.exec(source)?.[1] ?? null;
   const title = /「([^」]+)」/.exec(line)?.[1] ?? null;
   return {ref, digest, title};
 }
@@ -613,9 +614,9 @@ function coldReadGaps({ id, body, taskPath, taskName }) {
   const currentLine = tableValue(block, '当前冷读') || numberedPointer(block, '5', '当前冷读') || convergenceCell;
   const firstLine = tableValue(block, '首轮冷读') || numberedPointer(block, '6', '复读对照');
   const revisionText = tableValue(block, '修订');
-  const readerMatch = (text) => /读者[：:]\s*([^\n，,；;]+)/.exec(text)?.[1]?.trim() ?? '';
+  const readerMatch = (text) => /(?:读者|审查者|reviewer)\s*[：:]\s*([^\n，,；;]+)/.exec(text)?.[1]?.trim() ?? '';
   const reader = readerMatch(cold) || readerMatch(convergenceCell) || '';
-  const independent = /未参与本[包卡]写作|独立读者/.test(`${cold}\n${convergenceCell}`);
+  const independent = /未参与本[包卡]写作|独立(?:读者|审查)|^\s*[-*]?\s*reviewer\s*[:：]/m.test(`${cold}\n${convergenceCell}`);
   let currentPointer = pointerFields(currentLine);
   if (!currentPointer.ref) {
     const discovered = discoverColdReadOriginal(taskPath, id);
@@ -648,27 +649,35 @@ function coldReadGaps({ id, body, taskPath, taskName }) {
   }
   const candidates = [cold, convergenceCell, coldOriginal].filter(Boolean);
   const readerFinal = readerMatch(coldOriginal) || reader;
-  if (!readerFinal || !(independent || /未参与本[包卡]写作/.test(coldOriginal))) {
+  if (!readerFinal || !(independent || /未参与本[包卡]写作|^\s*[-*]?\s*reviewer\s*[:：]/m.test(coldOriginal))) {
     gaps.push('冷读读者未声明独立');
     errors.push(`${taskName}/冷读: 读者或“未参与本包写作”缺失`);
   }
+  // 当前默认是六问；只有没有轮次/六问标记的历史件才按旧五问读。
+  const versionedCold = /轮次|round\s*[:：]/i.test(block) || candidates.some(text => /⑥/.test(text));
+  const markPool = ['①', '②', '③', '④', '⑤', '⑥'];
+  const marks = markPool.slice(0, versionedCold ? 6 : 5);
   const answers = new Map();
   for (const candidate of candidates) {
     for (const line of candidate.split(/\r?\n/)) {
-      const match = /^([①②③④⑤])\s*(.+)$/.exec(line.trim());
-      if (!match || answers.has(match[1])) continue;
-      const content = match[2].replace(/^[^：:]*[：:]\s*/, '').trim();
-      if (content) answers.set(match[1], content);
+      const text = line.trim();
+      const circled = /^([①②③④⑤⑥])\s*(.+)$/.exec(text);
+      const numbered = /^(\d+)\.\s*(.+)$/.exec(text);
+      const mark = circled ? circled[1] : (numbered && Number(numbered[1]) >= 1 && Number(numbered[1]) <= marks.length ? marks[Number(numbered[1]) - 1] : null);
+      if (!mark || answers.has(mark)) continue;
+      const content = (circled ? circled[2] : numbered[2]).replace(/^[^：:]*[：:]\s*/, '').trim();
+      if (content) answers.set(mark, content);
     }
   }
-  const missing = ['①', '②', '③', '④', '⑤'].filter(mark => !answers.get(mark) || /^(?:待补|未答|TODO)/i.test(answers.get(mark)));
+  const missing = marks.filter(mark => !answers.get(mark) || /^(?:待补|未答|TODO)/i.test(answers.get(mark)));
   if (missing.length) {
-    gaps.push('冷读五问不全');
-    errors.push(`${taskName}/冷读: 五问少答 ${missing.join('')}`);
+    gaps.push(versionedCold ? '冷读六问不全' : '冷读五问不全');
+    errors.push(`${taskName}/冷读: ${versionedCold ? '六' : '五'}问少答 ${missing.join('')}`);
   }
-  if (!candidates.some(text => /五问全答出/.test(text))) {
-    gaps.push('冷读结论未写五问全答出');
-    errors.push(`${taskName}/冷读: 结论未写“五问全答出”`);
+  const conclusionPattern = versionedCold ? /六问全答(?:得)?出/ : /五问全答出/;
+  if (!candidates.some(text => conclusionPattern.test(text))) {
+    gaps.push(`冷读结论未写${versionedCold ? '六问全答出' : '五问全答出'}`);
+    errors.push(`${taskName}/冷读: 结论未写“${versionedCold ? '六问全答出' : '五问全答出'}”`);
   }
   const card = cardPointer(cardLine);
   if (!card.ref || !card.ref.includes('#') || !card.digest) {
@@ -740,9 +749,12 @@ function coldReadGaps({ id, body, taskPath, taskName }) {
     if (!first.ref || !first.digest) {
       gaps.push('修订未复读');
       errors.push(`${taskName}/冷读: 有修订但缺首轮冷读对照`);
-    } else if (firstReader && readerFinal && firstReader === readerFinal) {
+    } else if (versionedCold && firstReader && readerFinal && firstReader !== readerFinal) {
       gaps.push('修订未复读');
-      errors.push(`${taskName}/冷读: 修订后仍由原读者复读`);
+      errors.push(`${taskName}/冷读: 修订后换读者复读（当前版本要求同一审查者复读）`);
+    } else if (!versionedCold && firstReader && readerFinal && firstReader === readerFinal) {
+      gaps.push('修订未复读');
+      errors.push(`${taskName}/冷读: 修订后仍由原读者复读（历史版本规则）`);
     } else if (first.digest === currentDigest) {
       gaps.push('修订未复读');
       errors.push(`${taskName}/冷读: 修订后冷读原件未变化`);
@@ -759,29 +771,243 @@ function coldReadGaps({ id, body, taskPath, taskName }) {
 const FIVE_MATERIAL_CLASSES = Object.freeze(['方案卡', '质询', '冷读', '对抗', '真实答复']);
 const FIVE_MATERIAL_CLASS_PATTERN = FIVE_MATERIAL_CLASSES.join('|');
 const FIVE_MATERIAL_HEADING = '五件同包原件';
-const fiveMaterialHeadingPattern = id => new RegExp(`^###\\s*包\\s*${Number(id)}(?!\\d)\\s*${FIVE_MATERIAL_HEADING}\\s*$`);
+const fiveMaterialHeadingPattern = id => new RegExp(`^###\\s*包\\s*${Number(id)}(?!\\d)(?:\\s*${FIVE_MATERIAL_HEADING})?\\s*$`);
 function convergencePointerRefs(decision) {
   return [...new Set([...String(decision ?? '').matchAll(/`(quality\/evidence\/[^`\n]*convergence-checklist[^`\n]*\.md)`/g)].map(match => match[1]))];
 }
 // Single failure predicate shared by check-stage-steps and run-checks, so a gap
 // that fails one entry cannot stay green in the other.
+// Single source of convergence failures. Both public exits and the direction
+// predicate read this list; no second hand-copied list may narrow or widen it.
+const CONVERGENCE_FAILURE_PATTERNS = Object.freeze([
+  /聊天呈现未取得/, /卡片摘要不符/, /缺少?真实问答指针/, /冷读五问未绑定/,
+  /缺冷读记录/, /缺冷读原件/, /收敛格缺当前卡节/, /冷读读者未声明独立/,
+  /冷读五问不全/, /冷读六问不全/, /冷读结论未写五问全答出/, /冷读结论未写六问全答出/,
+  /冷读原件未绑定卡摘要/, /冷读原件摘要不符/, /修订未复读/, /先设计后提问缺证/,
+  /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
+  /十一格/, /配套与影响/, /冷读六问/, /对抗九问/, /六问全答出/, /阻塞项/,
+  /轮次/, /第三轮/, /两轮/, /第二轮/, /复读/, /换读者/, /同一审查者/, /审查者与设计者/,
+  /方案卡形状不可读/, /缺一卡一次冷读/, /缺一次冷读/, /轻档缺收敛清单/, /小改/,
+  /UI设计源首问/, /证据标签非原件/, /证据缺当前原件/, /引用旧清单/,
+]);
+export function isConvergenceEvidenceFailure(gap) {
+  return CONVERGENCE_FAILURE_PATTERNS.some(pattern => pattern.test(String(gap)));
+}
 function isDirectionMaterialFailure(gap) {
   return [
-    // Direction material and the pre-existing evidence-gap classes share one
-    // failure predicate; the run-checks seam must not narrow the old range.
+    // Direction-only material failures. The shared evidence list below is the
+    // same one both public exits use, so this predicate cannot drift from them.
     /收敛清单缺指针/, /收敛清单指针候选数/, /权威模块集合未取得或重复（已声明收敛）/,
     /收敛清单不可读/, /收敛清单越界/,
     new RegExp(`包 \\d+ (?:${FIVE_MATERIAL_CLASS_PATTERN})：`),
     /包 \d+ 同包五件：/,
-    /聊天呈现未取得/, /卡片摘要不符/, /缺少?真实问答指针/, /冷读五问未绑定/,
-    /缺冷读记录/, /缺冷读原件/, /收敛格缺当前卡节/, /冷读读者未声明独立/,
-    /冷读五问不全/, /冷读结论未写五问全答出/, /冷读原件未绑定卡摘要/,
-    /冷读原件摘要不符/, /修订未复读/, /先设计后提问缺证/,
-    /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
-    /UI设计源首问/, /证据标签非原件/, /证据缺当前原件/, /引用旧清单/,
-  ].some(pattern => pattern.test(String(gap)));
+  ].some(pattern => pattern.test(String(gap))) || isConvergenceEvidenceFailure(gap);
 }
-function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
+// Explicit version boundary. A current package is a bare `### 包 N` block or any
+// declaration carrying 轮次; it must record the reviewer, round and reviewed card
+// digest, keep eleven card cells, six cold-read questions, nine adversarial
+// questions, the same reviewer for both, and at most two rounds (first review +
+// one same-reviewer re-read). A current package without 轮次 is a named gap, not
+// a skip. The legacy `### 包 N 五件同包原件` block without any 轮次 stays on the
+// P1 rules and its historical verdicts are not re-judged here.
+const ELEVEN_CARD_CELLS = Object.freeze(['一句话结果', '对应需求', '现状缺口', '方案与取舍', '边界', '数据与状态', '验收', '风险与回退', '未决', '白话复述', '配套与影响']);
+const VERSION_COLD_MARKS = Object.freeze(['①', '②', '③', '④', '⑤', '⑥']);
+const VERSION_ADVERSARIAL_MARKS = Object.freeze(['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨']);
+function declarationField(text, key) {
+  return new RegExp(`${key}\\s*[=:：]\\s*([^；;\\s）)]+)`).exec(String(text ?? ''))?.[1] ?? null;
+}
+function declarationRound(text) {
+  const raw = declarationField(text, '轮次');
+  return raw && /^\d+$/.test(raw) ? Number(raw) : null;
+}
+function missingReviewMarks(text, marks) {
+  const found = new Set();
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const circled = /^([①②③④⑤⑥⑦⑧⑨])\s*/.exec(trimmed);
+    const numbered = /^(\d+)\.\s*/.exec(trimmed);
+    if (circled) found.add(circled[1]);
+    else if (numbered && Number(numbered[1]) >= 1 && Number(numbered[1]) <= marks.length) found.add(marks[Number(numbered[1]) - 1]);
+  }
+  return marks.filter(mark => !found.has(mark));
+}
+function reviewIdentity(text) {
+  const value = label => new RegExp(`^\\s*[-*]?\\s*${label}\\s*[:：]\\s*(.+)$`, 'm').exec(String(text ?? ''))?.[1]?.trim() ?? null;
+  const reviewer = value('reviewer');
+  const designer = value('designer');
+  const round = value('round');
+  const digest = /^\s*[-*]?\s*reviewed_card_sha256\s*[:：]\s*([0-9a-f]{64})/m.exec(String(text ?? ''))?.[1] ?? null;
+  return { reviewer, designer, round: round && /^\d+$/.test(round) ? Number(round) : null, digest };
+}
+function cardTableCells(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const start = lines.findIndex(line => /^\|\s*格\s*\|/.test(line));
+  if (start >= 0) {
+    const cells = [];
+    for (let index = start + 2; index < lines.length && /^\|/.test(lines[index]); index += 1) {
+      const first = lines[index].split('|').slice(1, -1).map(cell => cell.trim())[0];
+      if (first) cells.push(first);
+    }
+    return cells;
+  }
+  // Heading-style cards are a real card shape: `### 一句话结果` or `1. 一句话结果`.
+  // Read the declared cell titles; never silently skip the eleven-cell check.
+  const cells = [];
+  for (const line of lines) {
+    const heading = /^#{2,4}\s*(?:格[：:]\s*)?(?:\d+\.\s*)?([^\s#：:]+)/.exec(line.trim());
+    const numbered = /^(\d+)\.\s*([^\s：:]+)/.exec(line.trim());
+    const name = heading ? heading[1] : (numbered ? numbered[2] : null);
+    if (name && ELEVEN_CARD_CELLS.includes(name)) cells.push(name);
+  }
+  return cells.length ? cells : null;
+}
+function versionedReviewGaps({ id, block, taskPath, taskName, cardText, cardDigest }) {
+  const packageId = String(Number(id));
+  const name = taskName || `包 ${packageId}`;
+  const gaps = [], errors = [];
+  const push = detail => {
+    gaps.push(`包 ${packageId} ${detail}`);
+    errors.push(`${name}: ${detail}`);
+  };
+  const linesOfBlock = String(block ?? '').split(/\r?\n/);
+  const lineOf = cls => linesOfBlock.find(line => new RegExp(`^-\\s*当前${cls}\\s*[：:]`).test(line.trim())) ?? '';
+  const lineNamed = label => linesOfBlock.find(line => new RegExp(`^-\\s*${label}\\s*[：:]`).test(line.trim())) ?? '';
+  const coldLine = lineOf('冷读'), adversarialLine = lineOf('对抗');
+  const coldRound = declarationRound(coldLine), adversarialRound = declarationRound(adversarialLine);
+  if (coldRound === null || adversarialRound === null) {
+    push('冷读或对抗缺轮次（新版完成判据要求记录首审与复读轮次）');
+    return { gaps, errors };
+  }
+  if (coldRound !== adversarialRound) push(`冷读与对抗轮次不一致（${coldRound}/${adversarialRound}）`);
+  const currentRound = Math.max(coldRound, adversarialRound);
+  if (currentRound > 2) push(`第三轮超出两轮上限（当前轮次 ${currentRound}）`);
+  const coldRef = pointerFields(coldLine).ref, adversarialRef = pointerFields(adversarialLine).ref;
+  if (!coldRef || !adversarialRef) {
+    push('冷读或对抗缺原件指针');
+    return { gaps, errors };
+  }
+  if (!taskPath) return { gaps, errors };
+  let coldText = '', adversarialText = '';
+  try { coldText = readTaskOriginal(taskPath, coldRef); }
+  catch (error) { push(`冷读原件不可回读（${error.message}）`); }
+  try { adversarialText = readTaskOriginal(taskPath, adversarialRef); }
+  catch (error) { push(`对抗原件不可回读（${error.message}）`); }
+  const cold = reviewIdentity(coldText), adversarial = reviewIdentity(adversarialText);
+  if (cold.reviewer && adversarial.reviewer && cold.reviewer !== adversarial.reviewer) {
+    push(`冷读与对抗不是同一审查者（${cold.reviewer}/${adversarial.reviewer}）`);
+  }
+  const reviewer = cold.reviewer || adversarial.reviewer;
+  if (reviewer && cold.designer && reviewer === cold.designer) push('审查者与设计者同一身份');
+  if (cold.round !== null && cold.round !== coldRound) push(`冷读原件轮次与声明不一致（${cold.round}/${coldRound}）`);
+  if (adversarial.round !== null && adversarial.round !== adversarialRound) push(`对抗原件轮次与声明不一致（${adversarial.round}/${adversarialRound}）`);
+  const declaredCardDigest = declarationField(coldLine, '卡节\\s*sha256') ?? declarationField(adversarialLine, '卡节\\s*sha256');
+  if (cardDigest && declaredCardDigest && declaredCardDigest.toLowerCase() !== cardDigest.toLowerCase()) {
+    push('修订后未经同一审查者复读（第二轮缺失）：冷读/对抗绑定的不是当前卡节');
+  }
+  if (cardDigest && cold.digest && cold.digest.toLowerCase() !== cardDigest.toLowerCase()) {
+    push('修订后未经同一审查者复读（第二轮缺失）：冷读原件读的不是当前卡');
+  }
+  if (cardDigest && adversarial.digest && adversarial.digest.toLowerCase() !== cardDigest.toLowerCase()) {
+    push('修订后未经同一审查者复读（第二轮缺失）：对抗原件读的不是当前卡');
+  }
+  if (currentRound >= 2) {
+    const firstColdLine = lineNamed('首轮冷读'), firstAdversarialLine = lineNamed('首轮对抗');
+    if (!firstColdLine || !firstAdversarialLine) {
+      push('第二轮缺首轮冷读或首轮对抗对照');
+    } else {
+      if ((declarationRound(firstColdLine) ?? declarationRound(firstAdversarialLine)) !== 1) push('首轮对照未记轮次=1');
+      const firstColdRef = pointerFields(firstColdLine).ref, firstAdversarialRef = pointerFields(firstAdversarialLine).ref;
+      if (!firstColdRef || !firstAdversarialRef) push('首轮对照缺原件指针');
+      else if (reviewer) {
+        try {
+          const firstCold = reviewIdentity(readTaskOriginal(taskPath, firstColdRef));
+          const firstAdversarial = reviewIdentity(readTaskOriginal(taskPath, firstAdversarialRef));
+          if (firstCold.reviewer && firstCold.reviewer !== reviewer) push(`修订后换读者（首轮 ${firstCold.reviewer}，复读 ${reviewer}）`);
+          if (firstAdversarial.reviewer && firstAdversarial.reviewer !== reviewer) push(`修订后换读者（首轮对抗 ${firstAdversarial.reviewer}，复读 ${reviewer}）`);
+          if (firstCold.digest && cold.digest && firstCold.digest === cold.digest) push('修订后冷读原件未变化（首轮与复读同一卡摘要）');
+        } catch (error) { push(`首轮对照原件不可回读（${error.message}）`); }
+      }
+    }
+  }
+  const missingCold = missingReviewMarks(coldText, VERSION_COLD_MARKS);
+  if (missingCold.length) push(`冷读六问不全：少答 ${missingCold.join('')}`);
+  if (!/六问全答(?:得)?出/.test(coldText)) push('冷读结论未写六问全答出');
+  const missingAdversarial = missingReviewMarks(adversarialText, VERSION_ADVERSARIAL_MARKS);
+  if (missingAdversarial.length) push(`对抗九问不全：少答 ${missingAdversarial.join('')}`);
+  if (!/阻塞项/.test(adversarialText) || !/处置|无/.test(adversarialText)) push('对抗缺阻塞项或处置记录');
+  if (cardText) {
+    const cells = cardTableCells(cardText);
+    if (!cells) {
+      push('方案卡形状不可读：既无「| 格 |」表也无标题式格');
+    } else {
+      const missingCells = ELEVEN_CARD_CELLS.filter(cell => !cells.includes(cell));
+      if (missingCells.length) push(`方案卡十一格不全：缺 ${missingCells.join('、')}`);
+      const acceptance = String(cardText).split(/\r?\n/).find(line => /^\|\s*验收\s*\|/.test(line)) ?? '';
+      if (acceptance) for (const item of ['通过', '失败', '反例', '证据']) if (!acceptance.includes(item)) push(`方案卡验收四件缺：${item}`);
+      const companion = String(cardText).split(/\r?\n/).find(line => /^\|\s*配套与影响\s*\|/.test(line)) ?? '';
+      if (companion) for (const item of ['调整', '迁移', '移除', '影响范围']) if (!companion.includes(item)) push(`方案卡配套与影响四项缺：${item}`);
+    }
+  }
+  return { gaps, errors };
+}
+// Small-route (轻档) thin convergence: one eleven-cell card and one six-question
+// cold read, no full three-role set and no adversarial nine. This is the single
+// machine definition of the small exception; the full per-package checks do not
+// run on a light route, and a light route without a card or a cold read still
+// fails by name.
+function lightPackageGaps({ id, body, taskPath, taskName }) {
+  const packageId = String(Number(id));
+  const name = taskName || `包 ${packageId}`;
+  const gaps = [], errors = [];
+  const push = detail => {
+    gaps.push(`包 ${packageId} ${detail}`);
+    errors.push(`${name}/小改: ${detail}`);
+  };
+  const heading = fiveMaterialHeadingPattern(id);
+  const headings = String(body ?? '').split(/\r?\n/).filter(line => heading.test(line)).length;
+  if (!headings) {
+    push('缺一卡一次冷读声明');
+    return { gaps, errors };
+  }
+  const range = sectionRange(body, heading);
+  const block = range.lines.slice(range.start, range.end).join('\n');
+  const lineNamed = label => block.split(/\r?\n/)
+    .find(line => new RegExp(`^-\\s*(?:当前)?${label}\\s*[：:]`).test(line.trim())) ?? '';
+  const cardLine = lineNamed('方案卡');
+  const coldLine = lineNamed('冷读');
+  if (!cardLine) push('缺当前方案卡');
+  if (!coldLine) push('缺一次冷读（当前冷读）');
+  if (!taskPath) return { gaps, errors };
+  if (cardLine) {
+    const [file, anchor] = String(/`([^`]+)`/.exec(cardLine)?.[1] ?? '').split('#');
+    if (!file || !anchor) push('方案卡缺本包卡节锚点');
+    else {
+      try {
+        const cardText = anchoredSection(readTaskOriginal(taskPath, file), anchor);
+        const cells = cardTableCells(cardText);
+        if (!cells) push('方案卡形状不可读：既无「| 格 |」表也无标题式格');
+        else {
+          const missing = ELEVEN_CARD_CELLS.filter(cell => !cells.includes(cell));
+          if (missing.length) push(`方案卡十一格不全：缺 ${missing.join('、')}`);
+        }
+      } catch (error) { push(`方案卡不可回读（${error.message}）`); }
+    }
+  }
+  if (coldLine) {
+    const coldRef = /`([^`]+)`/.exec(coldLine)?.[1];
+    if (!coldRef) push('冷读缺原件指针');
+    else {
+      try {
+        const coldText = readTaskOriginal(taskPath, coldRef);
+        const missing = missingReviewMarks(coldText, VERSION_COLD_MARKS);
+        if (missing.length) push(`冷读六问不全：少答 ${missing.join('')}`);
+        if (!/六问全答(?:得)?出/.test(coldText)) push('冷读结论未写六问全答出');
+      } catch (error) { push(`冷读原件不可回读（${error.message}）`); }
+    }
+  }
+  return { gaps, errors };
+}
+function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId, versioned = false }) {
   const packageId = String(Number(id));
   const name = taskName || `包 ${packageId}`;
   const gaps = [], errors = [];
@@ -802,7 +1028,7 @@ function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
   const range = sectionRange(body, heading);
   const block = range.lines.slice(range.start, range.end).join('\n');
   const declared = new Map();
-  const linePattern = new RegExp(`^-\\s*当前(${FIVE_MATERIAL_CLASS_PATTERN})\\s*[：:]\\s*(.+)$`);
+  const linePattern = new RegExp(`^-\\s*(?:当前)?(${FIVE_MATERIAL_CLASS_PATTERN})\\s*[：:]\\s*(.+)$`);
   for (const line of block.split(/\r?\n/)) {
     const match = linePattern.exec(line.trim());
     if (!match) continue;
@@ -821,6 +1047,8 @@ function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
 
   let cardDigest = null;
   let cardBatch = null;
+  let cardText = '';
+  const historicalBlock = /历史只读|历史版本/.test(String(block ?? ''));
   for (const cls of FIVE_MATERIAL_CLASSES) {
     const entries = declared.get(cls) ?? [];
     if (!entries.length) { pushGap(cls, `缺${cls}当前原件`); continue; }
@@ -831,7 +1059,8 @@ function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
     const declaredPackage = field(value, '包');
     const digest = field(value, '卡节\\s*sha256');
     const batch = field(value, '批次');
-    const declaredTask = field(value, '任务');
+    const declaredTaskExplicit = field(value, '任务');
+    const declaredTask = declaredTaskExplicit;
     if (!declaredPackage) { pushGap(cls, '缺包号身份'); continue; }
     if (String(Number(declaredPackage)) !== packageId) { pushGap(cls, `包号不符（声明 ${declaredPackage}）`); continue; }
     if (!digest || !/^[0-9a-f]{64}$/i.test(digest)) { pushGap(cls, '缺卡节 sha256'); continue; }
@@ -861,8 +1090,11 @@ function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
         pushGap(cls, '卡节标题不是本包 ## 工作包 N'); continue;
       }
       const actual = coldDigest(sectionText);
-      if (actual !== digest.toLowerCase()) { pushGap(cls, '卡节摘要不符'); continue; }
-      cardDigest = actual;
+      const declaredDigest = digest.toLowerCase();
+      const newlineActual = coldDigest(`${sectionText}\n`);
+      if (actual !== declaredDigest && newlineActual !== declaredDigest) { pushGap(cls, '卡节摘要不符'); continue; }
+      cardDigest = declaredDigest;
+      cardText = sectionText;
       continue;
     }
     if (!declaredTask) { pushGap(cls, '缺任务身份'); continue; }
@@ -876,20 +1108,75 @@ function fiveMaterialDeclarationGaps({ id, body, taskPath, taskName, taskId }) {
     const actualTask = field(text, '任务'), actualPackage = field(text, '包');
     const actualBatch = field(text, '批次'), actualDigest = field(text, '卡节\\s*sha256');
     if (!actualTask) { pushGap(cls, '原件缺任务身份'); continue; }
-    if (!actualPackage) { pushGap(cls, '原件缺包号身份'); continue; }
-    if (!actualBatch) { pushGap(cls, '原件缺批次身份'); continue; }
-    if (!actualDigest) { pushGap(cls, '原件缺卡节 sha256'); continue; }
     if (actualTask !== declaredTask) { pushGap(cls, `原件任务不符（声明 ${actualTask}）`); continue; }
+    if (!actualPackage) { pushGap(cls, '原件缺包号身份'); continue; }
     if (String(Number(actualPackage)) !== packageId) { pushGap(cls, `原件包号不符（声明 ${actualPackage}）`); continue; }
+    if (!actualBatch) { pushGap(cls, '原件缺批次身份'); continue; }
     if (actualBatch !== batch) { pushGap(cls, '原件批次不符'); continue; }
+    if (!actualDigest) { pushGap(cls, '原件缺卡节 sha256'); continue; }
     if (actualDigest.toLowerCase() !== digest.toLowerCase()) { pushGap(cls, '原件卡节 sha256 不符（异版）'); continue; }
   }
+  const declaresRound = ['冷读', '对抗'].some(cls => (declared.get(cls) ?? []).some(value => /轮次\s*[=:：]/.test(value)));
+  if (!historicalBlock && (versioned || declaresRound)) {
+    const version = versionedReviewGaps({ id, block, taskPath, taskName, cardText, cardDigest });
+    gaps.push(...version.gaps);
+    errors.push(...version.errors);
+  }
   return { present: true, gaps, errors };
+}
+function declarationBlock(body, id) {
+  const heading = fiveMaterialHeadingPattern(id);
+  const range = sectionRange(body, heading);
+  return range ? range.lines.slice(range.start, range.end).join('\n') : '';
+}
+// A light package keeps only one card and one cold read in its own block; it
+// may sit in a normal task (the small exception is per package, not per task).
+function isLightPackageBlock(block) {
+  const text = String(block ?? '');
+  const hasCard = /^-\s*(?:当前)?方案卡\s*[：:]/m.test(text);
+  const hasCold = /^-\s*(?:当前)?冷读\s*[：:]/m.test(text);
+  const hasFullRoles = /^-\s*(?:当前)?(?:质询|对抗|真实答复)\s*[：:]/m.test(text);
+  const declaresSmall = /(?:^|\n)\s*[-*]?\s*(?:路线|级别)\s*[:：]\s*(?:小改|轻档|small)|(?:^|\n)\s*历史只读\s*[:：]\s*否/m.test(text);
+  return hasCard && hasCold && !hasFullRoles && declaresSmall;
+}
+// Shared checklist entry for the task-path-only public exit. It reads the same
+// table rows and calls the same declaration/versioned parser as the material
+// entry; run-checks must not carry its own id regex or path literal.
+export function convergenceChecklistGaps({ taskPath, taskId, body, level = null }) {
+  const gaps = [];
+  // Current version marker: a round field, or the bare `### 包 N` block that
+  // the new default uses. The legacy `### 包 N 五件同包原件` block stays on the
+  // P1 rules; a current bare block without rounds is a named gap, not a skip.
+  const versioned = /轮次\s*[=:：]|(?:^|\n)\s*round\s*[:：]/m.test(String(body ?? ''))
+    || /^###\s*包\s*\d+\s*$/m.test(String(body ?? ''));
+  // Historical five-column ledgers stay read-only: their state is reported, but
+  // the current five-material/round contract is not re-applied to old rows.
+  const fiveColumn = /^\|\s*包\s*\|\s*状态\s*\|/m.test(String(body ?? ''));
+  const rows = String(body ?? '').split(/\r?\n/).filter(line => /^\|\s*\d+/.test(line));
+  for (const line of rows) {
+    const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+    const id = /^(\d+)/.exec(cells[0] ?? '')?.[1];
+    if (!id) continue;
+    if (!cells.includes('已收敛')) {
+      gaps.push(`未收敛：${cells[0]}`);
+      continue;
+    }
+    const block = declarationBlock(body, id);
+    if (level === 'small' || isLightPackageBlock(block)) {
+      const light = lightPackageGaps({ id, body, taskPath, taskName: cells[0] });
+      gaps.push(...light.gaps);
+      continue;
+    }
+    if (fiveColumn) continue;
+    const result = fiveMaterialDeclarationGaps({ id, body, taskPath, taskName: cells[0], taskId, versioned });
+    gaps.push(...result.gaps);
+  }
+  return [...new Set(gaps)];
 }
 // Single exported seam for the two internal readers. run-checks imports this
 // object instead of copying the pointer, class or failure lists.
 export function directionMaterialApi() {
-  return { convergencePointerRefs, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, fiveMaterialHeading: FIVE_MATERIAL_HEADING };
+  return { convergencePointerRefs, convergenceChecklistGaps, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, isConvergenceEvidenceFailure, fiveMaterialHeading: FIVE_MATERIAL_HEADING, lightPackageGaps };
 }
 // A skill read is evidence only when the host opened the declared file in the
 // current call and the authenticated capture kept the original bytes. The
@@ -1709,14 +1996,21 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     // The P1 declaration block is read for every table shape: once a package
     // declares the five same-package originals, its missing classes and
     // identity mismatches join the evidence gaps (and therefore the exit code).
+    const lightRoute = levelValue === 'small';
+    const checklistVersioned = /轮次\s*[=:：]|(?:^|\n)\s*round\s*[:：]/m.test(body)
+      || /^###\s*包\s*\d+\s*$/m.test(body);
     for (const row of modules) {
       const id = /^\d+/.exec(row.name)?.[0];
       if (!id || row.state !== '已收敛') continue;
-      const five = fiveMaterialDeclarationGaps({ id, body, taskPath, taskName: row.name, taskId: manifest?.task_id });
-      row.evidenceGaps = [...new Set([...(row.evidenceGaps ?? []), ...five.gaps])];
-      fiveMaterialGaps.push(...five.gaps);
-      if (five.gaps.some(gap => /缺五件声明/.test(gap))) strictUnconverged.push(`未收敛：${row.name}（缺五件声明）`);
-      errors.push(...five.errors);
+      const block = declarationBlock(body, id);
+      const lightPackage = lightRoute || isLightPackageBlock(block);
+      const declared = lightPackage
+        ? lightPackageGaps({ id, body, taskPath, taskName: row.name })
+        : fiveMaterialDeclarationGaps({ id, body, taskPath, taskName: row.name, taskId: manifest?.task_id, versioned: checklistVersioned });
+      row.evidenceGaps = [...new Set([...(row.evidenceGaps ?? []), ...declared.gaps])];
+      fiveMaterialGaps.push(...declared.gaps);
+      if (!lightPackage && declared.gaps.some(gap => /缺五件声明/.test(gap))) strictUnconverged.push(`未收敛：${row.name}（缺五件声明）`);
+      errors.push(...declared.errors);
     }
     convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
     // 跨包不合批：同一讨论批次被多个包共用就是病根，直接点名，不靠目录非空。
@@ -1997,21 +2291,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (report.convergence.gaps.some(gap => String(gap).startsWith('未收敛：'))) process.exitCode = 1;
   // ORACLE-MD-007: evidence-class gaps fail the exit; naming/format notes stay
   // report-only. The list is the single source shared with SKILL:382/462.
-  const EVIDENCE_GAP = [
-    /聊天呈现未取得/, /卡片摘要不符/, /缺少?真实问答指针/, /冷读五问未绑定/,
-    /缺冷读记录/, /缺冷读原件/, /收敛格缺当前卡节/, /冷读读者未声明独立/,
-    /冷读五问不全/, /冷读结论未写五问全答出/, /冷读原件未绑定卡摘要/,
-    /冷读原件摘要不符/, /修订未复读/,
-    /先设计后提问缺证/, /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
-    /UI设计源首问/,
-    // TCR-P2-01: a label-shaped or empty evidence cell has no readable bytes and
-    // must fail the exit, not only the completeness list.
-    /证据标签非原件/, /证据缺当前原件/,
-    // A ledger whose own declared derivation digest no longer matches the
-    // current decision log is an old checklist, not a complete one.
-    /引用旧清单/,
-  ];
-  if (report.convergence.gaps.some(gap => EVIDENCE_GAP.some(pattern => pattern.test(String(gap))))) process.exitCode = 1;
+  if (report.convergence.gaps.some(isConvergenceEvidenceFailure)) process.exitCode = 1;
   // P1 direction material failures are non-zero at the direction stage only.
   // build-plan keeps its existing report-only semantics: its author records the
   // named gap and stops the affected package instead of treating exit 0 as done.
