@@ -477,9 +477,9 @@ P1实际问答和P7交接由现有 create-only producer 返回真实路径。
 | `T/quality/evidence/decision-maker/p06/card.md` | 十一格卡，卡末 `source_id=U-004`；历史方向原件 |
 | `T/quality/evidence/decision-maker/p07/card.md` | 十一格卡，卡末 `source_id=U-004`；历史方向原件 |
 | `specs/archive/delivery-quality-reform-20261121/prd.md` | 第44行明确非 UI；归档只读 |
-| `GLOSSARY.md` | git status 已有他人修改，本任务不接管 |
-| `skills/wh-review/scripts/simple-review-runner.mjs` | git status 已有他人修改，本任务不接管 |
-| `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs` | git status 已有他人修改，本任务不接管 |
+| `GLOSSARY.md` | 原为工作树既有未提交改动；用户 2026-11-24 决定随本任务一并交付（内容为「承诺四态」，属 P2 语义） |
+| `skills/wh-review/scripts/simple-review-runner.mjs` | 原为工作树既有未提交改动；用户 2026-11-24 决定随本任务一并交付（审查包提示词，不属本任务写集，交付原因单独登记） |
+| `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs` | 原为工作树既有未提交改动；用户 2026-11-24 决定随本任务一并交付（同上提示词的测试） |
 
 以上实读使用 read/grep/git status/shasum，日期为 2026-11-23。
 若开工时实际值不同，先回对应 owner 更新设计，不按本快照覆盖现状。
