@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | `doctor --action=workspace` | 显式 | `stage-runtime.mjs` 的 help 与 publicRoute | action 未核实；help 于 2026-09-26 11:53 UTC |
 | `status --action=begin` | 显式 | 同上；`README.md` 也点名此路由 | action 未核实 |
-| `status --action=repair` | 显式 | `stage-runtime.mjs` 的 help 与 publicRoute | action 未核实 |
+| `status --action=repair` | 历史（2026-11-23 退役） | 决定人用户；来源 P5/T006 与 decision-log 包7；现 help 与 publicRoute 均不再列 | 不适用——已退役，真跑应报 unknown public runtime action |
 | `run --action=execute` | 显式 | 同上；`spec.md` §8 列本卡带任务身份的实际命令 | action 未核实 |
 | `run --action=preflight` | 显式 | `stage-runtime.mjs` 的 help 与专用委派分支 | action 未核实 |
 | `run --action=draft` | 显式 | `stage-runtime.mjs` 的 help 与 publicRoute | action 未核实 |

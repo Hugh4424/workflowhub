@@ -147,9 +147,35 @@ describe("ORACLE-TERMINAL-EVIDENCE validator and real terminal consumer", () => 
     expect(result.value.quality_status, "empty acceptance-evidence.v1 refs must remain incomplete").toBe("incomplete");
   });
 
-  it.skip("unavailable: the existing public terminal contract has no accepted_risk binding field to drive without inventing a new interface", () => {
-    // The target is a valid buildRiskAcceptance read by terminalAssessmentQuality,
-    // with unanswered and wrong-finding negative controls. The current terminal
-    // input schema names no such field, so this is not replaced by a guessed key.
+  it("rejects a quality/evidence original with result/refs but no self-declared schema_version", async () => {
+    const x = await terminalFixture();
+    x.raw.acceptance[0].refs = [x.save("invalid-no-schema-acceptance.json", {
+      task_id: taskId, stage: "build-code", acceptance_criterion_id: "AC-ONE", result: "pass", refs: [],
+    })];
+    const published = x.publish();
+    expect(x.run(published).ok).toBe(true);
+    const result = status(x.f);
+    expect(result.ok).toBe(true);
+    expect(result.value.quality_status, "a result/refs original without schema_version must not bypass validation").toBe("incomplete");
+  });
+
+  it("rejects a legacy AC-shaped original with result/refs but an empty refs list", async () => {
+    const x = await terminalFixture();
+    x.raw.acceptance[0].refs = [x.save("ac-bad-shape-no-marker.json", {
+      id: "AC-ONE", result: "pass", refs: [],
+    })];
+    const published = x.publish();
+    expect(x.run(published).ok).toBe(true);
+    const result = status(x.f);
+    expect(result.ok).toBe(true);
+    expect(result.value.quality_status, "an AC-shaped original without schema_version must not bypass validation").toBe("incomplete");
+  });
+
+  it.skip("fail: the public terminal contract has no accepted_risk binding field, so a valid risk acceptance cannot be driven without inventing one", () => {
+    // terminalAssessmentQuality now calls deriveSeriousReviewPause/validateRiskAcceptance
+    // when a.risk_acceptances, a.authorized_risk_finding_ids and a.user_reply exist,
+    // but the public terminal contract names none of them. This is a standard defect
+    // (owner: review/contract owner), not an environment-unavailable fact.
+    // AC-EVID-001 is recorded as fail until the contract defines the binding.
   });
 });

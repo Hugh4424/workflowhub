@@ -7,10 +7,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
-import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import Ajv2020 from "ajv/dist/2020.js";
 import { aggregateCanonicalProviderResults } from "../../runtime/review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../../runtime/review/review-output.mjs";
 import { deriveSeriousReviewPause, validateReportableFindingDispositions } from "../../runtime/review/stage-review-disposition.mjs";
+const resultSchema=JSON.parse(readFileSync(new URL("../../runtime/review/schemas/result.schema.json",import.meta.url),"utf8"));
+const validateResult=new Ajv2020({allErrors:true,strict:true,strictRequired:false,formats:{"date-time":true}}).compile(resultSchema);
 const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
 async function fixture(){const root=realpathSync(mkdtempSync(join(tmpdir(),"ordinary-review-record-")));roots.push(root);const repo=join(root,"metadata-repo");mkdirSync(repo);const task=await createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"workflowhub",task_id:randomUUID(),created_at:"2026-10-03T00:00:00Z",target_repo_root:repo,activation_cohort:"post",record_model:"vnext-single-write",execution_mode:"per_invocation",issue_ids:[],inputs:{}}});return{root,task};}
 const request=(phase="P1")=>({stage:"build-code",review_scope:"phase",phase_id:phase,subject_kind:"phase",surface:"code",subject:{files:["README.md"]},materials:{approved_spec:"owned ordinary current specification"}});
@@ -38,7 +40,7 @@ describe("ordinary review request/result lifecycle",()=>{
      {provider:"codex/owned",read:["approved_spec"],unread:[],undetermined:[]},
      {provider:"other/owned",read:[],unread:[],undetermined:["approved_spec"]},
      {provider:"third/owned",read:[],unread:[],undetermined:["approved_spec"]}]);
-   expect(()=>validateSchema("result",value)).not.toThrow();
+   expect(validateResult(value)).toBe(true);
  });
  it("records the latest same material after dispatch while damaged top-level history remains passive",async()=>{
    const f=await fixture(),id="a".repeat(64);let calls=0;
@@ -70,7 +72,7 @@ describe("ordinary review request/result lifecycle",()=>{
    expect(outputs).toHaveLength(1);
    expect(value.discarded_facts.map(fact=>fact.dropped_key)).toEqual(["provider-output:codex/owned","codex/owned:output","codex/owned:raw_output"]);
    expect(value.discarded_facts.every(fact=>fact.reason==="zero_bytes")).toBe(true);
-   expect(()=>validateSchema("result",value)).not.toThrow();
+   expect(validateResult(value)).toBe(true);
  });
  it("counts material UTF8 and byte views without filling absent material or usage with zero",async()=>{
    const f=await fixture(),materials={text:"中文",bytes:Buffer.from([0,255]),view:new Uint8Array([1,2,3]),json:{flag:true}};
@@ -141,6 +143,7 @@ describe("lens-scoped canonical identity", () => {
    expect(value.status).toBe("available");
    expect(value.findings[0]).not.toHaveProperty("lens");
  });
+ it("rejects a schema-invalid record envelope before the single write",async()=>{const f=await fixture();await expect(record(f,async()=>result({version:"wh-review-result.v2"}))).rejects.toMatchObject({code:"SCHEMA_VALIDATION_FAILED",schema:"result-envelope"});expect(results(f)).toEqual([]);});
 });
 
 describe("out-of-vocabulary lens on the record route", () => {

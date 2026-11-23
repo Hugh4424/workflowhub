@@ -17,7 +17,20 @@
 
 版本 1.0.0 同源落盘于源码仓 `package.json`、`package-lock.json`（根与 `packages[""]`，不随包分发）与发布包 `release.json`、`runner/package.json`、`runner/runner-release.json`。更新检查只有三态：有更新、无更新、无法检查；无明确来源就报无法检查，不联网、不猜。
 
-安装与卸载边界：安装会执行 `npm ci --ignore-scripts --omit=dev` 与 Git init/add/commit，需要 npm、git 和隔离目标授权；本段只以记录型 stand-in 验证调用序列，未执行真实安装副作用。发布包不是整树证据，原始命令与负例输出在任务库。
+安装与卸载边界：安装会执行 `npm ci --ignore-scripts --omit=dev` 与 Git init/add/commit，需要 npm、git 和隔离目标授权。P5 已在隔离临时根真实执行一次安装（本地 npm 缓存离线）并复跑安装态自检；其它机器、npm 源与离线缓存状态不在本次结论内。发布包不是整树证据，原始命令与负例输出在任务库。
+
+## 安装态覆盖域
+
+| 项 | 当前事实 |
+| --- | --- |
+| 无参聚合自检 | 裸 `runner` + `skill-bundle` 安装根实测 exit 0（任务库 447）；完整 `buildRelease` 根实测 exit 0，`skill-static-deps` 通过（任务库 448） |
+| 随包门禁检查器 | `check-anti-host`、`check-stage-quality` 进失败清单；删除任一后同一命令 exit 1 并点名，恢复同字节后 exit 0（本机实测 `check-anti-host`） |
+| 源码登记检查 | 裸安装根不带 `skills/catalog.yaml`，两项打印具名 `NOT RUN`，不计失败；完整 `buildRelease` 把 catalog 复制进 `runner/`，且发布构建按 catalog 收齐非 retired 技能，两项真实运行并通过（任务库 448）。`check-skill-consistency` 保留报告级警告，不作为派发授权 |
+| advisory | `check-decision-log-chain` 只打印 advisory 警告，失败不进聚合失败清单 |
+| 数据依赖 | `runtime/review/schemas/result.schema.json`、`stage-materials.schema.json`、`runtime/schemas/skill-bundle.schema.json` 等显式数据依赖随包；`attempt.schema.json` 不在包内 |
+| 四个文档命令 | `check-delivery-claims`、`check-specs-archive`、`check-replay`、`measure-main-agent-cost` 在运行器根可调用；正常例需要任务或案例输入，缺输入时命令自行报缺并保持原退出码，不以清单存在代替调用 |
+| 七类公共入口 | 完整发布根实测：doctor/status/verify/confirm/authorize 正常例 exit 0；review 无 provider 时正常命令 exit 0 且结果为 unavailable；run 的 phase_progress 夹具未形成合法 Phase 任务卡（具名夹具缺口，非命令缺口）。七个非法 action 均 exit 1 并报 `unknown public runtime action`（任务库 439） |
+| 计划卡命令表缺口 | P5 表里 `doctor` 缺 `--stage`、`run --stage=build-plan` 不受支持（run:execute 只接 build-code 游标）、`authorize` 缺 `--subject-ref`；owner=计划卡，按真实参数复跑，不照抄错命令 |
 
 ## 宿主支持
 

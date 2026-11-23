@@ -29,8 +29,8 @@
  */
 
 import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
-import { readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
-import { join, resolve, dirname, relative } from "node:path";
+import { existsSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { join, resolve, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
@@ -260,7 +260,12 @@ export function scanFiles(files) {
 
 function runScan() {
   const files = collectScanFiles();
-  console.log(`[check-stage-quality] scanning ${files.length} file(s) in metrics/ + scripts/ ...`);
+  // Report the directories this root actually has; an installed Runner release
+  // legitimately carries metrics/ without the historical scripts/ tree.
+  const scanned = [join(repoRoot, "metrics"), join(repoRoot, "scripts")]
+    .filter((dir) => existsSync(dir))
+    .map((dir) => `${relative(repoRoot, dir).split(sep).join("/")}/`);
+  console.log(`[check-stage-quality] scanning ${files.length} file(s) in ${scanned.join(" + ") || "no existing scan root"} ...`);
 
   const findings = scanFiles(files);
 

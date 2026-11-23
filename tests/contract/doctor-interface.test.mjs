@@ -13,7 +13,11 @@ describe("doctor/status public interface", () => {
   it("keeps doctor workspace capability checks separate from status", async () => {
     const help = await stageRuntimeCliMain(["--help"]);
     expect(help.actions.doctor).toEqual(["workspace"]);
-    expect(help.actions.status).toEqual(["begin", "repair"]);
+    expect(help.actions.status).toEqual(["begin"]);
     expect(help.actions.doctor).not.toContain("begin");
+  });
+
+  it("retires the old status repair route", async () => {
+    await expect(stageRuntimeCliMain(["status", "--action=repair"])).rejects.toThrow(/unknown public runtime action/);
   });
 });

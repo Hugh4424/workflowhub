@@ -223,7 +223,17 @@ node tools/cli/build-skill-manifests.mjs --check
 
 预期输出形如 `[build-skill-manifests] manifest check passed: <N> repository skills, <M> external entries`，exit 0。N/M **以本次输出为准**，别把某个数字当固定值。
 
-注意这条只能在源码仓根目录跑：发布包的 `tools/cli/` 只带 `onboard-release.mjs`，没有这个脚本；如果从源码仓用 `--root=` 指向发布文件夹，也会因为没有清单源 `skills/catalog.yaml` 而失败 `MANIFEST_INVALID: manifest source is missing or unsafe: skills/catalog.yaml`。
+注意 `build-skill-manifests.mjs` 只能在源码仓根目录跑：发布包的 `tools/cli/` 只带 `onboard-release.mjs`，没有这个脚本；如果从源码仓用 `--root=` 指向发布文件夹，也会因为没有清单源 `skills/catalog.yaml` 而失败 `MANIFEST_INVALID: manifest source is missing or unsafe: skills/catalog.yaml`。
+
+**在运行器根目录**，跑安装态聚合自检（必须是真的装好的 `runner/`）：
+
+```bash
+node tools/cli/run-checks.mjs
+```
+
+逐项点名跑过的检查。裸 `runner` + `skill-bundle` 安装根没有 `skills/catalog.yaml`，会打印两行 `NOT RUN` 并说明原因，命令仍 exit 0；advisory 的 `check-decision-log-chain` 不算失败。负控：删掉 `tools/cli/check-anti-host.mjs` 后同一条命令必须 exit 1 并点名该检查器；把同字节恢复后回到 exit 0。
+
+**完整 `buildRelease` 根不同**：它会把 `skills/catalog.yaml` 复制进 `runner/`，两项源码登记检查会真正运行。发布构建按 catalog 收齐非 retired 技能（含 `workflowhub-host-protocol`、`third-review`、`workflowhub-multica-sync`），完整发布根实测聚合自检 exit 0，`skill-static-deps` 不再报缺。
 
 ## 配置
 

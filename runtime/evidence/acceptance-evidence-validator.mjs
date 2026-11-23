@@ -2,7 +2,10 @@ import { SHA256_HEX } from "./canonical-utils.mjs";
 const GIT_OID = /^[a-f0-9]{40}$/i;
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
-const EVIDENCE_REF = /^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+// Terminal assessments already cite their originals under quality/reviews and
+// quality/tests. Those prefixes are the current terminal evidence locations,
+// not a new namespace: accept exactly the three current task-relative roots.
+const EVIDENCE_REF = /^(?:evidence|quality\/evidence|quality\/reviews|quality\/tests)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const ACCEPTANCE_RESULTS = ["pass", "fail", "inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable"];
 
 function validateSummaryAnchor(value, label) {

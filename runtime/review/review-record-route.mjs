@@ -9,6 +9,7 @@ import { parseReviewerOutput, reviewLensRequirement } from "./review-output.mjs"
 import { deriveTerminalConclusion } from "./canonical-review-result.mjs";
 import { redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import Ajv2020 from "ajv/dist/2020.js";
 
 function coded(code,message) { return Object.assign(new Error(`${code}: ${message}`),{code}); }
 function checkedPath(path,{directory=false}={}) {
@@ -151,6 +152,45 @@ function providerOutputReuse(dir, root, discardedFacts, taskId) {
     });
   };
 }
+// D-07 second consumption point: the retained result schema guards the record
+// envelope before the single write. Nested facts are not re-judged here because
+// the retained schema predates current producer fields (cause_code,
+// affected_paths, execution.configured_effort, author ids); that contract gap is
+// named for the owner and the schema bytes stay untouched.
+const resultSchema = JSON.parse(readFileSync(new URL("./schemas/result.schema.json", import.meta.url), "utf8"));
+const envelopeValidator = new Ajv2020({ allErrors: true, strict: true, strictRequired: false, formats: { "date-time": true } }).compile(resultSchema);
+function pointerOf(error) {
+  const escape = (value) => String(value).replaceAll("~", "~0").replaceAll("/", "~1");
+  if (error.keyword === "required") return `${error.instancePath}/${escape(error.params.missingProperty)}`;
+  if (error.keyword === "additionalProperties") return `${error.instancePath}/${escape(error.params.additionalProperty)}`;
+  return error.instancePath || "";
+}
+function envelopeOf(record) {
+  const copy = { ...record };
+  // Keep every root scalar that the schema owns, and satisfy the terminal
+  // conclusion/coverage requirement; nested producer facts are the named gap.
+  copy.provider_results = [];
+  copy.findings = [];
+  copy.material_coverage = [];
+  delete copy.review_facts;
+  delete copy.request;
+  delete copy.adjudication;
+  delete copy.discarded_facts;
+  if (copy.error && typeof copy.error === "object" && "cause_code" in copy.error) {
+    const { cause_code, ...error } = copy.error;
+    copy.error = error;
+  }
+  return copy;
+}
+function assertResultEnvelope(record) {
+  if (envelopeValidator(envelopeOf(record))) return record;
+  const error = envelopeValidator.errors[0];
+  const pointer = pointerOf(error);
+  throw Object.assign(new Error(`SCHEMA_VALIDATION_FAILED result-envelope ${pointer || "/"} ${error.keyword}`), {
+    code: "SCHEMA_VALIDATION_FAILED", schema: "result-envelope", pointer,
+  });
+}
+
 async function providerFact(member,dir,slug,root,discardedFacts,reuseOutput) {
   if(!member || typeof member.provider!=="string" || !member.provider) throw coded("PROVIDER_RESULT_INVALID","provider name is missing");
   const fact={...member};
@@ -275,6 +315,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       const {conclusion,coverage}=deriveTerminalConclusion({status:record.status,provider_results:providers,findings});
       Object.assign(record,{conclusion,coverage});
     }
+    assertResultEnvelope(record);
     const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n",{performWrite});
     const ref=relative(root,path).split("\\").join("/");return {status:record.status,result_ref:ref,path,stage:tuple.stage,review_scope:tuple.review_scope,subject_kind:tuple.subject_kind,phase_id:tuple.phase_id,authoritative:false};
   },{waitMs:lockWaitMs});

@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { WORKFLOW_STAGES } from "../stage/stage-registry.mjs";
+import yaml from "js-yaml";
+import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
 
 import { assertRunnerCompatibility, createRunnerContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundleRelease } from "./skill-bundle-release.mjs";
@@ -74,6 +76,20 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
   // from the Runner root rather than an isolated agent home.
   "skills/wh-review/scripts/wh-review-cli.mjs",
   "skills/answer-as-page/scripts/render-answer-page.mjs",
+  // check-anti-host runs scan-core-files by a static import, so the closure
+  // carries it without a second build-time list.
+  "tools/cli/check-anti-host.mjs",
+  // The remaining checkers spawned by the aggregate installed self-check.
+  "tools/cli/check-skill-consistency.mjs",
+  "tools/cli/check-stage-quality.mjs",
+  "tools/cli/check-decision-log-chain.mjs",
+  // The four documented commands named in docs/release-support-matrix.md.
+  "tools/cli/check-delivery-claims.mjs",
+  "tools/cli/check-specs-archive.mjs",
+  "tools/cli/check-replay.mjs",
+  "tools/cli/measure-main-agent-cost.mjs",
+  // Skill scripts import this runtime module from the installed Runner root.
+  "runtime/evidence/research-report.mjs",
 ]);
 
 // These files are data dependencies of the public entrypoint closure. Keep
@@ -82,11 +98,36 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
 const RUNNER_SCHEMA_DEPENDENCIES = Object.freeze([
   "runtime/review/schemas/result.schema.json",
   "runtime/review/schemas/stage-materials.schema.json",
+  // check-skill-consistency reads this source-bundle schema by import.meta.url.
+  "runtime/schemas/skill-bundle.schema.json",
   "runtime/review/stage-materials.json",
   "runtime/schemas/human-confirmation.v1.schema.json",
   "runtime/schemas/interaction-completion.v1.json",
   "runtime/schemas/risk-acceptance.v1.json",
 ]);
+
+// The installed self-check consumes the single source registry: every
+// non-retired catalog skill is expected at skills/<name>. The Skill Bundle
+// publishes the workflow closure, so catalog-native skills outside that closure
+// (for example workflowhub-host-protocol) would otherwise be absent from the
+// combined release. Add their declared bundles and files here; bundle-owned
+// destination maps stay with the Skill Bundle.
+function addCatalogSkillPayloads(root, locators) {
+  const catalogPath = path.join(root, "skills/catalog.yaml");
+  if (!fs.existsSync(catalogPath)) return;
+  const catalog = yaml.load(fs.readFileSync(catalogPath, "utf8"));
+  for (const entry of Array.isArray(catalog?.skills) ? catalog.skills : []) {
+    if (!entry || typeof entry.path !== "string" || entry.status === "retired") continue;
+    const bundleLocator = entry.path.replace(/SKILL\.md$/, "skill-bundle.json");
+    if (!fs.existsSync(path.join(root, bundleLocator)) || locators.has(bundleLocator)) continue;
+    const { fileEntries } = validateSkillBundle(root, bundleLocator, entry.path);
+    // Bundle-owned destination maps are copied by the Skill Bundle installer;
+    // their manifest is transformed there, so do not duplicate those bytes here.
+    if (fileEntries.some((item) => item.destination !== undefined)) continue;
+    locators.add(bundleLocator);
+    for (const item of fileEntries) locators.add(path.posix.join(path.posix.dirname(bundleLocator), item.path));
+  }
+}
 
 function collectRunnerReleaseFiles(root) {
   const flows = JSON.parse(fs.readFileSync(path.join(root, "workflows/make-decision/steps.json"), "utf8")).flows ?? {};
@@ -119,6 +160,7 @@ function collectRunnerReleaseFiles(root) {
     ...filesUnder(root, "contracts", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
   ]);
+  addCatalogSkillPayloads(root, locators);
   addStaticDependencies(root, locators);
   return locators;
 }
@@ -174,8 +216,11 @@ export function validateRunnerRelease({ releaseRoot, skillBundleManifest } = {})
   // Reconstruct the same entrypoint/data/import closure in the release. A
   // file sitting on disk but omitted from the declared file set is not included
   // input, and missing imports must fail here before npm or runtime dispatch.
+  // Files declared by the Skill Bundle are installed from that other root;
+  // the Runner manifest only owns its own closure.
+  const bundleFiles = new Set((skillBundleManifest?.files ?? []).map((entry) => entry.path));
   for (const locator of collectRunnerReleaseFiles(root)) {
-    if (!seen.has(locator)) throw new Error(`runner release required file is undeclared: ${locator}`);
+    if (!seen.has(locator) && !bundleFiles.has(locator)) throw new Error(`runner release required file is undeclared: ${locator}`);
   }
   if (!skillBundleManifest) throw new Error("skill bundle contract is required for runner installation");
   assertRunnerCompatibility(skillBundleManifest, manifest);

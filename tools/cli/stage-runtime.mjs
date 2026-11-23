@@ -36,6 +36,8 @@ import { capturePreExecutionTaskChangeScope, collectTaskChangeScope } from "../.
 import { captureReviewSource, readScopedReviewMaterial } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
+import { validateAcceptanceEvidence } from "../../runtime/evidence/acceptance-evidence-validator.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptance } from "../../runtime/review/stage-review-disposition.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -1854,7 +1856,25 @@ function terminalAssessmentQuality(context, row) {
     const verdicts=[];
     for(const {ref,raw} of sources){
       if(!requireFact(ref.ref!==a.final_report?.ref&&ref.sha256!==a.final_report?.sha256,`acceptance ${entry.id}: final report cannot be its own upstream verdict`))continue;
-      if(raw!==null)try{const verdict=originalVerdict(JSON.parse(raw),entry.id);if(verdict!==null)verdicts.push(verdict);}catch{}
+      if(raw!==null)try{const value=JSON.parse(raw);
+        // Any AC-shaped quality/evidence original carrying result+refs is an
+        // acceptance-evidence candidate and is validated unconditionally; the
+        // self-declared schema_version is not a gate. Legacy plain verdicts
+        // ({id:"AC-…", result, refs}) are projected onto the current contract
+        // before validation, so an empty/wrong refs list cannot pass. Non-AC
+        // proof facts (for example a finding verification with result+refs but
+        // finding_id only) keep the originalVerdict path and are not reclassified.
+        const candidate = plain(value)&&ref.ref.startsWith("quality/evidence/")&&("result" in value)&&("refs" in value)
+          ? (typeof value.acceptance_criterion_id==="string" ? value
+            : typeof value.id==="string"&&/^AC-[A-Za-z0-9._:-]+$/.test(value.id)
+              ? {schema_version:"acceptance-evidence.v1",acceptance_criterion_id:value.id,result:value.result,refs:value.refs}
+              : null)
+          : null;
+        if(candidate){
+          try{validateAcceptanceEvidence(candidate,`acceptance ${entry.id}`);}
+          catch(error){gaps.push(`acceptance ${entry.id}: ${error.message}`);}
+        }
+        const verdict=originalVerdict(value,entry.id);if(verdict!==null)verdicts.push(verdict);}catch{}
     }
     const conflicting=verdicts.includes("inconsistent")||new Set(verdicts).size>1;
     requireFact(!conflicting,`acceptance ${entry.id}: inconsistent applicable original verdicts`);
@@ -1963,7 +1983,28 @@ function terminalAssessmentQuality(context, row) {
       if(!requireFact(typeof id==="string"&&ds.length===1,`finding ${id}: missing unique disposition`))continue;
       const d=ds[0];requireFact(sameReference(d.original_review_ref,a.review),`finding ${id}: original review mismatch`);
       const rejected=d.status==="rejected_invalid";
-      requireFact(d.status==="fixed"||rejected,`finding ${id}: unresolved; risk acceptance not inferred`);
+      const accepted=d.status==="accepted_risk";
+      let acceptedResolved=false;
+      if(accepted){
+        const acceptances=Array.isArray(a.risk_acceptances)?a.risk_acceptances:null;
+        const authorized=Array.isArray(a.authorized_risk_finding_ids)?a.authorized_risk_finding_ids:[];
+        const reply=a.user_reply;
+        if(!acceptances||!reply||!authorized.includes(id)){
+          gaps.push(`finding ${id}: standard defect — the public terminal contract has no accepted_risk binding field (risk_acceptances/authorized_risk_finding_ids/user_reply); owner=审查域+合同 owner; recovery=contract adds authoritative finding ids and the verbatim user reply`);
+        }else{
+          try{
+            const pause=deriveSeriousReviewPause({taskId:context.identity.taskId,stage:"build-code",reviewRef:a.review.ref,result:review});
+            const acceptance=acceptances.find(v=>v?.finding_id===id);
+            requireFact(acceptance,`finding ${id}: missing risk acceptance fact`);
+            if(acceptance){
+              validateRiskAcceptance({acceptance,pause});
+              requireFact(reply.finding_id===id&&typeof reply.reply==="string"&&reply.reply.trim().length>0&&typeof reply.reply_ref==="string"&&reply.reply_ref.trim().length>0,`finding ${id}: risk acceptance requires the verbatim current user reply and ref`);
+              acceptedResolved=true;
+            }
+          }catch(error){gaps.push(`finding ${id}: ${error.message}`);}
+        }
+      }
+      requireFact(d.status==="fixed"||rejected||acceptedResolved,`finding ${id}: unresolved; risk acceptance not inferred`);
       if(!rejected)readRefs(d.fix_refs,`finding ${id} fix`);
       const verifications=readRefs(d.verification_refs,`finding ${id} independent verification`);
       const paths=list(d.affected_paths,`finding ${id} affected paths`);
@@ -2312,7 +2353,27 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   }
   if (command === "authorize-operation") {
     if (!["commit", "push", "merge", "archive", "cleanup", "pr"].includes(values.operation) || !values["subject-ref"]) throw new TypeError("authorize requires a supported operation and --subject-ref");
-    const grant=await context.task.recordGitAuthorization({cwd:context.workspace.worktreeRoot,operation:values.operation,confirmationRef:values["subject-ref"],...(values.stage==="build-code"&&values.operation==="commit"?{phase:"build-code"}:{})});
+    // A grant must cite a real confirmation original, not an arbitrary string.
+    // Bind it to the current task tree, the CLI stage and a verbatim reply; a
+    // fake or foreign ref is rejected before any authorization record is written.
+    const confirmationRef = values["subject-ref"];
+    const confirmationDir = join(context.task.taskPath, "quality", "evidence", "human-confirmations");
+    const invalidConfirmation = message => Object.assign(new TypeError(message), { code: "AUTHORIZATION_CONFIRMATION_INVALID" });
+    if (typeof confirmationRef !== "string" || !isAbsolute(confirmationRef) || resolve(confirmationRef) !== confirmationRef) throw invalidConfirmation("authorize --subject-ref must be an absolute confirmation original under quality/evidence/human-confirmations");
+    if (dirname(confirmationRef) !== confirmationDir) throw invalidConfirmation("authorize --subject-ref is outside the current task confirmations");
+    let confirmation;
+    try {
+      const stat = lstatSync(confirmationRef);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw invalidConfirmation("authorize --subject-ref must be a single-link regular confirmation original");
+      confirmation = JSON.parse(readFileSync(confirmationRef, "utf8"));
+    } catch (error) {
+      if (error.code === "AUTHORIZATION_CONFIRMATION_INVALID") throw error;
+      throw invalidConfirmation(`authorize --subject-ref is unreadable or invalid: ${error.message}`);
+    }
+    if (!confirmation || typeof confirmation !== "object" || Array.isArray(confirmation)) throw invalidConfirmation("authorize --subject-ref must name a confirmation object");
+    if (confirmation.stage !== values.stage) throw invalidConfirmation("authorize confirmation stage differs from the CLI stage");
+    if (typeof confirmation.reply !== "string" || !confirmation.reply.trim()) throw invalidConfirmation("authorize confirmation requires a non-empty verbatim reply");
+    const grant=await context.task.recordGitAuthorization({cwd:context.workspace.worktreeRoot,operation:values.operation,confirmationRef,...(values.stage==="build-code"&&values.operation==="commit"?{phase:"build-code"}:{})});
     return { status: "recorded", ...grant };
   }
   if (command === "run") {
@@ -2377,7 +2438,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
       run_execute: "build-code: mutually exclusive phase_progress cursor or terminal_assessment_ref ordinary original reference only; build-prd: supplied step outcomes require an explicit planning task type for writes; no input returns not-started/ref=null without writing; records do not certify business or quality success; no official stage execution",
       actions: {
         doctor: ["workspace"],
-        status: ["begin", "repair"],
+        status: ["begin"],
         run: ["draft", "execute"],
         review: ["record"],
         verify: ["execute"],
@@ -2419,7 +2480,6 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   const internalOperation = ({
     "doctor:workspace": "doctor",
     "status:begin": "status",
-    "status:repair": "status",
     "run:execute": "run",
     "run:draft": "artifact",
     "review:record": "review-record",

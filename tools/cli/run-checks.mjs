@@ -181,13 +181,22 @@ async function runAggregate({ materialRoot, stage } = {}) {
   const metricsCode = runChecker("check-metrics-schema", [], checkMetricsSchema);
   if (metricsCode !== 0) failures.push({ name: "check-metrics-schema", code: metricsCode });
 
-  console.log("[run-checks] running skill-static-deps ...");
-  const skillDepsCode=runChecker("skill-static-deps",[],checkSkillStaticDependencies);
-  if(skillDepsCode!==0)failures.push({name:"skill-static-deps",code:skillDepsCode});
+  // The source registry is not part of the Runner release. When it is absent,
+  // the two registry checks are named NOT RUN with the actual reason instead of
+  // failing on ENOENT or being silently skipped. Source checkouts keep them.
+  const catalogPath = resolve(repoRoot, "skills/catalog.yaml");
+  if (existsSync(catalogPath)) {
+    console.log("[run-checks] running skill-static-deps ...");
+    const skillDepsCode=runChecker("skill-static-deps",[],checkSkillStaticDependencies);
+    if(skillDepsCode!==0)failures.push({name:"skill-static-deps",code:skillDepsCode});
 
-  console.log("[run-checks] running check-skill-consistency ...");
-  const consistencyCode=runChecker("check-skill-consistency",["--root",repoRoot]);
-  if(consistencyCode!==0)failures.push({name:"check-skill-consistency",code:consistencyCode});
+    console.log("[run-checks] running check-skill-consistency ...");
+    const consistencyCode=runChecker("check-skill-consistency",["--root",repoRoot]);
+    if(consistencyCode!==0)failures.push({name:"check-skill-consistency",code:consistencyCode});
+  } else {
+    console.log("[run-checks] NOT RUN skill-static-deps — skills/catalog.yaml is absent from this root (installed release carries no source registry); source-registry coverage is unavailable here");
+    console.log("[run-checks] NOT RUN check-skill-consistency — skills/catalog.yaml is absent from this root (installed release carries no source registry); source-registry coverage is unavailable here");
+  }
 
   // 2. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
   console.log("[run-checks] running check-stage-quality ...");
