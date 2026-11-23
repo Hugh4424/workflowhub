@@ -204,6 +204,14 @@ node tools/cli/check-decision-log-chain.mjs --file specs/delivery-quality-direct
 - **停止 / 恢复**: 来源或绑定失败回材料主会话；机器错误回本段开发；误伤撤本段严格分支，保原失败与来源并定向复验；需改原判据停该路径回原决定人。
 - **完成**: 前置（不作完成条件）：公开入口和原命令输出可读。完成条件（只写效果）：同一目标断言与独立原话读回皆支持 AC-P2-001，负例拒绝且原件可定位；未执行保持 incomplete，阶段三接当前共享字节。
 
+## 本 Phase 自带判据小结
+
+自己验了什么：gate 命令原件 `quality/tests/p02-commitment.green3.output`（16 passed）；真实链 exit 0（`quality/tests/p02-real-chain.output`）；负例具名——引用块、有序列表、待定空段、错锚各报 `ANSWER_COMMITMENT_*`（`p02-commitment.n1-probe.output`、`p02-commitment.template-shape.output`、`p02-commitment.real-material-negative.output`）。
+
+没验什么：语义首判 incomplete，包 2 无真实逐包原话；索引续段 U-007–U-015 incomplete，答复登记表被空行截断读不到，是材料结构缺口。
+
+未验项条件与 owner：真实逐包答复由用户产生；登记带行位与语气的索引行由材料主会话补；语义首判由未参与写作的读者做，回修后立即首判。
+
 ## 机器字段（校验器用，人可跳过）
 
 - **全局规格**: `spec.md#实现设计全局权威`
@@ -215,4 +223,4 @@ node tools/cli/check-decision-log-chain.mjs --file specs/delivery-quality-direct
 - **evidence_path**: planned: `quality/tests/p02-real-source.readback.md`
 - **STOP**: 源和映射失败回材料主会话；机器误伤回本段开发撤受影响严格块，保旧例与原失败并定向复验；改原判据回原决定人，其它路径继续。
 - **覆盖 AC**: AC-P2-001
-- **Done**: 前置（不作完成条件）：定向与真实材料入口的输出可读。完成条件（只写效果）：AC-P2-001 须同一目标断言和完整原话语义都成立、负例拒绝且独立审查后可回读，未执行保持 incomplete；计划 `quality/tests/p02-real-source.readback.md` 及其捕获引用。
+- **Done**: 前置（不作完成条件）：定向与真实材料入口的输出可读。完成条件（只写效果）：AC-P2-001 须同一目标断言和完整原话语义都成立、负例拒绝且独立审查后可回读，未执行保持 incomplete；计划 `quality/tests/p02-real-source.readback.md` 及其捕获引用；AC-P2-001：incomplete；证据 quality/tests/p02-real-source.readback.md（真实链读回）、p02-commitment.green3.output（gate 全绿）、quality/tests/2026-11-23-305-p2-review.md（独立审查，无阻塞 finding）；未通过原因：包 2 四条承诺全为待定，无真实逐包原话，独立语义首判未做。

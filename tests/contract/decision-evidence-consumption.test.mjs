@@ -1425,3 +1425,290 @@ describe("P10 ORACLE-LOG-V2-TERMINAL template shape, real dispositions and ten r
     expect(without.rings.find((row) => row.ring === 2).state).toBe("unavailable");
   });
 });
+
+// P2/T002 ORACLE-COMMITMENT-SOURCE: the two target groups below were frozen by
+// the pre-writing test author before the commitment branch existed. They fix the
+// contract the chain checker (decisionSections / checkDecisionLogChain) and the
+// v2 template's decision block have to implement:
+//
+//   - 承诺：<必须|允许|本次不做>｜<完整原话>｜<索引编号>
+//   - 承诺：待定｜<未答问题>｜未答：…；负责人：…；恢复条件：…
+//
+// A commitment line lives in a mapped 决定 N block. 必须 / 允许 / 本次不做 cite
+// exactly one requirement-index row whose 答复原文 is the whole original line;
+// the row's 原件ref与行位 is then read and its bytes compared. 待定 has no reply
+// yet, so the three unresolved parts replace the pointer. An 作者推断 row never
+// backs a commitment, and a rejected alternative stays in the block on its own
+// 被否方案 line, which is not read as a commitment.
+//
+// Lines are judged in this order: state word, pointer presence / pending parts,
+// pointer resolution and quote comparison, source class, then tone strength.
+// Named failures, all of which must exit non-zero like the four P1 answer codes:
+//   ANSWER_COMMITMENT_STATE_UNDECLARED   the state word is not one of the four
+//   ANSWER_COMMITMENT_UNSOURCED          the line has no unique index pointer
+//   ANSWER_COMMITMENT_PENDING_INCOMPLETE 待定 misses 未答/负责人/恢复条件
+//   ANSWER_COMMITMENT_ANCHOR_MISMATCH    the pointer has no row, or its row is
+//                                        not this line's quote
+//   ANSWER_COMMITMENT_PARTIAL_QUOTE      a strict fragment of the row quote is
+//                                        presented as the full original line
+//   ANSWER_COMMITMENT_INFERENCE_AS_USER  an 作者推断 row backs a commitment
+//   ANSWER_COMMITMENT_TONE_RAISED        the state is stronger than the row tone
+// Expectations are written by hand from the Phase card and AC-P2-001 and are
+// never computed from the checker's current output.
+const COMMITMENT_CODES = [
+  "ANSWER_COMMITMENT_STATE_UNDECLARED",
+  "ANSWER_COMMITMENT_UNSOURCED",
+  "ANSWER_COMMITMENT_PENDING_INCOMPLETE",
+  "ANSWER_COMMITMENT_ANCHOR_MISMATCH",
+  "ANSWER_COMMITMENT_PARTIAL_QUOTE",
+  "ANSWER_COMMITMENT_INFERENCE_AS_USER",
+  "ANSWER_COMMITMENT_TONE_RAISED",
+];
+
+const COMMITMENT_SOURCE = {
+  3: "必须在隔离库先验一次",
+  4: "允许在总结里各留一句",
+  5: "本次不做历史回填",
+  6: "建议先升数据库结构",
+  7: "允许在预发环境测一次，再决定要不要上",
+  8: "允许升一次数据库结构，旧数据兼容。",
+};
+
+// One index row per commitment state: 必须=require, 允许=permit, 本次不做=reject.
+// U-904 is an author inference (tone recommend) and must never back a commitment.
+const COMMITMENT_ROWS = [
+  { id: "U-901", grade: "保存转录", quote: COMMITMENT_SOURCE[3], tone: "require", line: 3 },
+  { id: "U-902", grade: "保存转录", quote: COMMITMENT_SOURCE[4], tone: "permit", line: 4 },
+  { id: "U-903", grade: "保存转录", quote: COMMITMENT_SOURCE[5], tone: "reject", line: 5 },
+  { id: "U-904", grade: "作者推断", quote: COMMITMENT_SOURCE[6], tone: "recommend", line: 6 },
+  { id: "U-905", grade: "保存转录", quote: COMMITMENT_SOURCE[7], tone: "permit", line: 7 },
+  { id: "U-906", grade: "保存转录", quote: COMMITMENT_SOURCE[8], tone: "permit", line: 8 },
+];
+
+function commitmentFixture({ commitments = [], rows = COMMITMENT_ROWS, extraLines = [] } = {}) {
+  const f = fixture({});
+  const lines = Array.from({ length: 12 }, (_, index) => `${index + 1}. filler line`);
+  for (const [line, text] of Object.entries(COMMITMENT_SOURCE)) lines[Number(line) - 1] = text;
+  writeFileSync(f.source, `${lines.join("\n")}\n`);
+  writeFileSync(f.index, [
+    "# Controlled index; U-90x are replay labels, not historical user ids",
+    INDEX_HEADER,
+    INDEX_RULE,
+    ...rows.map((row) => `| ${row.id} | ${row.grade} | ${row.quote} | ${row.tone} | ${f.source}#L${row.line}-L${row.line} | 2026-11-12（原件） | 1 |`),
+    "",
+  ].join("\n"));
+  writeFileSync(f.log, [
+    "# Controlled replay, not a new user decision",
+    `- 基准目录：${f.base}`,
+    "- 需求索引：quality/evidence/decision-log-refs/requirement-index.md",
+    "",
+    "## 旧编号对照",
+    "| 正文编号 | 旧编号 | 说明 |",
+    "| --- | --- | --- |",
+    "| 决定 1 | D-901 | 受控映射 |",
+    "",
+    "### 决定 1 — 原话与承诺",
+    "- 做什么：保留四态与完整原话。",
+    "- 不做什么：不把派生建议写成承诺。",
+    "- 风险：错锚让下游引用假原话。",
+    "- 改动：只读承诺行。",
+    ...commitments,
+    ...extraLines,
+    "",
+  ].join("\n"));
+  return f;
+}
+
+describe("ORACLE-COMMITMENT-SOURCE 承重承诺：四态、派生与被否分列", () => {
+  it("keeps 必须/允许/本次不做/待定 with the full quote and the rejected option in place", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：必须｜必须在隔离库先验一次｜U-901",
+      "- 承诺：允许｜允许在总结里各留一句｜U-902",
+      "- 承诺：本次不做｜本次不做历史回填｜U-903",
+      "- 承诺：待定｜上线日期｜未答：用户未答上线时间；负责人：材料主会话；恢复条件：用户给出上线日期",
+      "- 派生建议：先升数据库结构（作者推断，不作为承诺）",
+      "- 被否方案：新建第二套承诺段（保持原位，不进入承诺）",
+    ] }).log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).not.toMatch(/ANSWER_COMMITMENT_/);
+  });
+
+  it("names a derived suggestion promoted into a user commitment", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：允许｜建议先升数据库结构｜U-904",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_INFERENCE_AS_USER");
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("names a measured reply rewritten as already approved", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：已批准｜允许在预发环境测一次，再决定要不要上｜U-905",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_STATE_UNDECLARED");
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("names a permitted reply raised to 必须", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：必须｜允许在总结里各留一句｜U-902",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_TONE_RAISED");
+    expect(result.status, result.output).toBe(1);
+  });
+});
+
+describe("ORACLE-COMMITMENT-SOURCE 需索引指针：缺源、错锚与截半", () => {
+  it("names a commitment line with no unique index pointer", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：必须｜必须在隔离库先验一次",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_UNSOURCED");
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("names a pointer that resolves to no row or to a different reply", () => {
+    for (const line of [
+      "- 承诺：必须｜必须在隔离库先验一次｜U-999",
+      "- 承诺：必须｜必须在隔离库先验一次｜U-902",
+    ]) {
+      const result = run(commitmentFixture({ commitments: [line] }).log);
+      expect(result.output, `${line}: ${result.output}`).toContain("ANSWER_COMMITMENT_ANCHOR_MISMATCH");
+      expect(result.status, result.output).toBe(1);
+    }
+  });
+
+  it("names half a reply declared as the complete original line", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：允许｜允许升一次数据库结构｜U-906",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_PARTIAL_QUOTE");
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("keeps a 待定 line that names the unanswered question, owner and recovery", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：待定｜上线日期｜未答：用户未答上线时间；负责人：材料主会话；恢复条件：用户给出上线日期",
+      "- 派生建议：先升数据库结构（作者推断，不作为承诺）",
+    ] }).log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).not.toMatch(/ANSWER_COMMITMENT_/);
+  });
+
+  it("names a 待定 line that drops its recovery condition", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：待定｜上线日期｜未答：用户未答上线时间；负责人：材料主会话",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_PENDING_INCOMPLETE");
+    expect(result.status, result.output).toBe(1);
+  });
+});
+
+// P2 test-change request (delta, 2026-11-23): the independent review found four
+// gaps in the frozen contract above. They are appended below as new cases only;
+// no existing assertion, group name or test name is changed. The full request
+// lives at the task root's `quality/evidence/p02-test-change-request.md`.
+//   F1 template readability: a log in the v2 template's current 「最终决定」
+//      shape (#### 5. 最终决定, zero-indented 承诺 lines) must be read as a
+//      commitment block; today only 「决定 N」 headings are recognized, so the
+//      section is silently accepted as "no decision entries".
+//   F2 non-flat markers: `1. 承诺：…` and `> 承诺：…` must not pass silently;
+//      they are either read (and their pointer checked) or named as failures.
+//   F5 empty pending segment: `待定｜｜未答…` has no unanswered question and
+//      must fail even when owner and recovery condition are present.
+//   F3 Chinese tone: an index row `语气=要求` is understood, a weaker 允许
+//      commitment is a named failure, and 要求↔必须 passes.
+// The delta uses the same frozen code set; it introduces no new code. The
+// weakening case below only demands that the strength change is *named* (the
+// current implementation already reports it as TONE_RAISED, which keeps the
+// behaviour safe even though the code name speaks of raising).
+const COMMITMENT_DELTA_CODES = [...COMMITMENT_CODES];
+
+function templateDecisionFixture({ commitments = [], rows = COMMITMENT_ROWS } = {}) {
+  const f = fixture({});
+  const lines = Array.from({ length: 12 }, (_, index) => `${index + 1}. filler line`);
+  for (const [line, text] of Object.entries(COMMITMENT_SOURCE)) lines[Number(line) - 1] = text;
+  writeFileSync(f.source, `${lines.join("\n")}\n`);
+  writeFileSync(f.index, [
+    "# Controlled index; U-90x are replay labels, not historical user ids",
+    INDEX_HEADER,
+    INDEX_RULE,
+    ...rows.map((row) => `| ${row.id} | ${row.grade} | ${row.quote} | ${row.tone} | ${f.source}#L${row.line}-L${row.line} | 2026-11-12（原件） | 1 |`),
+    "",
+  ].join("\n"));
+  writeFileSync(f.log, [
+    "# 决策日志（受控模板样例）",
+    `- 基准目录：${f.base}`,
+    "- 需求索引：quality/evidence/decision-log-refs/requirement-index.md",
+    "",
+    "## 4. 每包设计",
+    "",
+    "### 包 1：受控包",
+    "",
+    "#### 5. 最终决定",
+    "- 选了什么：保留四态与完整原话。",
+    ...commitments,
+    "",
+  ].join("\n"));
+  return f;
+}
+
+describe("ORACLE-COMMITMENT-SOURCE 承重承诺：模板节、非平铺标记与中文语气", () => {
+  it("reads the template 最终决定 shape instead of accepting it unread", () => {
+    const result = run(templateDecisionFixture({ commitments: [
+      "- 承诺：必须｜必须在隔离库先验一次｜U-901",
+      "- 承诺：允许｜允许在总结里各留一句｜U-902",
+    ] }).log);
+    expect(result.status, result.output).toBe(0);
+    expect(result.output).not.toContain("ANSWER_COMMITMENT_UNSOURCED");
+    expect(result.output, "the 最终决定 section must be read, not reported as no decision entries").not.toContain("no_decision_entries");
+  });
+
+  it("names an unreadable pointer inside the template 最终决定 section", () => {
+    const result = run(templateDecisionFixture({ commitments: [
+      "- 承诺：必须｜必须在隔离库先验一次｜U-999",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_ANCHOR_MISMATCH");
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("does not let a numbered 承诺 marker pass silently", () => {
+    const line = "1. 承诺：必须｜必须在隔离库先验一次｜U-999";
+    const result = run(commitmentFixture({ commitments: [line] }).log);
+    expect(result.output, `${line}: ${result.output}`).toMatch(new RegExp(COMMITMENT_DELTA_CODES.join("|")));
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("does not let a blockquote 承诺 marker pass silently", () => {
+    const line = "> 承诺：必须｜必须在隔离库先验一次｜U-999";
+    const result = run(commitmentFixture({ commitments: [line] }).log);
+    expect(result.output, `${line}: ${result.output}`).toMatch(new RegExp(COMMITMENT_DELTA_CODES.join("|")));
+    expect(result.status, result.output).toBe(1);
+  });
+
+  it("reads 要求 and names a 允许 commitment that weakens it", () => {
+    const chineseRows = COMMITMENT_ROWS.map((row) => (row.id === "U-901" ? { ...row, tone: "要求" } : row));
+    const weaker = run(commitmentFixture({
+      commitments: ["- 承诺：允许｜必须在隔离库先验一次｜U-901"],
+      rows: chineseRows,
+    }).log);
+    expect(weaker.output, weaker.output).toMatch(/ANSWER_COMMITMENT_TONE_(RAISED|WEAKENED)/);
+    expect(weaker.status, weaker.output).toBe(1);
+    const consistent = run(commitmentFixture({
+      commitments: ["- 承诺：必须｜必须在隔离库先验一次｜U-901"],
+      rows: chineseRows,
+    }).log);
+    expect(consistent.status, consistent.output).toBe(0);
+    expect(consistent.output).not.toMatch(/ANSWER_COMMITMENT_/);
+  });
+});
+
+describe("ORACLE-COMMITMENT-SOURCE 需索引指针：待定空段", () => {
+  it("names a 待定 line whose unanswered question is empty", () => {
+    const result = run(commitmentFixture({ commitments: [
+      "- 承诺：待定｜｜未答：上线时间未定；负责人：材料主会话；恢复条件：用户给出上线日期",
+    ] }).log);
+    expect(result.output, result.output).toContain("ANSWER_COMMITMENT_PENDING_INCOMPLETE");
+    expect(result.status, result.output).toBe(1);
+  });
+});

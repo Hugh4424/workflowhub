@@ -8,12 +8,17 @@
  * answer source_id/modality/来源身份 is checked against the requirement index;
  * its four named answer-source codes (unverifiable, modality mismatch,
  * inference-as-user, self-reference) make the process exit 1, because a
- * citation that cannot be verified must not look like a pass. The function's
- * result.exit_code carries the same distinction for private callers.
+ * citation that cannot be verified must not look like a pass. A log that writes
+ * 承诺 lines is read the same way even without the three source fields: each
+ * line carries one state, the whole original reply and one index pointer (or
+ * the three 待定 parts), and its seven named commitment codes exit 1 too.
+ * The function's result.exit_code carries the same distinction for private
+ * callers.
  * Only local text structure, the declared index and explicitly authorized
  * original files are inspected. New-shape 决定 N headings map through the
  * material's 旧编号对照; an unmapped block is reported as a warning, never
- * silently treated as zero entries.
+ * silently treated as zero entries. A v2 package's numbered 「最终决定」 item
+ * (`### 包 N` + `#### 5. 最终决定`) is the other recognized commitment block.
  */
 
 import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
@@ -37,8 +42,47 @@ const SOURCE_FIELDS = ["source_id", "modality", "来源身份"];
 const SOURCE_GRADES = ["自由手写", "明确选项采纳", "保存转录", "作者推断"];
 const SOURCE_IDENTITIES = ["用户答复", "作者推断"];
 const TONE_GRADES = ["permit", "require", "recommend", "reject"];
-const ANSWER_FLAGS = ["ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_MODALITY_MISMATCH", "ANSWER_INFERENCE_AS_USER", "ANSWER_SOURCE_SELF_REFERENCE"];
 const INDEX_COLUMNS = ["编号", "来源分级", "答复原文", "语气", "原件ref与行位", "时点", "所属包"];
+// P2 commitment contract: a 承诺 line inside a mapped 决定 N block states how
+// strongly the user bound the delivery (必须/允许/本次不做) and cites exactly one
+// index row whose 答复原文 is the whole original line; 待定 has no reply yet, so
+// the unanswered question, its owner and the recovery condition replace the
+// pointer. 派生建议 and 被否方案 stay on their own lines and never back a
+// commitment. The seven named failures exit non-zero like the P1 answer codes.
+// Flat `- 承诺：` lines are the declared shape. Numbered (`1. 承诺：`) and quoted
+// (`> 承诺：`) markers are still detected, so neither can pass unread: a numbered
+// line at the block's parent level is read like a bullet, a quoted one is named
+// as unread (quoted evidence is not a declaration).
+const COMMITMENT_LINE = /^([\t ]*)(>([\t ]*))*([-*+][\t ]+|\d+[.)、][\t ]+)?(?:\*\*)?承诺(?:\*\*)?[\t ]*[:：][\t ]*(.*?)[\t ]*$/;
+const COMMITMENT_STATES = new Map([["必须", "require"], ["允许", "permit"], ["本次不做", "reject"]]);
+const COMMITMENT_STATE_NAMES = [...COMMITMENT_STATES.keys()];
+const COMMITMENT_PENDING = "待定";
+const COMMITMENT_PENDING_PARTS = ["未答", "负责人", "恢复条件"];
+// A commitment sits beside the decision's own parent fields; these labels are
+// legitimate siblings, not unexpected parents.
+const COMMITMENT_LINE_FIELDS = ["承诺", "派生建议", "被否方案"];
+// Exactly one index pointer, nothing else, after the full quote.
+const COMMITMENT_POINTER = /^[A-Z][A-Z0-9]*-\d+$/;
+const COMMITMENT_FLAGS = [
+  "ANSWER_COMMITMENT_STATE_UNDECLARED",
+  "ANSWER_COMMITMENT_UNSOURCED",
+  "ANSWER_COMMITMENT_PENDING_INCOMPLETE",
+  "ANSWER_COMMITMENT_ANCHOR_MISMATCH",
+  "ANSWER_COMMITMENT_PARTIAL_QUOTE",
+  "ANSWER_COMMITMENT_INFERENCE_AS_USER",
+  "ANSWER_COMMITMENT_TONE_RAISED",
+];
+const ANSWER_FLAGS = [
+  "ANSWER_SOURCE_UNVERIFIABLE",
+  "ANSWER_MODALITY_MISMATCH",
+  "ANSWER_INFERENCE_AS_USER",
+  "ANSWER_SOURCE_SELF_REFERENCE",
+  ...COMMITMENT_FLAGS,
+];
+// The requirement index of this repository spells its 语气 column in Chinese.
+// Those four words name the same grades as the English ids, so the commitment
+// branch compares grades, not glyphs; it never widens what a grade means.
+const TONE_SPELLINGS = new Map([["要求", "require"], ["允许", "permit"], ["建议", "recommend"], ["拒绝", "reject"]]);
 // Accepted original-position spellings: path#L7-L7, path#L7, path:7, path:7-9.
 const SOURCE_REF = /^(.*?)(?:#L|:)(\d+)(?:-(?:L)?(\d+))?$/;
 // A confirmation may bind its original to a frozen Git object:
@@ -137,8 +181,10 @@ export function fenceStep(line, fence) {
 function decisionSections(markdown, mappings = new Map()) {
   const lines = markdown.split("\n");
   const sections = [];
+  const commitmentSections = [];
   const unmapped = [];
   const nonCanonical = [];
+  const looseCommitments = [];
   const headings = new Set();
   const sourceIds = new Set();
   // A material that carries 旧编号对照 declares the current decision shape.
@@ -149,6 +195,11 @@ function decisionSections(markdown, mappings = new Map()) {
   let fence = null;
   let current = null;
   let headingLevel = 0;
+  // The v2 design record keeps each package's decision in its own numbered
+  // 「最终决定」 item (`### 包 N：…` then `#### 5. 最终决定`). That section is read
+  // as a commitment block; a stray 最终决定 heading outside a package stays
+  // unread, so the strict "commitments live in a recognized block" rule holds.
+  let packageHeading = null;
   for (const [index, line] of lines.entries()) {
     const nextFence = fenceStep(line, fence);
     if (nextFence !== fence) { fence = nextFence; continue; }
@@ -162,6 +213,9 @@ function decisionSections(markdown, mappings = new Map()) {
       const match = /^((?:N\d+|(?:ADR|D)-\d+))(?=\s|[—–-]|$)/.exec(heading[2]);
       const currentShape = !match && CURRENT_DECISION_HEADING.exec(heading[2]);
       const decision = (match || currentShape) && (heading[1].length === 3 || heading[1].length === 4);
+      if (packageHeading && heading[1].length <= packageHeading.level) packageHeading = null;
+      const pkgHeading = /^包\s*(\d+)\s*[：:]/.exec(heading[2]);
+      if (pkgHeading) packageHeading = { level: heading[1].length, label: `包 ${pkgHeading[1]}` };
       if (current && (decision || heading[1].length <= current.level)) current = null;
       if (decision) {
         if (match) {
@@ -181,6 +235,11 @@ function decisionSections(markdown, mappings = new Map()) {
             unmapped.push({ label, line: index + 1 });
           }
         }
+      } else if (packageHeading && packageHeading.level < heading[1].length
+        && heading[1].length >= 3 && heading[1].length <= 4
+        && /^(?:\d+\.\s*)?最终决定$/.test(heading[2].trim())) {
+        current = { decision_id: `${packageHeading.label} 最终决定`, level: heading[1].length, lines: [], commitment_only: true };
+        commitmentSections.push(current);
       }
     }
     // Only declarations in local headings, index rows or list entries are
@@ -191,8 +250,20 @@ function decisionSections(markdown, mappings = new Map()) {
       sourceIds.add(id[0]);
     }
     if (current && !heading) current.lines.push({ text: line, line: index + 1, parent: headingLevel === current.level });
+    // A commitment is read only as a parent line of a recognized decision
+    // block. Any other 承诺 line stays visible as unread instead of passing as
+    // if the checker had compared it with the index.
+    const commitment = heading ? null : COMMITMENT_LINE.exec(line);
+    if (!commitment) continue;
+    const [, indent = "", , , , pledge = ""] = commitment;
+    const quoted = /^[\t ]*>/.test(line);
+    if (current && headingLevel === current.level && !indent && !quoted) {
+      (current.commitments ??= []).push({ text: pledge, line: index + 1 });
+    } else {
+      looseCommitments.push({ text: pledge, line: index + 1, quoted });
+    }
   }
-  return { sections, unmapped, nonCanonical, headings, sourceIds };
+  return { sections, commitmentSections, unmapped, nonCanonical, headings, sourceIds, looseCommitments };
 }
 
 // Only explicitly headed unit tables contribute unit warnings; they never
@@ -465,6 +536,155 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source,
   return { warnings, bindings };
 }
 
+// The commitment branch reads one 承诺 line at a time, in the order the frozen
+// contract names: state word, pointer or the three 待定 parts, pointer
+// resolution and quote comparison, source class, then tone. The cited row's
+// 原件ref与行位 is read as bytes too, so an index paraphrase cannot stand in for
+// the complete original line.
+function commitmentWarnings({ sections = [], commitmentSections = [], looseCommitments = [], requirement_index_markdown, read_source, identity = {} } = {}) {
+  const warnings = [];
+  const fail = (code, decision_id, field, message) => warnings.push(warning(code, decision_id, field, message));
+  const index = typeof requirement_index_markdown === "string" ? parseRequirementIndex(requirement_index_markdown) : null;
+  const rows = index && !index.legacyShape ? index.rows : null;
+  for (const item of looseCommitments) {
+    fail("ANSWER_COMMITMENT_UNSOURCED", "unknown", "承诺",
+      `承诺 at line ${item.line} ${item.quoted ? "is inside a quote block" : "is not a parent line of a recognized 决定 N block"}; a commitment is only read as a declaration in a decision block`);
+  }
+  for (const { decision_id, commitments } of [...sections, ...commitmentSections]) {
+    for (const item of commitments ?? []) {
+      const segments = item.text.split("｜").map((part) => part.trim());
+      const [state = "", quote = "", pointer = "", ...rest] = segments;
+      const where = `${decision_id} line ${item.line}`;
+      if (state === COMMITMENT_PENDING) {
+        const parts = segments.slice(2).join("｜");
+        const missing = COMMITMENT_PENDING_PARTS.filter((label) => !new RegExp(`${label}[\\t ]*[:：]`).test(parts));
+        const problems = [];
+        // 待定 names the question still open; an empty slot is not a question.
+        if (!segments[1]) problems.push("names no unanswered question");
+        if (segments.length < 3) problems.push("has no 未答/负责人/恢复条件 part");
+        else if (missing.length) problems.push(`is missing ${missing.join("、")}`);
+        if (problems.length) {
+          fail("ANSWER_COMMITMENT_PENDING_INCOMPLETE", decision_id, "承诺",
+            `${where}: 待定 ${problems.join("; ")}; 待定 needs the unanswered question plus 未答、负责人 and 恢复条件`);
+        }
+        continue;
+      }
+      if (!COMMITMENT_STATES.has(state)) {
+        fail("ANSWER_COMMITMENT_STATE_UNDECLARED", decision_id, "承诺",
+          `${where}: state ${state || "(empty)"} is not one of ${[...COMMITMENT_STATE_NAMES, COMMITMENT_PENDING].join("/")}`);
+        continue;
+      }
+      if (!COMMITMENT_POINTER.test(pointer) || rest.length) {
+        fail("ANSWER_COMMITMENT_UNSOURCED", decision_id, "承诺",
+          `${where}: ${state} needs the full quote and exactly one index pointer (承诺：${state}｜<原话>｜<索引编号>)`);
+        continue;
+      }
+      if (!rows) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "source_id",
+          `${where}: ${pointer} cannot be resolved; no readable requirement index with the ${INDEX_COLUMNS.join("/")} columns was supplied`);
+        continue;
+      }
+      const row = rows.get(pointer);
+      if (!row) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "source_id", `${where}: ${pointer} is not a row of the requirement index`);
+        continue;
+      }
+      const rowQuote = normalizeQuote(row.quote);
+      const lineQuote = normalizeQuote(quote);
+      if (!rowQuote) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "答复原文", `${where}: reply ${pointer} has no 答复原文 in the index`);
+        continue;
+      }
+      if (!lineQuote) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "答复原文", `${where}: the ${state} line quotes nothing, but ${pointer} is ${JSON.stringify(row.quote)}`);
+        continue;
+      }
+      if (lineQuote !== rowQuote) {
+        if (rowQuote.includes(lineQuote)) {
+          fail("ANSWER_COMMITMENT_PARTIAL_QUOTE", decision_id, "答复原文",
+            `${where}: ${JSON.stringify(quote)} is only part of ${pointer}'s reply ${JSON.stringify(row.quote)}; a commitment quotes the whole original line`);
+        } else {
+          fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "答复原文",
+            `${where}: cites ${pointer}, whose reply is ${JSON.stringify(row.quote)}, not ${JSON.stringify(quote)}`);
+        }
+        continue;
+      }
+      if (!SOURCE_GRADES.includes(row.grade)) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "来源分级",
+          `${where}: reply ${pointer} has unverifiable source class ${row.grade || "(empty)"}, so it cannot back a commitment`);
+        continue;
+      }
+      if (row.grade === "作者推断") {
+        fail("ANSWER_COMMITMENT_INFERENCE_AS_USER", decision_id, "来源分级",
+          `${where}: ${pointer} is 作者推断, so ${JSON.stringify(quote)} is a derived suggestion, not a user commitment`);
+        continue;
+      }
+      const rowTone = TONE_GRADES.includes(row.tone) ? row.tone : (TONE_SPELLINGS.get(row.tone) ?? null);
+      if (rowTone === null) {
+        fail("ANSWER_COMMITMENT_TONE_RAISED", decision_id, "语气",
+          `${where}: reply ${pointer} has undeclared tone ${row.tone || "(empty)"}, so ${state} cannot be compared`);
+        continue;
+      }
+      if (rowTone !== COMMITMENT_STATES.get(state)) {
+        // The code name is kept for existing callers; the message says what is
+        // actually wrong, because a weakened commitment is as wrong as a raised
+        // one. Both directions exit non-zero.
+        fail("ANSWER_COMMITMENT_TONE_RAISED", decision_id, "语气",
+          `${where}: the ${state} commitment does not match the original reply's strength (${COMMITMENT_STATES.get(state)} vs ${rowTone}); a commitment may neither raise nor weaken ${pointer}`);
+        continue;
+      }
+      const ref = SOURCE_REF.exec(String(row.ref ?? "").trim());
+      if (!ref) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "原件ref与行位",
+          `${where}: reply ${pointer} has no readable original line reference ${row.ref || "(empty)"}`);
+        continue;
+      }
+      const start = Number(ref[2]);
+      const end = ref[3] === undefined ? start : Number(ref[3]);
+      if (!Number.isInteger(start) || start < 1 || !Number.isInteger(end) || end < start) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "原件ref与行位", `${where}: reply ${pointer} has an invalid line range ${row.ref}`);
+        continue;
+      }
+      if (typeof read_source === "function" && typeof read_source.resolve === "function" && (identity.log_path || identity.index_path)) {
+        let real = null;
+        try { real = read_source.resolve(ref[1]); } catch { real = null; }
+        const self = real && identity.log_path && real === identity.log_path;
+        const derived = real && identity.index_path && real === identity.index_path;
+        if (self || derived) {
+          fail("ANSWER_SOURCE_SELF_REFERENCE", decision_id, "原件ref与行位",
+            `${where}: reply ${pointer} cites ${row.ref}, which resolves to ${self ? "the decision log itself" : "the requirement index"}; ${self ? "a log cannot be its own original" : "the index is derived from the original, not the original"}`);
+          continue;
+        }
+      }
+      if (typeof read_source !== "function") {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "read_source", `${where}: reply ${pointer} has no reader to verify the original line`);
+        continue;
+      }
+      let text;
+      try {
+        text = read_source(ref[1]);
+        if (text && typeof text.then === "function") {
+          fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "read_source", `${where}: reply ${pointer} needs a synchronous original read`);
+          continue;
+        }
+      } catch (error) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "原件ref与行位", `${where}: reply ${pointer} cannot be read: ${error.code ?? "READ_FAILED"}: ${error.message}`);
+        continue;
+      }
+      if (typeof text !== "string") {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "原件ref与行位", `${where}: reply ${pointer} reader returned no text`);
+        continue;
+      }
+      const observed = text.split("\n").slice(start - 1, end).join("\n");
+      if (!quoteMatches(observed, row.quote)) {
+        fail("ANSWER_COMMITMENT_ANCHOR_MISMATCH", decision_id, "答复原文",
+          `${where}: reply ${pointer}'s 答复原文 is not the complete original sentence on ${row.ref}`);
+      }
+    }
+  }
+  return { warnings };
+}
+
 /**
  * Text-only chain warnings for one decision log.
  *
@@ -577,7 +797,12 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
   // an advisory reading of the current bytes, not a new gate.
   const designPackages = readDesignBlocks(markdown).map(pkg => ({ ...pkg, missingItems: pkg.missing }));
   const mappings = decisionIdMappings(markdown);
-  const { sections, unmapped, nonCanonical, headings, sourceIds } = decisionSections(markdown, mappings);
+  const { sections, commitmentSections, unmapped, nonCanonical, headings, sourceIds, looseCommitments } = decisionSections(markdown, mappings);
+  // A 「最终决定」 heading with no 承诺 line under it is still a decision entry
+  // that carries nothing; it must keep reporting no_decision_entries instead of
+  // counting as a read block. Only a section that actually carries a
+  // commitment line is recognized.
+  const readCommitmentSections = commitmentSections.filter((section) => (section.commitments?.length ?? 0) > 0);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = unitWarnings(markdown);
   for (const pkg of designPackages) {
@@ -614,7 +839,11 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
       `${label} at line ${line} uses ${"#".repeat(level)}; decisions are read at ### or ####, so this heading is reported instead of silently skipped`,
     ));
   }
-  if (sections.length === 0) {
+  // A package's 「最终决定」 item is a recognized commitment block only when it
+  // carries a commitment line, so a log in the v2 template shape is read
+  // instead of collapsing into "no entries" — while an empty section still is
+  // no entry at all.
+  if (sections.length === 0 && readCommitmentSections.length === 0) {
     warnings.push(warning(
       "no_decision_entries",
       "unknown",
@@ -660,10 +889,13 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     }
     if (isCurrent) {
       for (const [index, parent] of parents.entries()) {
-        if (parents.slice(0, index).some(({ field }) => field === parent.field)) {
+        // A decision block carries several 承诺 lines by design, and the
+        // derived/rejected lines repeat per decision too; only the decision's
+        // own single-value parent fields are duplicate-checked.
+        if (!COMMITMENT_LINE_FIELDS.includes(parent.field) && parents.slice(0, index).some(({ field }) => field === parent.field)) {
           warnings.push(warning("duplicate_chain_field", decision_id, parent.field, `${decision_id} repeats parent ${parent.field} at line ${parent.line}`));
         }
-        if (![...CURRENT_FIELDS, ...SOURCE_FIELDS].includes(parent.field)) {
+        if (![...CURRENT_FIELDS, ...SOURCE_FIELDS, ...COMMITMENT_LINE_FIELDS].includes(parent.field)) {
           warnings.push(warning("conflicting_chain_field", decision_id, parent.field, `${decision_id} has unexpected parent ${parent.field} at line ${parent.line}`));
         }
       }
@@ -753,11 +985,15 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
 
   const answerSources = answerSourceWarnings(answerSections, requirement_index_markdown, read_source, { log_path, index_path, read_blob });
   warnings.push(...answerSources.warnings);
+  const commitmentBranches = commitmentWarnings({
+    sections, commitmentSections: readCommitmentSections, looseCommitments, requirement_index_markdown, read_source, identity: { log_path, index_path },
+  });
+  warnings.push(...commitmentBranches.warnings);
 
   return {
     schema_version: "decision-log-chain-warning.v1",
     source_ref,
-    recognized_blocks: sections.length,
+    recognized_blocks: sections.length + readCommitmentSections.length,
     recognized_fields: recognizedFields,
     design_packages: designPackages.map(pkg => ({ id: pkg.id, name: pkg.name, line: pkg.line, acs: pkg.acs, missing_items: pkg.missingItems })),
     ac_reconciliation: acReconciliation,
@@ -841,6 +1077,21 @@ function declaresAnswerSource(markdown) {
     if (nextFence !== fence) { fence = nextFence; continue; }
     if (fence) continue;
     if (/^(?:[-*+]\s+)?(?:\*\*)?(?:source_id|modality|来源身份)(?:\*\*)?\s*[:：]/.test(line)) return true;
+  }
+  return false;
+}
+
+// A 承诺 line is the second way a log declares that the index has to be read.
+// It is not the P1 source contract: the pledge keeps its own pointer per line,
+// so a log that only writes commitments still gets the index and the original
+// bytes read. Fenced examples stay examples.
+function declaresCommitment(markdown) {
+  let fence = null;
+  for (const line of markdown.split("\n")) {
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
+    if (fence) continue;
+    if (COMMITMENT_LINE.test(line)) return true;
   }
   return false;
 }
@@ -1003,7 +1254,7 @@ export function main(args = process.argv.slice(2)) {
     // the blob reader is bound to the worktree this input lives in.
     const side = { spec_markdown: readSpecSibling(input.path), read_blob: createGitBlobReader({ worktree: worktreeRootOf(input.path) }) };
     if (values.file) {
-      const declared = declaresAnswerSource(markdown);
+      const declared = declaresAnswerSource(markdown) || declaresCommitment(markdown);
       const pointers = declared ? requirementIndexPointers(markdown) : [];
       if (!declared) {
         result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, ...side });
@@ -1025,7 +1276,7 @@ export function main(args = process.argv.slice(2)) {
         result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, read_source,
           log_path: realpathSync(input.path), index_path: indexPath, ...side });
       } else {
-        console.error(`[check-decision-log-chain] ${input.source_ref} declares source_id but has no requirement-index pointer; source and tone cannot be checked`);
+        console.error(`[check-decision-log-chain] ${input.source_ref} declares source_id or 承诺 but has no requirement-index pointer; source, tone and commitment cannot be checked`);
         hadReadError = true; continue;
       }
     } else {
@@ -1056,7 +1307,7 @@ export function main(args = process.argv.slice(2)) {
     return 1;
   }
   if (answerErrors > 0) {
-    console.error(`[check-decision-log-chain] ${answerErrors} named answer-source error(s); new-shape source/tone evidence is not usable, exit 1`);
+    console.error(`[check-decision-log-chain] ${answerErrors} named source/commitment error(s); new-shape source/tone/commitment evidence is not usable, exit 1`);
     return 1;
   }
   if (checkedInputs > 0) console.log(`[check-decision-log-chain] advisory complete: ${warningCount} warning(s), non-blocking, exit 0`);
