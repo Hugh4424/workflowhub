@@ -349,15 +349,95 @@ export function requireTaskIdFromHost(taskId) {
   if(typeof taskId!=='string'||!(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId))||taskId.includes('..'))throw safeError('BROWSER_QA_TASK_HANDLE_UNAVAILABLE');
   return taskId;
 }
+const dualLabels = ['p1','p2'];
+const validTarget = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+function validManagedTargets(pages, labels) {
+  return pages && Object.keys(pages).length === labels.length &&
+    labels.every(label => validTarget(pages[label])) && new Set(Object.values(pages)).size === labels.length;
+}
+async function matchManagedPages(task, binding) {
+  if (task.name !== binding.name || task.spaceId !== binding.spaceId) throw safeError('EGO_WORKSPACE_NAME_MISMATCH');
+  const pages = await task.pages();
+  const labels = Object.keys(binding.pages);
+  if (pages.length !== labels.length || !labels.every(label => pages.some(page =>
+    page.label === label && page.spaceId === binding.spaceId && page.targetId === binding.pages[label]))) {
+    throw safeError('EGO_WORKSPACE_PAGE_IDENTITY_CHANGED');
+  }
+  return new Map(pages.map(page => [page.label, page]));
+}
+export function bindOwnedEgoPages(task, binding) {
+  if (!binding || !validManagedTargets(binding.pages, dualLabels) ||
+      !Number.isSafeInteger(binding.spaceId) || binding.spaceId < 1 ||
+      typeof binding.name !== 'string' || !binding.name.startsWith('workflowhub-qa-')) {
+    throw safeError('EGO_DUAL_BINDING_INVALID');
+  }
+  const target = makeBrowserQaScope(binding.targetUrl);
+  if (!['127.0.0.1','localhost'].includes(target.hostname)) throw safeError('EGO_DUAL_LOOPBACK_REQUIRED');
+  const owner = {...binding, pages:{...binding.pages}};
+  const verifyPages = () => matchManagedPages(task, owner);
+  const ownedPage = (pages, label) => {
+    if (!dualLabels.includes(label)) throw safeError('EGO_DUAL_MANAGED_LABEL_REQUIRED');
+    return pages.get(label);
+  };
+  const exactRoute = async pages => {
+    if (!(await Promise.all(dualLabels.map(label => pages.get(label).url()))).every(url => url === target.targetUrl)) {
+      throw safeError('EGO_DUAL_PAGE_ROUTE_MISMATCH');
+    }
+  };
+  const visibility = async () => {
+    const pages = await verifyPages();
+    await exactRoute(pages);
+    return Object.fromEntries(await Promise.all(dualLabels.map(async label => {
+      const value = await pages.get(label).evaluate(() => ({
+        state: document.visibilityState,
+        timeOrigin: performance.timeOrigin,
+        entries: performance.getEntriesByType('visibility-state').slice(-64).map(({name,startTime}) => ({name,startTime})),
+      }));
+      if (!['visible','hidden'].includes(value?.state) || !Number.isFinite(value?.timeOrigin) ||
+          !Array.isArray(value?.entries) || value.entries.length > 64 ||
+          value.entries.some(item => !['visible','hidden'].includes(item.name) || !Number.isFinite(item.startTime))) {
+        throw safeError('EGO_DUAL_VISIBILITY_UNAVAILABLE');
+      }
+      return [label, value];
+    })));
+  };
+  return {
+    page: async label => ownedPage(await verifyPages(), label),
+    visibility,
+    async activate(label) {
+      const pages = await verifyPages();
+      const own = ownedPage(pages, label);
+      await exactRoute(pages);
+      const result = await own.cdp('Page.bringToFront');
+      if (result?.error) throw safeError('EGO_DUAL_ACTIVATION_UNAVAILABLE');
+      const peer = label === 'p1' ? 'p2' : 'p1';
+      const deadline = Date.now() + 2500;
+      do {
+        const observed = await visibility();
+        if (observed[label].state === 'visible' && observed[peer].state === 'hidden') return observed;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } while (Date.now() < deadline);
+      throw safeError('EGO_DUAL_NATIVE_VISIBILITY_NOT_OBSERVED');
+    },
+  };
+}
 function validEgoHandle(value,expectedName) {
   if(!value||typeof value!=='object'||value.name!==expectedName||!Number.isSafeInteger(value.spaceId)||value.spaceId<1||value.label!=='p1')throw safeError('EGO_WORKSPACE_HANDLE_INVALID');
-  return {name:value.name,spaceId:value.spaceId,label:value.label};
+  const handle = {name:value.name,spaceId:value.spaceId,label:value.label};
+  if (value.pages === undefined) return handle;
+  if (!value.pages || !validManagedTargets(value.pages, Object.keys(value.pages)) ||
+      !Object.keys(value.pages).every(label => dualLabels.includes(label)) || !value.pages.p1) {
+    throw safeError('EGO_WORKSPACE_HANDLE_INVALID');
+  }
+  return {...handle,pages:{...value.pages}};
 }
 function safeEgoErrorCode(error) {return typeof error?.code==='string'&&/^[A-Z0-9_]+$/.test(error.code)?error.code:'EGO_WORKSPACE_FAILED';}
-function verifiedEgoFinish(outcome) {
+function verifiedEgoFinish(outcome, handle) {
   const receipt=outcome?.receipt;
   return outcome?.resolved===true&&receipt&&typeof receipt==='object'&&receipt.closed_page_label_p1===true
-    &&receipt.closed_page_count===1&&receipt.retained_page_count===0
+    &&receipt.closed_page_count===(handle.pages?Object.keys(handle.pages).length:1)&&receipt.retained_page_count===0
+    &&(!handle.pages||(validManagedTargets(receipt.closed_page_targets,Object.keys(handle.pages))&&
+      Object.entries(handle.pages).every(([label,id])=>receipt.closed_page_targets[label]===id)))
     &&(receipt.preserved_unmanaged_count===null
       ||(Number.isSafeInteger(receipt.preserved_unmanaged_count)&&receipt.preserved_unmanaged_count>=0));
 }
@@ -387,7 +467,7 @@ export async function runOwnedEgoTaskSpace({taskId,createSpace,runScenario,finis
       cleanup='running';
       try {
         const outcome=await finishSpace(handle);
-        if(!verifiedEgoFinish(outcome))throw safeError('EGO_WORKSPACE_FINISH_CONFIRMATION_UNAVAILABLE');
+        if(!verifiedEgoFinish(outcome,handle))throw safeError('EGO_WORKSPACE_FINISH_CONFIRMATION_UNAVAILABLE');
         cleanup='finished';
         report({event:'ego-workspace-finished',page_label:handle.label,receipt:outcome.receipt});
       } catch(error) {
@@ -607,6 +687,7 @@ async function runEgoQa({env,session,evidence,scenario,scope,mode,egoHelperPath}
   if(mode!=='none')throw safeError('EGO_WORKSPACE_TICKET_EXPORT_UNSUPPORTED');
   if(typeof egoHelperPath!=='string'||!isAbsolute(egoHelperPath))throw safeError('EGO_HELPER_UNAVAILABLE');
   const taskId=requireTaskIdFromHost(env.BROWSER_QA_TASK_ID);
+  const dual=env.BROWSER_QA_EGO_PAGES==='2';
   if(env.BROWSER_QA_EGO_SPACE_ID!==undefined||env.BROWSER_QA_EGO_KEEP_OPEN!==undefined)throw safeError('EGO_TASKSPACE_REUSE_OPTIONS_UNSUPPORTED');
   if(!await egoAlreadyRunning(env))throw safeError('EGO_NOT_RUNNING');
   await mkdir(resolve(evidence),{recursive:true});
@@ -617,17 +698,44 @@ async function runEgoQa({env,session,evidence,scenario,scope,mode,egoHelperPath}
     await runOwnedEgoTaskSpace({
       taskId,
       createSpace:async name=>{
-        const script=`const name=${JSON.stringify(name)};const task=await taskSpace(name);if(task.name!==name)throw Object.assign(new Error('EGO_WORKSPACE_NAME_MISMATCH'),{code:'EGO_WORKSPACE_NAME_MISMATCH'});console.log('WHQA_OWNED_HANDLE='+JSON.stringify({name:task.name,spaceId:task.spaceId,label:'p1'}));`;
-        return executeEgoWorkspaceCommand([egoHelperPath,'nodejs','-e',script],env,aborter.signal);
+        const script=`const name=${JSON.stringify(name)};const task=await taskSpace(name);
+          if(task.name!==name)throw new Error('EGO_WORKSPACE_NAME_MISMATCH');
+          const handle={name:task.name,spaceId:task.spaceId,label:'p1'};
+          ${dual?`const initial=await task.pages();
+          if(initial.length!==1||initial[0].label!=='p1'||initial[0].spaceId!==task.spaceId||!initial[0].targetId)
+            throw new Error('EGO_DUAL_INITIAL_PAGE_UNAVAILABLE');
+          handle.pages={p1:initial[0].targetId};
+          try {
+            const extra=await task.newPage();
+            if(extra.label!=='p2'||extra.spaceId!==task.spaceId||!extra.targetId||extra.targetId===handle.pages.p1)
+              throw new Error('EGO_DUAL_SECOND_PAGE_UNAVAILABLE');
+            handle.pages.p2=extra.targetId;
+          } finally {
+            console.log('WHQA_OWNED_HANDLE='+JSON.stringify(handle));
+          }`:`console.log('WHQA_OWNED_HANDLE='+JSON.stringify(handle));`}`;
+        return executeEgoWorkspaceCommand([egoHelperPath,'nodejs','-e',script],env,dual?undefined:aborter.signal);
       },
       runScenario:async handle=>{
         if(cancelled)throw safeError('CANCELLED');
-        const result=await command(scenario,{...env,BROWSER_QA_EGO_TASKSPACE_NAME:handle.name,BROWSER_QA_EGO_PAGE_LABEL:handle.label,BROWSER_QA_EGO_HELPER_PATH:egoHelperPath,BROWSER_QA_TARGET_URL:scope.targetUrl,BROWSER_QA_EVIDENCE_DIR:resolve(evidence)},{signal:aborter.signal,inherit:true});
+        if(dual&&!validManagedTargets(handle.pages,dualLabels))throw safeError('EGO_DUAL_SECOND_PAGE_UNAVAILABLE');
+        const owned=dual?{BROWSER_QA_EGO_PAGE_LABELS:dualLabels.join(','),
+          BROWSER_QA_EGO_OWNED_PAGES:JSON.stringify({...handle,targetUrl:scope.targetUrl})}:{};
+        const result=await command(scenario,{...env,...owned,BROWSER_QA_EGO_TASKSPACE_NAME:handle.name,BROWSER_QA_EGO_PAGE_LABEL:handle.label,BROWSER_QA_EGO_HELPER_PATH:egoHelperPath,BROWSER_QA_TARGET_URL:scope.targetUrl,BROWSER_QA_EVIDENCE_DIR:resolve(evidence)},{signal:aborter.signal,inherit:true});
         if(cancelled||result.code)throw safeError(cancelled||result.code===130||result.code===143?'CANCELLED':'SCENARIO_FAILED');
         return result;
       },
       finishSpace:handle=>executeEgoFinishCommand(
-        [egoHelperPath,'nodejs','-e',`const name=${JSON.stringify(handle.name)};const task=await taskSpace(name);if(task.name!==name)throw Object.assign(new Error('EGO_WORKSPACE_NAME_MISMATCH'),{code:'EGO_WORKSPACE_NAME_MISMATCH'});const value=await task.finish({keep:[]});const receipt=value&&typeof value==='object'?value:{};const entries=Object.entries(receipt);const closed=entries.filter(([key,list])=>/closed/i.test(key)&&Array.isArray(list)&&list.every(label=>typeof label==='string'));const retained=entries.filter(([key,list])=>/(retained|kept)/i.test(key)&&Array.isArray(list)&&list.every(label=>typeof label==='string'));const count=lists=>lists.reduce((total,[,list])=>total+list.length,0);const closedSpace=typeof receipt.closedSpace==='boolean'?receipt.closedSpace:typeof receipt.closed_space==='boolean'?receipt.closed_space:null;const protectedCount=Number.isSafeInteger(receipt.preservedUnmanagedCount)?receipt.preservedUnmanagedCount:Number.isSafeInteger(receipt.preserved_unmanaged_count)?receipt.preserved_unmanaged_count:null;const summary={receipt_keys:Object.keys(receipt).sort(),closed_page_label_p1:closed.some(([,list])=>list.includes('p1')),closed_page_count:count(closed),retained_page_count:count(retained),closed_space:closedSpace,preserved_unmanaged_count:protectedCount};console.log(JSON.stringify({event:'ego-workspace-finished',resolved:true,receipt:summary}));`],
+        [egoHelperPath,'nodejs','-e',`const name=${JSON.stringify(handle.name)};const task=await taskSpace(name);if(task.name!==name)throw new Error('EGO_WORKSPACE_NAME_MISMATCH');
+          const expected=${JSON.stringify(handle.pages??null)};
+          if(expected){
+            if(task.spaceId!==${JSON.stringify(handle.spaceId)})throw new Error('EGO_WORKSPACE_NAME_MISMATCH');
+            const managed=await task.pages();
+            if(managed.length!==Object.keys(expected).length||!managed.every(page=>page.spaceId===task.spaceId&&expected[page.label]===page.targetId))
+              throw new Error('EGO_WORKSPACE_PAGE_IDENTITY_CHANGED');
+          }
+          const value=await task.finish({keep:[]});const receipt=value&&typeof value==='object'?value:{};const entries=Object.entries(receipt);const closed=entries.filter(([key,list])=>/closed/i.test(key)&&Array.isArray(list)&&list.every(label=>typeof label==='string'));const retained=entries.filter(([key,list])=>/(retained|kept)/i.test(key)&&Array.isArray(list)&&list.every(label=>typeof label==='string'));const count=lists=>lists.reduce((total,[,list])=>total+list.length,0);const closedSpace=typeof receipt.closedSpace==='boolean'?receipt.closedSpace:typeof receipt.closed_space==='boolean'?receipt.closed_space:null;const protectedCount=Number.isSafeInteger(receipt.preservedUnmanagedCount)?receipt.preservedUnmanagedCount:Number.isSafeInteger(receipt.preserved_unmanaged_count)?receipt.preserved_unmanaged_count:null;const summary={receipt_keys:Object.keys(receipt).sort(),closed_page_label_p1:closed.some(([,list])=>list.includes('p1')),closed_page_count:count(closed),retained_page_count:count(retained),closed_space:closedSpace,preserved_unmanaged_count:protectedCount};
+          if(expected)summary.closed_page_targets=Object.fromEntries(Object.entries(expected).filter(([label])=>receipt.closedManagedLabels?.includes(label)));
+          console.log(JSON.stringify({event:'ego-workspace-finished',resolved:true,receipt:summary}));`],
         env,undefined,handle
       ),
       report:fact=>process.stdout.write(JSON.stringify(fact)+'\n')
@@ -765,7 +873,11 @@ function makeBrowserQaScope(value, topLevelSite) {
 export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.env,selectionOptions={}) {
   let url,evidence;const a=[...args];while(a.length&&a[0]!=='--'){const flag=a.shift();if(flag==='--url')url=a.shift();else if(flag==='--evidence-dir')evidence=a.shift();else throw safeError('INVALID_RUN_ARGUMENT');}if(a.shift()!=='--'||!a.length||!evidence)throw safeError('INVALID_RUN_ARGUMENT');
   const env={...inputEnv};const sourceInput=env.BROWSER_QA_TICKET_SOURCE_WS;const site=env.BROWSER_QA_TICKET_TOP_LEVEL_SITE;delete env.BROWSER_QA_TICKET_SOURCE_WS;delete env.BROWSER_QA_TICKET_TOP_LEVEL_SITE;
+  delete env.BROWSER_QA_EGO_PAGE_LABELS;delete env.BROWSER_QA_EGO_OWNED_PAGES;
   const scope=makeBrowserQaScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';
+  if(env.BROWSER_QA_EGO_PAGES!==undefined&&env.BROWSER_QA_EGO_PAGES!=='2')throw safeError('EGO_QA_PAGE_COUNT_UNSUPPORTED');
+  if(env.BROWSER_QA_EGO_PAGES==='2'&&(env.BROWSER_QA_ENGINE!=='ego-lite'||mode!=='none'||
+      !['127.0.0.1','localhost'].includes(scope.hostname)))throw safeError('EGO_DUAL_EXPLICIT_LOOPBACK_REQUIRED');
   const selection=await selectBrowserEngine(env,selectionOptions);let engine=selection.engine;
   for(const fact of selection.fallbacks)console.log(JSON.stringify(fact));
   if(!['ego-lite','agent-browser','browser-use'].includes(engine))throw safeError('UNSUPPORTED_ENGINE');

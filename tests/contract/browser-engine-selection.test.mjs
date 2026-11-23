@@ -286,3 +286,59 @@ it('entry:symlink-context-run-executes-validator-instead-of-silent-success',()=>
     expect(imported.status).toBe(0);expect(imported.stdout.trim()).toBe('import-only');expect(imported.stderr).toBe('');
   }finally{rmSync(root,{recursive:true,force:true});}
 });
+
+describe('Ego loopback dual-page ownership',()=>{
+  const binding={name:'workflowhub-qa-fixture-test',spaceId:17,pages:{p1:'target-1',p2:'target-2'},targetUrl:'http://127.0.0.1:3000/live'};
+  function fakeTask() {
+    let active='p1';
+    const calls=[];
+    const pages=Object.entries(binding.pages).map(([label,targetId])=>({
+      label,targetId,spaceId:binding.spaceId,url:async()=>binding.targetUrl,
+      evaluate:async()=>({state:active===label?'visible':'hidden',timeOrigin:200,entries:[{name:'visible',startTime:5}]}),
+      cdp:async method=>{calls.push({method,targetId});active=label;},
+    }));
+    return {calls,managed:pages,task:{name:binding.name,spaceId:binding.spaceId,pages:async()=>pages}};
+  }
+  it('checks exact loopback display, activates only a managed target, and reads native state',async()=>{
+    const {calls,managed,task}=fakeTask();
+    const owned=api.bindOwnedEgoPages(task,binding);
+    expect(await owned.page('p2')).toBe(managed[1]);
+    expect((await owned.activate('p2')).p1.state).toBe('hidden');
+    expect((await owned.activate('p1')).p2.state).toBe('hidden');
+    await expect(owned.activate('target-2')).rejects.toMatchObject({code:'EGO_DUAL_MANAGED_LABEL_REQUIRED'});
+    managed[1].url=async()=>binding.targetUrl+'?foreign=1';
+    await expect(owned.activate('p2')).rejects.toMatchObject({code:'EGO_DUAL_PAGE_ROUTE_MISMATCH'});
+    managed[1].targetId='target-external';
+    await expect(owned.activate('p2')).rejects.toMatchObject({code:'EGO_WORKSPACE_PAGE_IDENTITY_CHANGED'});
+    expect(calls).toEqual([
+      {method:'Page.bringToFront',targetId:'target-2'},
+      {method:'Page.bringToFront',targetId:'target-1'},
+    ]);
+  });
+  it('rejects remote dual mode and auto/alternate engines before looking for a browser',async()=>{
+    for(const [url,engine] of [['https://example.test/live','ego-lite'],[binding.targetUrl,'auto'],[binding.targetUrl,'agent-browser']]){
+      await expect(api.runBrowserQa(['--url',url,'--evidence-dir','/unused','--','must-not-run'],
+        {BROWSER_QA_EGO_PAGES:'2',BROWSER_QA_ENGINE:engine},{probe:()=>{throw Error('unexpected probe');}}))
+        .rejects.toMatchObject({code:'EGO_DUAL_EXPLICIT_LOOPBACK_REQUIRED'});
+    }
+  });
+  it('verifies both target IDs on finish even when the scenario failed',async()=>{
+    const calls=[];
+    const scenarioError=Object.assign(new Error('fixture scenario failure'),{code:'SCENARIO_FAILED'});
+    const options={taskId:'dual-ownership',
+      createSpace:async name=>({name,spaceId:17,label:'p1',pages:{p1:'target-1',p2:'target-2'}}),
+      runScenario:async()=>{calls.push('scenario');throw scenarioError;},
+      finishSpace:async()=>{calls.push('finish');return {resolved:true,receipt:{
+        closed_page_label_p1:true,closed_page_count:2,retained_page_count:0,
+        closed_page_targets:{p1:'target-1',p2:'target-2'},preserved_unmanaged_count:1,
+      }};},
+    };
+    await expect(api.runOwnedEgoTaskSpace(options)).rejects.toBe(scenarioError);
+    expect(calls).toEqual(['scenario','finish']);
+    await expect(api.runOwnedEgoTaskSpace({...options,finishSpace:async()=>{
+      const outcome=await options.finishSpace();
+      outcome.receipt.closed_page_targets.p2='replaced';
+      return outcome;
+    }})).rejects.toMatchObject({code:'EGO_WORKSPACE_CLEANUP_INCOMPLETE'});
+  });
+});
