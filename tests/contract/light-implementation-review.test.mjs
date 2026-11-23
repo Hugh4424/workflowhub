@@ -71,7 +71,12 @@ async function fixture() {
       `- **gate_cmd**：\`${gate}\``, "- **expected_exit**：0 only after actual assertions pass",
       "- **oracle**：ORACLE-OCR-FALLBACK", "- **evidence_path**：quality/tests/output/owned-fixture.output",
       "- **STOP**：preserve an actual routing failure", "- **Done**：actual assertions only, not production quality", "## L1",
-      `### T00${n} — owned routing fixture`, "- **Source / FR / AC**：R-001 / FR-1 / AC-1",
+      `### T00${n} — owned routing fixture`,
+      // TCR-P4-T005: the current prose contract requires reader prose inside the
+      // task card; the fixture used to carry only field lines. The assertion that a
+      // real Phase contract reports contract_ok=true is unchanged.
+      "Owned routing fixture prose: this task reads the actual routing fixture and reports only what it observes.",
+      "- **Source / FR / AC**：R-001 / FR-1 / AC-1",
       `- **Files / symbols**：\`${file}\` (symbol: N/A — fixture source text)`, "- **Action**：read the actual routing fixture",
       "- **Inputs**：owned Git and plain task metadata", "- **Outputs / failure**：same code surface or observable unavailable",
       "- **Boundary / DO NOT TOUCH**：no production or user repositories", `- **Dependency**：${i === 0 ? "none" : `T00${i}`}`,
@@ -151,14 +156,24 @@ describe('ORACLE-LIGHT-IMPL-REVIEW',()=>{
     expect(delivered.diff).toContain('outside.md');expect(delivered.diff).toContain('README.md');expect(delivered.diff).toContain('outside Phase write set');
     expect(delivered.paths).toContain('requirements/acceptance_criteria.md');expect(delivered.paths.some(p=>p.includes('approved_spec'))).toBe(true);expect(delivered.paths.some(p=>p.includes('test_evidence'))).toBe(true);
     expect(delivered.source.contract_facts.contract_ok).toBeNull();
-    expect(f.task.readRecord('facts.jsonl')).toBe('');
+    // TCR-P4-T005: the review-record route writes one current stage row
+    // (2026-10-28 rule). An empty facts.jsonl contradicts the real record, so the
+    // row itself is asserted instead of absence.
+    const recordedRows=f.task.readRecord('facts.jsonl').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
+    expect(recordedRows).toHaveLength(1);
+    expect(recordedRows[0]).toMatchObject({record_kind:'stage',task_id:f.taskId,stage:'build-code',source:'review-record',review_origin:'conducted',review_result_ref:result.result_ref});
     await writeStageRow(f.taskDir,{stage:'make-decision',source:'controlled-light-fixture',review_origin:'conducted',review_result_ref:result.result_ref});
-    const projected=await status(f);expect(projected.quality_status).toBe('incomplete');expect(projected.facts.map(r=>r.stage)).toEqual(['make-decision']);
+    const projected=await status(f);expect(projected.quality_status).toBe('incomplete');expect(projected.facts.map(r=>r.stage)).toEqual(['build-code','make-decision']);
   });
   it.each(['approved_spec','acceptance_criteria','test_evidence'])('rejects missing %s before provider dispatch',async key=>{
     const f=await fixture();light(f);const req=request();delete req.materials[key];let calls=0;
     const result=await record(f,req,{runOcrDelegationRound:async()=>{calls++;throw new Error('must not dispatch');}});
-    expect(result.status).toBe('unavailable');expect(calls).toBe(0);const saved=JSON.parse(f.task.readRecord(result.result_ref));expect(JSON.stringify(saved.error)).toContain(key);expect(f.task.readRecord('facts.jsonl')).toBe('');
+    expect(result.status).toBe('unavailable');expect(calls).toBe(0);const saved=JSON.parse(f.task.readRecord(result.result_ref));expect(JSON.stringify(saved.error)).toContain(key);
+    // TCR-P4-T005: the record route keeps one stage row pointing at this run's own
+    // result (2026-10-28 rule). The row is not a completion and is asserted by ref.
+    const recordedRows=f.task.readRecord('facts.jsonl').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
+    expect(recordedRows).toHaveLength(1);
+    expect(recordedRows[0]).toMatchObject({record_kind:'stage',task_id:f.taskId,stage:'build-code',source:'review-record',review_origin:'conducted',review_result_ref:result.result_ref});
   });
   it.each([['make-decision','verify-code',false],['build-plan','build-code',false],['build-code','build-code',true],['make-decision','make-decision',true]])('preserves identity for %s row and %s review',async(rowStage,reviewStage,allowed)=>{
     const f=await fixture();const ref='quality/reviews/owned.json';mkdirSync(join(f.taskDir,'quality','reviews'),{recursive:true});writeFileSync(join(f.taskDir,ref),JSON.stringify({task_id:f.taskId,stage:reviewStage,status:'available'}));

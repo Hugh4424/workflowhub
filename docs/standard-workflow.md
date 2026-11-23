@@ -36,7 +36,7 @@ make-decision 最终确认＝阶段收口，具体动作沿其方法与决策日
 
 ### 长任务与证据边界
 
-执行策略沿 make-decision 已确认答复，开工记录 execution_budget 及重试预留。
+执行策略沿 make-decision 已确认答复；execution_budget 仅可选人读，retry_reserve 并入可选执行策略。
 操作细则唯一读 [长任务怎么控制](../workflows/build-code/SKILL.md#长任务怎么控制)：
 检查点覆盖 Phase 边界、长命令前后和阻塞；等待用事件通知，不 sleep/轮询。
 墙钟、活动、用户等待、provider 审查等待和真实环境纯等待分别记录。
@@ -53,6 +53,17 @@ S/M 快速反馈不替代最终完整数据与验收；独立测试面按各自 
 同运行同字节复用并保 provenance；旧运行同字节不能冒当前证据。
 空间检查消费当前策略及原 task handle 预算，不恢复历史库大小倍数门。
 保存、比较与保留仍以本文件「证据只留原始件」为唯一执行底座。
+
+### 安装态发布检查
+
+真实装好的运行器根（`runner/`）用 `node tools/cli/run-checks.mjs` 做聚合自检：
+逐项报告跑过、具名未跑与失败；成功只证明这些检查真实跑过，不证明业务或发布通过。
+裸 `runner` + `skill-bundle` 安装根缺 `skills/catalog.yaml` 时，两项源码登记检查打印具名 `NOT RUN`，命令仍 exit 0；
+完整 `buildRelease` 根会把 catalog 复制进 `runner/`，两项真实运行。
+删除任一随包门禁检查器后同一命令必须 exit 1 并点名该检查器，恢复同字节后回到 exit 0。
+advisory 的 `check-decision-log-chain` 只打印警告，不进失败清单。
+检查器清单、数据依赖与七类入口的当前覆盖唯一读 [发布支持矩阵](release-support-matrix.md)「安装态覆盖域」，
+本文件不复制第二份清单。
 
 ### 三审查点与结论真实性
 

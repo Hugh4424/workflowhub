@@ -5,6 +5,8 @@
     {
       "step_id": 1,
       "step_slug": "load-confirmed-inputs",
+      "method_anchor": "方法",
+      "requires_user_reply": false,
       "observable_result": "父决策和必要来源可读，逐条读父决策并出决定清单（编号＋一句结论＋旧位置），完整旅程、需求范围、排除理由与未知项明确；不推断缺失确认。 判定消费：SKILL.md#方法 第1步；原件：decision确认ref、原始要求与只读输入原件。",
       "completion_evidence": [
         {
@@ -16,6 +18,8 @@
     {
       "step_id": 2,
       "step_slug": "generate-outline-and-task-map",
+      "method_anchor": "方法",
+      "requires_user_reply": false,
       "observable_result": "第一次spec-prd内容调用产大纲与5列任务地图（任务/结果/依赖/波次/主承接需求），结果列只写用户可见结果，需求与决定的落点记在决策覆盖表；波次只排任务先后；每需求有负责卡或明确排除，实际稿件已展示，未答仍为草稿。 判定消费：SKILL.md#方法 第2步；原件：prd地图实际稿、作者调用事实、来源覆盖。 UI 任务时，先写页面清单（页面、路由与组件）再排地图，需要设计才排设计任务，前端底座只在跨多页或多任务时排；有稿不排设计任务，单页且有设计稿不排设计任务、不排前端底座；非 UI 跳过。",
       "completion_evidence": [
         {
@@ -27,6 +31,8 @@
     {
       "step_id": 3,
       "step_slug": "confirm-map-and-conditional-design",
+      "method_anchor": "方法",
+      "requires_user_reply": true,
       "observable_result": "主会话保留地图及适用设计的真实答复；未展示、旧稿指代、拒绝或未答不当当前批准。 判定消费：SKILL.md#方法 第3步；原件：真实问题/答复、设计来源/预览限制。",
       "completion_evidence": [
         {
@@ -38,6 +44,8 @@
     {
       "step_id": 4,
       "step_slug": "expand-single-prd",
+      "method_anchor": "方法",
+      "requires_user_reply": false,
       "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD；同一作者同批产出决策覆盖表（行按decision-log六节实有项列，落点为空即未完成），整理覆盖表不是第三次内容调用；一个作者写整个PRD文件，不按波次切作者，来源/语义一致，缺口保留，不新增第三内容调用。 判定消费：SKILL.md#方法 第4步；原件：作者真实调用事实、同一prd、决策覆盖表与确认输入。 UI 任务时，按五行卡更新页面清单，并为每个 UI 任务补逐任务接线、视觉、组件三段：接线写页面区域、数据或动作的真假变化与失败态；视觉写视觉还原验收（设计源与视口对照）；组件写组件复用与沉淀；写设计偏差处置；页面数据清单由 PRD 作者另写一张；非 UI 跳过。",
       "completion_evidence": [
         {
@@ -49,6 +57,8 @@
     {
       "step_id": 5,
       "step_slug": "review-and-confirm-final-draft",
+      "method_anchor": "方法",
+      "requires_user_reply": true,
       "observable_result": "完整稿只做一次审查，由wh-review执行并只审拆卡、实现可行性、范围、验收、旧件保真五件事；审查输入含旧件与决策覆盖表，缺旧件记incomplete不写pass，抽读覆盖表落点；审查发现逐项处置；最终实际展示稿取得真实confirm，版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
       "completion_evidence": [
         {
@@ -64,6 +74,8 @@
     {
       "step_id": 6,
       "step_slug": "closeout",
+      "method_anchor": "方法",
+      "requires_user_reply": true,
       "observable_result": "阶段末主会话按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。build-prd仅成本标签，材料未供unavailable、无审查事实no_stage_fact；读回27列及旧前缀/窗口，缺报exit1与无记录分列，未齐incomplete。 判定消费：SKILL.md#方法 第6步；原件：原hand-off、成本27列原读数、真实交付原ref。",
       "completion_evidence": [
         {

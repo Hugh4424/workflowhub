@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import Ajv2020 from "ajv/dist/2020.js";
+import { readFileSync } from "node:fs";
 import { REVIEW_ORIGINS } from "../../runtime/task/task-store.mjs";
 import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
 import { classifyAttemptTaxonomy } from "../../skills/wh-review/scripts/review-result.mjs";
 
+const attemptSchema=JSON.parse(readFileSync(new URL("../../runtime/review/schemas/attempt.schema.json",import.meta.url),"utf8"));
+const validateAttempt=new Ajv2020({allErrors:true,strict:true,strictRequired:false,formats:{"date-time":true}}).compile(attemptSchema);
 const materialId = "a".repeat(64);
 const runtimeId = "runtime-stalled";
 const requestId = "request-stalled";
@@ -45,7 +48,7 @@ function managedTerminalWire() {
       state: "terminal",
       material_id: materialId,
       group: {
-        host_provider: "codex",
+        host_provider: "dsh",
         outcome: "stalled",
         providers: [managedMember()],
         round: 1,
@@ -118,6 +121,6 @@ describe("stalled consumer delta", () => {
   });
 
   it("accepts stalled in the attempt coverage contract", () => {
-    expect(validateSchema("attempt", stalledAttempt())).toMatchObject({ coverage: { group_outcome: "stalled" } });
+    const attempt=stalledAttempt();expect(validateAttempt(attempt),JSON.stringify(validateAttempt.errors)).toBe(true);expect(attempt).toMatchObject({ coverage: { group_outcome: "stalled" } });
   });
 });

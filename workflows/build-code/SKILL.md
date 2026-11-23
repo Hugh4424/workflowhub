@@ -19,9 +19,9 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 ## 长任务怎么控制？
 
 沿 make-decision 已确认的执行策略开工；build-plan 与本阶段只消费，不补默认方向。
-每 Phase 记人读的
-`execution_budget={window_minutes,command_cap,wait_cap,retry_reserve}`，
-逐项注明来源、单位和重试预留，观察墙钟、活动、命令、轮询、阻塞及测试代理。
+`execution_budget` 只作可选人读参考：window_minutes、command_cap、wait_cap 三个观察量
+按实际来源与单位记，retry_reserve 并入可选执行策略，不逐项强制成必填对象。
+观察墙钟、活动、命令、轮询、阻塞及测试代理；缺观察就写未观察，不补默认值。
 用户等待、provider 审查等待、真实环境纯等待分账；真实环境操作仍算活动。
 缺值回原 owner，保 unknown；不用命令数量、代理数量或固定轮次作机器质量门。
 

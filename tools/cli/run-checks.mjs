@@ -181,13 +181,22 @@ async function runAggregate({ materialRoot, stage } = {}) {
   const metricsCode = runChecker("check-metrics-schema", [], checkMetricsSchema);
   if (metricsCode !== 0) failures.push({ name: "check-metrics-schema", code: metricsCode });
 
-  console.log("[run-checks] running skill-static-deps ...");
-  const skillDepsCode=runChecker("skill-static-deps",[],checkSkillStaticDependencies);
-  if(skillDepsCode!==0)failures.push({name:"skill-static-deps",code:skillDepsCode});
+  // The source registry is not part of the Runner release. When it is absent,
+  // the two registry checks are named NOT RUN with the actual reason instead of
+  // failing on ENOENT or being silently skipped. Source checkouts keep them.
+  const catalogPath = resolve(repoRoot, "skills/catalog.yaml");
+  if (existsSync(catalogPath)) {
+    console.log("[run-checks] running skill-static-deps ...");
+    const skillDepsCode=runChecker("skill-static-deps",[],checkSkillStaticDependencies);
+    if(skillDepsCode!==0)failures.push({name:"skill-static-deps",code:skillDepsCode});
 
-  console.log("[run-checks] running check-skill-consistency ...");
-  const consistencyCode=runChecker("check-skill-consistency",["--root",repoRoot]);
-  if(consistencyCode!==0)failures.push({name:"check-skill-consistency",code:consistencyCode});
+    console.log("[run-checks] running check-skill-consistency ...");
+    const consistencyCode=runChecker("check-skill-consistency",["--root",repoRoot]);
+    if(consistencyCode!==0)failures.push({name:"check-skill-consistency",code:consistencyCode});
+  } else {
+    console.log("[run-checks] NOT RUN skill-static-deps — skills/catalog.yaml is absent from this root (installed release carries no source registry); source-registry coverage is unavailable here");
+    console.log("[run-checks] NOT RUN check-skill-consistency — skills/catalog.yaml is absent from this root (installed release carries no source registry); source-registry coverage is unavailable here");
+  }
 
   // 2. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
   console.log("[run-checks] running check-stage-quality ...");
@@ -261,23 +270,59 @@ async function materialTaskRecordRoot(materialRoot) {
   } catch { return undefined; }
 }
 
-function materialConvergenceErrors(root, files) {
+async function materialConvergenceErrors(root, files, { taskPath = null } = {}) {
+  const { convergencePointerRefs, coldReadGaps, fiveMaterialDeclarationGaps, fiveMaterialHeading } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
   const decision = String(files?.['decision-log.md'] ?? '');
-  const pointer = /清单：`([^`\n]*convergence-checklist[^`\n]*\.md)`/.exec(decision)?.[1];
-  if (!pointer) return [];
+  // The direction checker and this material reader share one pointer parse:
+  // any backticked current convergence-checklist path, not only a "清单：" line.
+  const pointers = convergencePointerRefs(decision);
+  if (!pointers.length) {
+    // A bare pre-convergence log stays clean; one that already declares
+    // packages must name its current checklist. Returning [] here would let a
+    // missing pointer pass as a clean material.
+    return /^####\s*WP-?\d+|^###\s*工作包\s*\d+|^\|\s*\d+\s*\|/m.test(decision)
+      ? ['收敛清单指针未取得：已声明工作包'] : [];
+  }
+  if (pointers.length > 1) return [`收敛清单指针候选数：${pointers.length}`];
+  const pointer = pointers[0];
+  if (pointer.split('/').some(part => part === '..' || part === '.') || pointer.includes('\\')) return [`收敛清单越界：${pointer}`];
   const candidates = [resolve(root, pointer), resolve(root, 'quality/evidence/decision-log-refs', pointer)];
   const ledgerPath = candidates.find(candidate => existsSync(candidate));
   if (!ledgerPath) return [`收敛清单不可读：${pointer}`];
   let ledger = '';
   try { ledger = readFileSync(ledgerPath, 'utf8'); } catch { return [`收敛清单不可读：${pointer}`]; }
   const errors = [];
+  // A declared package set with no readable/unique module rows cannot pass the
+  // material side merely because a checklist file exists.
+  const declaredIds = [...decision.matchAll(/^#{2,4}\s*(?:WP-?(\d+)|工作包\s*(\d+)|包\s*(\d+))/gm)]
+    .map(match => String(Number(match[1] ?? match[2] ?? match[3])));
+  const ledgerIds = [...ledger.matchAll(/^\|\s*(\d+)\s*\|/gm)].map(match => String(Number(match[1])));
+  if (declaredIds.length && (!ledgerIds.length || new Set(ledgerIds).size !== ledgerIds.length)) {
+    errors.push('权威模块集合未取得或重复');
+  }
+  // Every 已收敛 row goes through the main checker's own cold-read parser. This
+  // entry keeps no weaker regex copy: the trigger is the row's real state, and the
+  // criterion (six/ five answers, reader independence, card digest, re-read) is the
+  // one the other convergence entry already applies.
   for (const line of ledger.split('\n')) {
     if (!/^\s*\|/.test(line)) continue;
     const cells = line.split('|').map(cell => cell.trim());
     const id = cells[1], state = cells[2];
     if (!/^\d+$/.test(id) || !/^已收敛/.test(state ?? '')) continue;
-    const block = new RegExp(`##\\s*工作包\\s*${id}(?![0-9])[\\s\\S]*?(?=\\n##\\s*工作包\\s*\\d|$)`).exec(ledger)?.[0] ?? '';
-    if (!/冷读|真实问答|聊天呈现/.test(block)) errors.push(`包 ${id} 已收敛但缺冷读/真实问答原件`);
+    for (const gap of coldReadGaps({ id, body: ledger, taskPath, taskName: `包 ${id}` }).errors) errors.push(gap);
+  }
+  // Every 已收敛 row needs its five-original declaration; block absence is a
+  // named gap, not a legacy pass. File-byte identity still needs --task-path.
+  const ids = new Set([...ledger.matchAll(new RegExp(`^###\\s*包\\s*(\\d+)\\s*${fiveMaterialHeading}\\s*$`, "gm"))].map(match => match[1]));
+  for (const line of ledger.split('\n')) {
+    if (!/^\s*\|/.test(line)) continue;
+    const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+    const id = /^(\d+)/.exec(cells[0] ?? '')?.[1];
+    if (id && cells.includes('已收敛')) ids.add(id);
+  }
+  for (const id of ids) {
+    const result = fiveMaterialDeclarationGaps({ id, body: ledger, taskPath: null, taskName: `包 ${id}` });
+    errors.push(...result.gaps);
   }
   return errors;
 }
@@ -630,7 +675,7 @@ async function runMaterialChecks(root, { stage } = {}) {
       const errors = [...inspection.errors];
       if (!String(inspection.files["decision-log.md"] ?? "").trim()) errors.push("decision-log.md 未取得：make-decision 阶段至少要有一份可读决策日志");
       for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
-      const convergenceErrors = materialConvergenceErrors(root, inspection.files);
+      const convergenceErrors = await materialConvergenceErrors(root, inspection.files, { taskPath: await materialTaskRecordRoot(root) });
       errors.push(...convergenceErrors);
       if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`); return false; }
       console.log(`[run-checks][material] ${root} stage=make-decision：本次只核 decision-log 可读与材料结构错误=0；未要求 spec.md/phases，不判阶段完成，也不证明步骤齐备`);
@@ -805,16 +850,101 @@ async function main() {
     });
     const { exit_code, ...coverage } = stepCoverageExit(report);
     let convergenceExit = exit_code;
+    let convergenceChecked = false;
     try {
-      const manifest = JSON.parse(readFileSync(joinPath(resolve(options.taskPath), "task.json"), "utf8"));
-      const material = joinPath(manifest.target_repo_root, "specs", manifest.task_id);
+      const manifest = JSON.parse(readFileSync(join(resolve(options.taskPath), "task.json"), "utf8"));
+      const material = join(manifest.target_repo_root, "specs", manifest.task_id);
       if (existsSync(material)) {
         const { runStageStepsCheck } = await import("./check-stage-steps.mjs");
         const checked = runStageStepsCheck({ taskPath: resolve(options.taskPath), materialRoot: material, repoRoot: options.workflowRoot ?? undefined, stage: "make-decision" });
         const gaps = checked.convergence?.gaps ?? [];
-        if (gaps.some(gap => /缺冷读原件|收敛格缺当前卡节|聊天呈现未取得|缺真实问答指针|冷读五问未绑定|先设计后提问缺证|UI设计源首问|冷读原件摘要不符|卡片摘要不符/.test(String(gap)))) convergenceExit = 1;
+        const { isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+        if (gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
       }
-    } catch { /* a missing material root leaves the existing aggregate unchanged */ }
+    } catch (error) {
+      // The material root existed, so a throw here is a real reader failure:
+      // keep the named error and fail instead of falling back to success.
+      console.error(`[run-checks] make-decision convergence check failed: ${error.message}`);
+      convergenceExit = 1;
+      convergenceChecked = true;
+    }
+    // A task-path-only call still has the task's own convergence checklist. The
+    // named gaps (eleven cells, six/nine questions, same reviewer, two rounds)
+    // must fail this public exit too; the check-stage-steps material entry is
+    // not the only reader of the same checklist bytes.
+    if (!convergenceChecked) {
+      const taskRoot = resolve(options.taskPath);
+      const manifest = JSON.parse(readFileSync(join(taskRoot, "task.json"), "utf8"));
+      let material = join(manifest.target_repo_root, "specs", manifest.task_id);
+      // A task branch worktree is the real material owner in this repository; the
+      // manifest target_repo_root can point at the base checkout. Prefer the
+      // current worktree when it has the task material.
+      if (!existsSync(join(material, "decision-log.md"))) {
+        const cwdMaterial = join(process.cwd(), "specs", manifest.task_id);
+        if (existsSync(join(cwdMaterial, "decision-log.md"))) material = cwdMaterial;
+      }
+      const { convergencePointerRefs, convergenceChecklistGaps, isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+      const reportGaps = [];
+      let body = null, level = null, decision = "";
+      const decideLevel = text => {
+        const match = /^\s*-?\s*(?:\*\*)?推荐级别(?:\*\*)?[:：]\s*(轻档|小改动|普通|复杂|small|normal|complex)/m.exec(text);
+        if (!match) return null;
+        return /^(?:轻档|小改动|small)$/.test(match[1]) ? "small" : "full";
+      };
+      // Pointer first: the task material owns the single current checklist
+      // pointer. A missing pointer file is a named gap, never a silent exit 0.
+      let decisionPath = join(material, "decision-log.md");
+      if (!existsSync(decisionPath)) {
+        const taskDecision = join(taskRoot, "quality/evidence/decision-log.md");
+        if (existsSync(taskDecision)) decisionPath = taskDecision;
+      }
+      if (existsSync(decisionPath)) {
+        try {
+          decision = readFileSync(decisionPath, "utf8");
+          level = decideLevel(decision);
+          const pointers = convergencePointerRefs(decision);
+          if (pointers.length > 1) {
+            reportGaps.push(`收敛清单指针候选数：${pointers.length}`);
+          } else if (pointers.length === 1) {
+            const candidates = [join(taskRoot, pointers[0]), join(taskRoot, "quality/evidence/decision-log-refs", pointers[0])];
+            const found = candidates.find(candidate => existsSync(candidate));
+            if (!found) reportGaps.push(`收敛清单不可读：${pointers[0]}`);
+            else body = readFileSync(found, "utf8");
+          } else if (/^#{2,4}\s*(?:WP-?\d+|工作包\s*\d+|包\s*\d+)|^\|\s*\d+\s*\|/m.test(decision)) {
+            reportGaps.push("收敛清单缺指针：已声明工作包");
+          } else if (level === "small") {
+            reportGaps.push("轻档缺收敛清单或一卡一次冷读声明");
+          }
+        } catch (error) {
+          reportGaps.push(`decision-log 不可读：${error.message}`);
+        }
+      }
+      // No material (or no pointer): use the task root's canonical checklist.
+      // Multiple candidate files are not a failure by themselves; the pointer
+      // is the authority, and a batch-prefixed pointer file is a normal shape.
+      if (!body) {
+        const evidenceRoot = join(taskRoot, "quality/evidence");
+        const canonical = join(evidenceRoot, "decision-log-refs/convergence-checklist.md");
+        if (existsSync(canonical)) body = readFileSync(canonical, "utf8");
+        else if (existsSync(evidenceRoot)) {
+          const found = readdirSync(evidenceRoot, { recursive: true })
+            .map(rel => join(evidenceRoot, String(rel)))
+            .filter(path => /convergence-checklist[^/]*\.md$/.test(path));
+          if (found.length === 1) body = readFileSync(found[0], "utf8");
+          else if (found.length > 1) reportGaps.push(`收敛清单指针候选数：${found.length}`);
+        }
+      }
+      if (body) {
+        try {
+          reportGaps.push(...convergenceChecklistGaps({ taskPath: taskRoot, taskId: manifest.task_id, body, level }));
+        } catch (error) {
+          reportGaps.push(`收敛清单读取失败：${error.message}`);
+        }
+      }
+      const gaps = [...new Set(reportGaps)];
+      for (const gap of gaps) console.error(`[run-checks] ${gap}`);
+      if (gaps.some(gap => String(gap).startsWith("未收敛：")) || gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
+    }
     process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
     process.exitCode = convergenceExit;
   } catch (error) {

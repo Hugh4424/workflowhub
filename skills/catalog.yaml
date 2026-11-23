@@ -295,7 +295,7 @@ skills:
     design_idea: 每包调研+设计+审查；十一格卡按真表格行判；验收要通过与失败分开并带反例；卡末绑角色原件与包级答复；没有三角色回传/冷读/对抗不算收敛
     used_by_stages: [make-decision]
     upstream: []
-    local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。
+    local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。P6/T009 核真：make-decision 的 skill-deps.yaml 已把本技能登记为阶段依赖（P3/5f192573 随新默认流程接线），故 used_by_stages 保持 [make-decision] 而非置空；本技能仍无 steps.json 步骤节点，只由该阶段依赖与散文条件入口消费。
     dependency_closure: ["skills/decision-log","skills/material-writing","skills/talk-with-zhipeng","skills/wh-review"]
     update_policy: 随 make-decision 合同变更审查
   - name: deep-research

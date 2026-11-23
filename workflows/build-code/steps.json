@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "read-current-task-documents",
-      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。 长任务消费已确认执行策略，记 execution_budget、retry_reserve、等待分账与检查点原ref；不新增游标字段或预算门。 UI 任务时，另读第 5 段 UI 六项（设计源引用、页面／路由／组件与状态乘视口、视觉对照项、前端质量门、组件复用与沉淀、独立设计审查与证据）与上文已批准原型，缺设计源记未知与补问对象；非 UI 跳过。",
+      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。 长任务消费已确认执行策略，记等待分账与检查点原ref；execution_budget 仅可选人读，retry_reserve 并入可选执行策略；不新增游标字段或预算门。 UI 任务时，另读第 5 段 UI 六项（设计源引用、页面／路由／组件与状态乘视口、视觉对照项、前端质量门、组件复用与沉淀、独立设计审查与证据）与上文已批准原型，缺设计源记未知与补问对象；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "material",

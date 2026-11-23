@@ -1582,14 +1582,15 @@
       "role": "production",
       "responsibility": "P6/T008阶段名单唯一可执行来源，P9/T011收敛正式开发3集与含独立规划的工作流4集；零runtime依赖，导出当前阶段名、供两处历史读取的退役build-spec值及供host-config被动读取的RETIRED_STAGE_VERIFY_CODE被动常量；该常量不进任何当前身份集合，原host配置不改写，旧provider不解析/不执行；历史facts原样读取，不新增阶段或公共行为。",
       "owner": "阶段运行时",
-      "consumer": "16个既有模块/CLI读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能；P8–P11作者承接注册表；Multica本地同步脚本经显式repo的所选main commit读取WORKFLOW_STAGES，不从dirty/cwd或第二枚举取值",
+      "consumer": "18 个非测试读取方按真实 import 读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能：17 个静态 import + tools/cli/run-checks.mjs:831 的 await import 动态读取（module_consumers 共列 18 项）；P8–P11作者承接注册表；Multica本地同步脚本经显式repo的所选main commit读取WORKFLOW_STAGES，不从dirty/cwd或第二枚举取值。计数口径只含非测试文件；测试按各自断言单列",
       "module_consumers": [
         "runtime/stage/stage-context.mjs",
         "runtime/task/task-store.mjs",
         "runtime/review/review-policy.mjs",
         "runtime/task/final-chain.mjs",
         "runtime/task/final-chain-runner.mjs",
-        "runtime/evidence/workflow-evolution.mjs",
+        "runtime/distribution/config-bootstrap.mjs",
+        "runtime/distribution/runner-release.mjs",
         "runtime/distribution/skill-bundle-release.mjs",
         "runtime/review/stage-review-disposition.mjs",
         "tools/cli/stage-runtime.mjs",
@@ -1597,7 +1598,8 @@
         "tools/cli/check-stage-steps.mjs",
         "tools/cli/measure-main-agent-cost.mjs",
         "tools/cli/n11-pairwise-judge.mjs",
-        "tools/cli/smoke-local-skill-dispatch.mjs",
+        "tools/cli/build-release.mjs",
+        "tools/cli/run-checks.mjs",
         "core/task-close.mjs",
         "skills/wh-review/scripts/third-review-host-config.mjs"
       ],
@@ -1862,11 +1864,10 @@
       "role": "production",
       "responsibility": "既有模块／资源职责；不从登记新增能力",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "当前直接模块消费者：metrics/adapters/host-adapter.mjs, tests/metrics-taskhandle-v2.test.mjs, workflows/build-code/metrics-writer.mjs",
+      "consumer": "当前直接模块消费者：metrics/adapters/host-adapter.mjs:10（recordSkeleton、updateOwnResult、updateStageImpact）；测试消费者 tests/metrics-taskhandle-v2.test.mjs。原列出的 workflows/build-code/metrics-writer.mjs 全仓实测不存在（历史路径从未落地），已从本条目删除，不另指替代实现",
       "module_consumers": [
         "metrics/adapters/host-adapter.mjs",
-        "tests/metrics-taskhandle-v2.test.mjs",
-        "workflows/build-code/metrics-writer.mjs"
+        "tests/metrics-taskhandle-v2.test.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -2093,15 +2094,15 @@
     {
       "source": "runtime/evidence/workflow-evolution.mjs",
       "destination": "runtime/evidence/workflow-evolution.mjs",
-      "status": "retain",
+      "status": "retired",
       "role": "production",
       "responsibility": "反思观察/候选/质量税投影（去项目锁后）由本文件承接",
       "owner": "B4/P5 / MT-1-041",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前消费者：交付质量基础任务 P6/T010 已物理删除。原唯一委托方是 tests/contract/lessons-jsonl.test.mjs 的历史经验候选机器回放用例，该用例同批删除；本文件无生产 importer，也不再有显式调用方",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "remove when M16 data-plane is retired",
-      "retention_basis": "MT-1-041 / NARROW"
+      "delete_condition": "已执行：交付质量基础任务 P6/T010 按当场条件（零生产 importer ∧ 移出 stage-registry 读者名单及本表副本 ∧ 悬空技能合同行同步 ∧ 冻结名单测试经独立审查）物理删除，恢复只能取 Git 原字节；不再登记未来消费者或替代入口",
+      "retention_basis": "MT-1-041 / NARROW；退役事实见 P6/T010、ADR-0030 的同步句、tests/contract/lessons-jsonl.test.mjs 同批断言变更。业务仓已提交的 evolution-candidates.jsonl 保留原字节、人能读；仓内不再有按 schema_version 读历史经验候选并给 historical/stale 的机器 reader，且不新增替代 reader（替代路线是 skills/stage-reflection 把经验落到业务仓 specs/Improvements.md）"
     },
     {
       "source": "runtime/interface/git-authorize.mjs",
@@ -2462,21 +2463,17 @@
     {
       "source": "runtime/review/schema-validator.mjs",
       "destination": "runtime/review/schema-validator.mjs",
-      "status": "retain",
+      "status": "retired",
       "role": "production",
       "responsibility": "保留面 AJV 校验（本文件）",
       "owner": "B5/P6 / MT-1-055",
-      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/schema-validator.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/stalled-consumer-delta.test.mjs",
-      "module_consumers": [
-        "skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs",
-        "skills/wh-review/scripts/__tests__/schema-validator.test.mjs",
-        "tests/contract/code-review-ocr.test.mjs",
-        "tests/contract/review-public-entrypoints.test.mjs",
-        "tests/contract/stalled-consumer-delta.test.mjs"
+      "consumer": "无当前消费者：交付质量基础任务 P5/T008 已物理删除本文件，原列出的 5 个测试消费者同批改为直接读 runtime/review/schemas/result.schema.json，不再 import 本文件；保留面 AJV 校验职责改由 runtime/review/review-record-route.mjs 的第二消费点承接",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/result-schema-contract.test.mjs"
       ],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-1-055 / NARROW"
+      "delete_condition": "已执行：本文件于 P5/T008 物理删除，恢复只能取 Git 原字节（HEAD 之前的历史对象），不再登记未来消费者或恢复入口",
+      "retention_basis": "MT-1-055 / NARROW；退役事实见 P5/T008 与 tests/contract/result-schema-contract.test.mjs 的“old module unavailable”断言"
     },
     {
       "source": "runtime/review/schemas/attempt.schema.json",
@@ -2498,7 +2495,7 @@
       "role": "production",
       "responsibility": "原结果schema增加terminal身份必需conclusion/coverage及worktree/null分支，旧build-code终末分支原字节保留。",
       "owner": "B4/P5 / MT-5-002",
-      "consumer": "runtime/review/schema-validator.mjs直接读取并编译result；terminal-chain对真实record结果与缺结论/覆盖反例调用validateSchema。",
+      "consumer": "当前直接模块消费者：runtime/review/review-record-route.mjs:160 读取并按其 D-07 第二消费点编译校验记录结果（唯一的运行时 schema 校验点）；runtime/distribution/runner-release.mjs:99 列入发布清单；skills/wh-review/manifest.json 把本文件声明为 runtime_review.schemas.result。原 runtime/review/schema-validator.mjs 已于 P5/T008 物理删除，不再是消费者，本表不再保留该假 consumer",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-09-build-spec-and-build-plan/build-code-P3-phase-card.md",
@@ -2575,11 +2572,16 @@
       "role": "production",
       "responsibility": "finding 处置值语义（本文件）",
       "owner": "B4/P5 / MT-1-057",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；退役登记（ADR-037）：7 个导出 isActionableSeriousFinding、canonicalReviewFindings、validateReportableFindingDispositions、deriveSeriousReviewPause、buildRiskAcceptance、validateRiskAcceptance、validateRiskAcceptanceSet 零非测试消费者（唯一测试消费者 tests/stage-risk-acceptance.test.mjs；717/720 disposition 为 null，F-003；F-006 判活有冲突），owner 确认前不删，删时同删该测试",
-      "retention_basis": "MT-1-057 / NARROW"
+      "consumer": "当前直接模块消费者：tools/cli/stage-runtime.mjs —— :40 import deriveSeriousReviewPause 与 validateRiskAcceptance，:1996 调 deriveSeriousReviewPause、:2000 调 validateRiskAcceptance（P9/P11 风险接受已接真实收口点）；其余导出 isActionableSeriousFinding、canonicalReviewFindings、validateReportableFindingDispositions、buildRiskAcceptance 按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "module_consumers": [
+        "tools/cli/stage-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "tests/stage-risk-acceptance.test.mjs",
+        "tests/contract/terminal-risk-acceptance.test.mjs"
+      ],
+      "delete_condition": "当场可判条件（不因本表产生许可或未来消费）：归档决定日志 specs/archive/workflowhub-review-efficiency-20261007/decision-log.md:740 的 037 决定节所列 F-003/F-006（同文件 :130）判死判活冲突由 owner 重新判死，且 tools/cli/stage-runtime.mjs 的 deriveSeriousReviewPause 与 validateRiskAcceptance 调用改接到具名替代、tests/stage-risk-acceptance.test.mjs 与 tests/contract/terminal-risk-acceptance.test.mjs 同批改断言并过独立审查后删除；7 个导出 isActionableSeriousFinding、canonicalReviewFindings、validateReportableFindingDispositions、deriveSeriousReviewPause、buildRiskAcceptance、validateRiskAcceptance、validateRiskAcceptanceSet 即随同处理，717/720 disposition 为 null 的历史事实只读保留",
+      "retention_basis": "MT-1-057 / NARROW；P5/T007 已把风险接受接进收口消费者，原“零非测试消费者”判断不再成立"
     },
     {
       "source": "runtime/schemas/human-confirmation.v1.schema.json",
@@ -2696,9 +2698,10 @@
       "role": "production",
       "responsibility": "技能包装载（去固定步骤清单后）由本文件承接",
       "owner": "B2/P3 / MT-1-072",
-      "consumer": "当前直接模块消费者：tools/cli/smoke-local-skill-dispatch.mjs",
+      "consumer": "当前直接模块消费者：runtime/distribution/skill-bundle-release.mjs, tools/cli/check-skill-consistency.mjs；原列出的 tools/cli/smoke-local-skill-dispatch.mjs 已随 P6/T010 退役，不再计入",
       "module_consumers": [
-        "tools/cli/smoke-local-skill-dispatch.mjs"
+        "runtime/distribution/skill-bundle-release.mjs",
+        "tools/cli/check-skill-consistency.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -2784,13 +2787,12 @@
       "role": "production",
       "responsibility": "task.json 读写 + 记录层路径防护（本文件）",
       "owner": "B4/P5 / MT-1-078",
-      "consumer": "当前直接模块消费者：core/__tests__/invocation-identity.test.mjs, core/__tests__/workspace-manager.test.mjs, core/task-close.mjs, metrics/collector.mjs, runtime/evidence/workflow-evolution.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/doctor-storage-consistency.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/research-report-current.test.mjs, tests/contract/review-history-canonical-reader.test.mjs, tests/contract/stage-context-workspace-degrade.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/task-close-cli-resolution.test.mjs, tests/contract/task-handle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/metrics-taskhandle-v2.test.mjs, tests/review/dsh-code-review-publication.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-foreign-pair-history.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tests/review/review-record-route.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：core/__tests__/invocation-identity.test.mjs, core/__tests__/workspace-manager.test.mjs, core/task-close.mjs, metrics/collector.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/doctor-storage-consistency.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/research-report-current.test.mjs, tests/contract/review-history-canonical-reader.test.mjs, tests/contract/stage-context-workspace-degrade.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/task-close-cli-resolution.test.mjs, tests/contract/task-handle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/metrics-taskhandle-v2.test.mjs, tests/review/dsh-code-review-publication.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-foreign-pair-history.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tests/review/review-record-route.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
         "core/__tests__/invocation-identity.test.mjs",
         "core/__tests__/workspace-manager.test.mjs",
         "core/task-close.mjs",
         "metrics/collector.mjs",
-        "runtime/evidence/workflow-evolution.mjs",
         "runtime/stage/stage-context.mjs",
         "skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs",
         "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs",
@@ -5041,15 +5043,15 @@
     {
       "source": "tools/cli/smoke-local-skill-dispatch.mjs",
       "destination": "tools/cli/smoke-local-skill-dispatch.mjs",
-      "status": "retain",
+      "status": "retired",
       "role": "production",
       "responsibility": "技能包「路径不逃逸」断言（可独立调用，供测试按需调用）；不进 `check`",
       "owner": "B5/P6 / MT-2-020",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前消费者：交付质量基础任务 P6/T010 已物理删除。原为可独立调用 CLI，不进 check，仓内无 import 或调用方；只在冻结读者名单与历史逻辑消费者清单里被列出",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-2-020 / NARROW"
+      "delete_condition": "已执行：交付质量基础任务 P6/T010 物理删除，恢复只能取 Git 原字节；不再登记未来消费者",
+      "retention_basis": "MT-2-020 / NARROW；退役事实见 P6/T010 与 tests/contract/stage-registry.test.mjs 的读者名单断言变更（16→14）。tests/acceptance/card-03-current.test.mjs 里的旧路径 scripts/__tests__/smoke-local-skill-dispatch.test.mjs 属另一对象的 54 项历史逻辑消费者清单，只读保留、不改"
     },
     {
       "source": "tools/cli/stage-runtime.mjs",

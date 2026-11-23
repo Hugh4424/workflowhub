@@ -6,6 +6,29 @@ const severityAliases = new Map([
 const evidenceKinds = new Set(["direct", "inferred", "machine"]);
 export const MAX_REVIEWER_OUTPUT_BYTES = 16 * 1024 * 1024;
 
+// A finding's attention angle is declared by the reviewing provider, never
+// derived from the provider or role identity. make-decision direction/detail
+// require one value from their track list; other stages keep the field optional
+// so historical records still read. The parser accepts the union and the host
+// checks the track, because one parser serves every review surface.
+export const DIRECTION_REVIEW_LENSES = Object.freeze([
+  "delivery", "wiring", "acceptance", "scope_risk", "user_effect",
+  "security", "compatibility", "performance", "cost",
+]);
+export const DETAIL_REVIEW_LENSES = Object.freeze([
+  "delivery", "acceptance", "scope", "risk", "user_effect",
+  "simplicity", "plan_eng_review", "ui_design",
+]);
+export const REVIEW_LENSES = Object.freeze([...new Set([...DIRECTION_REVIEW_LENSES, ...DETAIL_REVIEW_LENSES])]);
+const reviewLenses = new Set(REVIEW_LENSES);
+
+export function reviewLensRequirement(stage, track) {
+  if (stage !== "make-decision") return null;
+  if (track === "direction") return DIRECTION_REVIEW_LENSES;
+  if (track === "detail") return DETAIL_REVIEW_LENSES;
+  return null;
+}
+
 function safeParseError(value) {
   const message = typeof value === "string" ? value : value?.message;
   return (message || "reviewer output candidate is invalid").replace(/\s+/g, " ").slice(0, 256);
@@ -18,7 +41,24 @@ function invalid(message, parseError = message) {
   throw error;
 }
 
-function validateFinding(value, index, { requireEvidence }) {
+// An out-of-vocabulary lens is not one more unparseable candidate to skip: the
+// controlled value itself is invalid, so it fails the whole output immediately.
+function invalidLens(message) {
+  const error = new Error(`REVIEW_LENS_INVALID: ${message}`);
+  error.code = "REVIEW_LENS_INVALID";
+  error.parse_error = safeParseError(message);
+  throw error;
+}
+
+// `lensPolicy` keeps the controlled vocabulary scoped to the stages that
+// require it. `strict` (the API default pinned by the frozen oracle) rejects an
+// out-of-vocabulary lens. `ignore` restores the pre-lens whitelist behaviour for
+// review surfaces where lens is optional: the extra key is dropped and the
+// finding stays valid. Stage-aware callers pass `ignore` when
+// `reviewLensRequirement` does not cover the current track.
+const LENS_POLICIES = new Set(["strict", "ignore"]);
+
+function validateFinding(value, index, { requireEvidence, lensPolicy = "strict" }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) invalid(`finding ${index} must be an object`);
   const severity = severityAliases.get(value.severity);
   if (!severity) return null;
@@ -32,12 +72,18 @@ function validateFinding(value, index, { requireEvidence }) {
   if (requireEvidence && needsEvidence
       && (!evidenceKinds.has(value.evidence_kind) || typeof value.evidence !== "string" || !value.evidence.trim()
         || typeof value.root_cause !== "string" || !value.root_cause.trim())) invalid(`finding ${index} evidence is invalid`);
+  const declaredLens = value.lens !== undefined && typeof value.lens === "string" && reviewLenses.has(value.lens) ? value.lens : undefined;
+  if (value.lens !== undefined && declaredLens === undefined) {
+    if (lensPolicy === "strict") invalidLens(`finding ${index} lens is invalid; use one of ${REVIEW_LENSES.join(", ")}`);
+    // `ignore`: the optional extra key is discarded, as before the lens field existed.
+  }
   return {
     severity, path: value.path, ...(Number.isSafeInteger(value.line) ? { line: value.line } : {}),
     issue: value.issue, recommendation: value.recommendation,
     ...(value.evidence_kind ? { evidence_kind: value.evidence_kind } : {}),
     ...(typeof value.evidence === "string" && value.evidence.trim() ? { evidence: value.evidence } : {}),
     ...(typeof value.root_cause === "string" && value.root_cause.trim() ? { root_cause: value.root_cause } : {}),
+    ...(declaredLens !== undefined ? { lens: declaredLens } : {}),
   };
 }
 
@@ -170,10 +216,11 @@ function parseUniqueEmbeddedObject(raw, options, errors) {
   return validateCandidate(value, options, errors, "embedded JSON object", "embedded_json");
 }
 
-export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
+export function parseReviewerOutput(raw, { requireEvidence = false, lensPolicy = "strict" } = {}) {
+  if (!LENS_POLICIES.has(lensPolicy)) throw new TypeError(`lensPolicy must be one of ${[...LENS_POLICIES].join(", ")}`);
   if (typeof raw !== "string" || !raw.trim()) invalid("provider returned no text");
   if (Buffer.byteLength(raw, "utf8") > MAX_REVIEWER_OUTPUT_BYTES) invalid(`provider output exceeds ${MAX_REVIEWER_OUTPUT_BYTES} bytes`);
-  const options = { requireEvidence };
+  const options = { requireEvidence, lensPolicy };
   const errors = [];
   let whole;
   try { whole = JSON.parse(raw.trim()); } catch {

@@ -695,6 +695,27 @@
     }
   },
   "$defs": {
+    "reviewLens": {
+      "description": "Controlled finding attention angle. make-decision direction/detail require one; other surfaces keep it optional so historical records stay readable. `unknown` means the finding has no lens; it exists only on the read/aggregation side and the record writer never persists it. Remove it from this enum once no readable historical record lacks a lens.",
+      "type": "string",
+      "enum": [
+        "delivery",
+        "wiring",
+        "acceptance",
+        "scope_risk",
+        "scope",
+        "risk",
+        "user_effect",
+        "security",
+        "compatibility",
+        "performance",
+        "cost",
+        "simplicity",
+        "plan_eng_review",
+        "ui_design",
+        "unknown"
+      ]
+    },
     "materialCoverage": {
       "type": "object",
       "required": ["provider", "read", "unread", "undetermined"],
@@ -861,7 +882,8 @@
         "evidence": {
           "type": "string",
           "minLength": 1
-        }
+        },
+        "lens": { "$ref": "#/$defs/reviewLens" }
       },
       "additionalProperties": false
     },
@@ -1013,7 +1035,8 @@
         "pair_id": {
           "type": "string",
           "minLength": 1
-        }
+        },
+        "lens": { "$ref": "#/$defs/reviewLens" }
       },
       "additionalProperties": false,
       "allOf": [
@@ -1082,7 +1105,8 @@
         },
         "evidence_anchor_valid": {
           "type": "boolean"
-        }
+        },
+        "lens": { "$ref": "#/$defs/reviewLens" }
       },
       "additionalProperties": false
     },
@@ -1122,6 +1146,7 @@
           "type": "integer",
           "minimum": 1
         },
+        "lens": { "$ref": "#/$defs/reviewLens" },
         "issue": {
           "type": "string",
           "minLength": 1

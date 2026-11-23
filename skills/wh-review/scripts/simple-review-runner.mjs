@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { join, relative, sep } from "node:path";
 
 import { BROKER_HOST_PROVIDER, registerReviewSupplement, ReviewProviderClient, validateDirectionFlow } from "./review-provider-client.mjs";
-import { parseReviewerOutput } from "../../../runtime/review/review-output.mjs";
+import { parseReviewerOutput, reviewLensRequirement } from "../../../runtime/review/review-output.mjs";
 import {
   loadTrustedThirdReviewConfig,
   resolveTrustedReviewRoute,
@@ -1036,7 +1036,7 @@ function evidenceAnchorValidity(bundleRoot, findings, deliveryManifest) {
   });
 }
 
-function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIdentities, selectedModels, bundleRoot, deliveryManifest }) {
+function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIdentities, selectedModels, bundleRoot, deliveryManifest, lensPolicy = "strict" }) {
   const provider = supplement?.provider;
   if (typeof provider !== "string" || !selectedSet.has(provider)) {
     const error = new Error("supplement provider is not part of the trusted review selection");
@@ -1045,7 +1045,7 @@ function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIden
   }
   let parsed;
   try {
-    parsed = parseReviewerOutput(JSON.stringify({ findings: supplement.findings }), { requireEvidence: true });
+    parsed = parseReviewerOutput(JSON.stringify({ findings: supplement.findings }), { requireEvidence: true, lensPolicy });
   } catch (error) {
     const invalid = new Error(`supplement findings are invalid: ${error.message}`);
     invalid.code = "SUPPLEMENT_INVALID";
@@ -1087,7 +1087,19 @@ function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIden
   };
 }
 
-async function preservedObservedFacts(source, { bundle, dependencies, pair, selectedIdentities, selectedModels, authenticated = false }) {
+// make-decision direction/detail findings must declare one controlled lens.
+// Missing or track-illegal values are a provider contract failure, never a
+// clean available result; other review surfaces keep the field optional.
+function lensContractFailure(findings, requiredLenses) {
+  if (!requiredLenses) return null;
+  const invalid = findings.filter((finding) => !requiredLenses.includes(finding.lens));
+  return invalid.length === 0 ? null : {
+    code: "REVIEW_LENS_INVALID",
+    message: `provider finding is missing a controlled lens (${invalid.length} finding(s)); allowed: ${requiredLenses.join(", ")}`,
+  };
+}
+
+async function preservedObservedFacts(source, { bundle, dependencies, pair, selectedIdentities, selectedModels, authenticated = false, requiredLenses = null }) {
   const entries = Array.isArray(source) ? source.map(item => [item?.provider ?? item?.identity?.provider, item])
     : source && typeof source === "object" ? Object.entries(source) : [];
   const names = entries.map(([provider]) => provider), unique = new Set(names).size === names.length;
@@ -1115,12 +1127,19 @@ async function preservedObservedFacts(source, { bundle, dependencies, pair, sele
       } else {
         let parsed;
         try {
-          parsed = parseReviewerOutput(item.output, { requireEvidence: true });
+          parsed = parseReviewerOutput(item.output, { requireEvidence: true, lensPolicy: requiredLenses ? "strict" : "ignore" });
           item.parse_outcome = "ok";
         } catch {
           item.status = "failed";
           item.parse_outcome = "invalid";
           item.error = { code: "OUTPUT_INVALID", message: "provider output is not valid findings JSON" };
+        }
+        const lensFailure = parsed ? lensContractFailure(parsed.findings, requiredLenses) : null;
+        if (lensFailure) {
+          parsed = null;
+          item.status = "failed";
+          item.parse_outcome = "invalid";
+          item.error = lensFailure;
         }
         if (bound && parsed) {
           const anchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings, bundle.deliveryManifest);
@@ -1528,6 +1547,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         const observation = error?.managed_observation;
         const source = observation?.group?.providers ?? observation?.providers ?? lifecycle?.group?.providers ?? lifecycle?.providers;
         const preserved = await preservedObservedFacts(source, { bundle, dependencies, pair, selectedIdentities, selectedModels,
+          requiredLenses: reviewLensRequirement(canonicalInput.stage, canonicalInput.review_track),
           authenticated: observation?.material_id === bundle.materialId && observation?.request_id === requestId
             && observation?.runtime_id === lifecycle?.runtime_id });
         return unavailableResult(input, normalizeProviderError(error), pair, {
@@ -1579,7 +1599,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       .filter((key) => Object.prototype.hasOwnProperty.call(group ?? {}, key))
       .map((key) => group[key]);
     if (brokerMaterialIds.some((materialId) => materialId !== bundle.materialId)) {
-      const preserved = await preservedObservedFacts(group?.providers, { bundle, dependencies, pair, selectedIdentities, selectedModels });
+      const preserved = await preservedObservedFacts(group?.providers, { bundle, dependencies, pair, selectedIdentities, selectedModels,
+        requiredLenses: reviewLensRequirement(canonicalInput.stage, canonicalInput.review_track) });
       return unavailableResult(canonicalInput, {
         code: "REVIEW_MATERIAL_IDENTITY_MISMATCH",
         message: "broker material identity does not match the submitted review bundle",
@@ -1625,6 +1646,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       }
     }
     const seenProviders = new Set();
+    const requiredLenses = reviewLensRequirement(canonicalInput.stage, canonicalInput.review_track);
     const providers = receivedProviders.map((rawItem) => {
       const item = rawItem && typeof rawItem === "object"
         ? { ...rawItem, provider: rawItem.provider ?? rawItem.identity?.provider }
@@ -1674,7 +1696,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         }
         let parsed;
         try {
-          parsed = parseReviewerOutput(item.output, { requireEvidence: true });
+          parsed = parseReviewerOutput(item.output, { requireEvidence: true, lensPolicy: requiredLenses ? "strict" : "ignore" });
         } catch (error) {
           const parseError = typeof error?.parse_error === "string" && error.parse_error.trim() !== ""
             ? error.parse_error
@@ -1688,6 +1710,15 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
               message: "provider output is not valid findings JSON",
               parse_error: redactHostPaths(parseError),
             },
+          };
+        }
+        const lensFailure = lensContractFailure(parsed.findings, requiredLenses);
+        if (lensFailure) {
+          return {
+            ...publicProviderResult(item, undefined, pair),
+            status: "failed",
+            parse_outcome: "invalid",
+            error: lensFailure,
           };
         }
         const providerDiscardedFacts = [...(parsed.discarded_facts ?? [])];
@@ -1774,7 +1805,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     if (providerNames.some((provider) => !selectedSet.has(provider))
         || new Set(providerNames).size !== providerNames.length
         || providerNames.length !== selectedProviders.length) {
-      const preserved = await preservedObservedFacts(receivedProviders, { bundle, dependencies, pair, selectedIdentities, selectedModels });
+      const preserved = await preservedObservedFacts(receivedProviders, { bundle, dependencies, pair, selectedIdentities, selectedModels,
+        requiredLenses: reviewLensRequirement(canonicalInput.stage, canonicalInput.review_track) });
       return unavailableResult(input, {
         code: "PROVIDER_RESULT_INVALID",
         message: "broker provider results could not be bound uniquely to the trusted review selection",
@@ -1830,6 +1862,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       const supplements = group.supplements.map((supplement) => bindReviewSupplementToSelection(supplement, {
         selectedSet, selectedIdentities, selectedModels, bundleRoot: bundle.bundleRoot,
         deliveryManifest: bundle.deliveryManifest,
+        lensPolicy: reviewLensRequirement(canonicalInput.stage, canonicalInput.review_track) ? "strict" : "ignore",
       }));
       return supplements.reduce((current, supplement) => registerReviewSupplement(current, supplement), {
         ...baseResult,
@@ -1872,7 +1905,11 @@ function uniquePairFindings(roleResults) {
   const findings = new Map();
   for (const result of roleResults) {
     for (const finding of result.findings) {
-      const key = `${finding.path}\u0000${finding.line ?? ""}\u0000${finding.issue}`;
+      // The attention angle is part of the claim identity. Two roles that flag
+      // equal anchors and issue text under different lenses are different
+      // findings and keep their own source; same-lens contributions merge with
+      // every role and provider retained.
+      const key = `${finding.path}\u0000${finding.line ?? ""}\u0000${finding.issue}\u0000${finding.lens ?? ""}`;
       const existing = findings.get(key);
       if (existing) {
         existing.roles = [...new Set([...(existing.roles ?? [existing.role]), result.role])].sort();

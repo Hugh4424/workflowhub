@@ -725,7 +725,7 @@ describe("simple material-only review", () => {
             runtimeId: "runtime-1", outcome: "completed",
             providers: [{
               provider: "other/model", status: "completed", identity: { provider: "other/model", model: "other-model" }, error: null,
-              output: JSON.stringify({ findings: [{ severity: "minor", path: "materials/01-raw_requirement.md", line: 1, issue: "gap", recommendation: "fix" }] }),
+              output: JSON.stringify({ findings: [{ severity: "minor", path: "materials/01-raw_requirement.md", line: 1, issue: "gap", recommendation: "fix", lens: "user_effect" }] }),
               timing: null, usage: null,
             }],
           };

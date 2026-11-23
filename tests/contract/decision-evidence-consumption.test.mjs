@@ -413,15 +413,20 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
     const cards = `quality/evidence/convergence/cards-${id}.md`;
     const card = `## 工作包 ${id}：受控包 ${id}\n\n一句话结果：受控结果。`;
     const coldRef = `quality/evidence/cold-read-p${id}.md`;
-    const cold = `# 受控冷读 ${id}\n\n- 读者：subagent:reader-${id}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cards}#工作包-${id}\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
+    const batch = batchFor(id);
+    const identity = `任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`;
+    const cold = `# 受控冷读 ${id}\n\n- 读者：subagent:reader-${id}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cards}#工作包-${id}\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n${identity}\n`;
     put(task, cards, `${card}${cardsExtra}`);
     put(task, coldRef, cold);
     const packageEvidence = `quality/evidence/convergence/package-evidence-${id}.md`;
     put(task, packageEvidence, `包 ${id} 的真实原件字节。\n`);
-    const batch = batchFor(id);
-    const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n用户原话：可以。\n批次：${batch}\n`;
+    const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n用户原话：可以。\n批次：${batch}\n${identity}\n`;
     const discussionRef = `quality/evidence/talk/discussion-p${id}.md`;
     put(task, discussionRef, discussion);
+    const adversarialRef = `quality/evidence/talk/adversarial-p${id}.md`;
+    put(task, adversarialRef, `# 对抗 ${id}\n\n九问与处置：受控。\n${identity}\n`);
+    const answerRef = `quality/evidence/talk/answer-p${id}.md`;
+    put(task, answerRef, `# 真实答复 ${id}\n\n用户原话：可以。\n${identity}\n`);
     let chatLine = "聊天展示：已发十格卡。";
     if (chatFor(id)) {
       const receipt = `工作包 ${id} 聊天回执\n\n批次：${batch}\n卡：工作包 ${id}\n`;
@@ -462,6 +467,12 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
       `6. 复读对照：首轮 \`${coldRef}\`（sha256 \`${p5Sha(cold)}\`，读者 subagent:reader-${id}）→ 本轮。`,
       "7. 验收：`quality/evidence/coverage-matrix-5d.md` 的 AC-01。",
       "8. 审查处置：`quality/reviews/direction.json`。", "",
+      `### 包 ${id} 五件同包原件`, "",
+      `- 当前方案卡：\`${cards}#工作包-${id}\`；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
+      `- 当前质询：\`${discussionRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
+      `- 当前冷读：\`${coldRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
+      `- 当前对抗：\`${adversarialRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
+      `- 当前真实答复：\`${answerRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`, "",
       ...marks, "",
     ].join("\n"));
   }
@@ -559,10 +570,15 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
     put(task, "quality/evidence/convergence/cards.md", card);
     put(task, "quality/evidence/convergence/package-evidence-1.md", "包 1 的真实原件字节。\n");
     const cold = `# 受控冷读 1\n\n- 读者：subagent:reader-1，未参与本包写作，只读本包卡。\n- 读的卡：\`quality/evidence/convergence/cards.md#工作包-1\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：改。\n② 为什么：因。\n③ 边界：界。\n④ 怎么验：验。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
-    if (withCold) put(task, "quality/evidence/cold-read-p1.md", cold);
+    const identity = `任务=task；包=1；批次=batch-1；卡节sha256=${p5Sha(card)}`;
+    const coldBytes = `${cold}\n${identity}\n`;
+    if (withCold) put(task, "quality/evidence/cold-read-p1.md", coldBytes);
     const coldRef = withCold ? "quality/evidence/cold-read-p1.md" : "quality/evidence/missing-cold-read-p1.md";
+    put(task, "quality/evidence/talk/discussion-p1.md", `工作包 1 讨论原件\n\n讨论前展示：已给卡。\n复述：受控。\n用户原话：可以。\n批次：batch-1\n${identity}\n`);
+    put(task, "quality/evidence/talk/adversarial-p1.md", `# 对抗 1\n\n九问与处置：受控。\n${identity}\n`);
+    put(task, "quality/evidence/talk/answer-p1.md", `# 真实答复 1\n\n用户原话：可以。\n${identity}\n`);
     const coldLine = withCold
-      ? `| 当前冷读 | \`${coldRef}\`；sha256 \`${p5Sha(cold)}\`；读者 subagent:reader-1；context=none |`
+      ? `| 当前冷读 | \`${coldRef}\`；sha256 \`${p5Sha(coldBytes)}\`；读者 subagent:reader-1；context=none |`
       : null;
     put(task, "quality/evidence/decision-log-refs/convergence-checklist.md", [
       "# 收敛清单", "",
@@ -575,6 +591,12 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
       "- 读者：subagent:reader-1，未参与本包写作，只读本包卡。",
       "- 五问原答：", "① 改什么：改。", "② 为什么：因。", "③ 边界：界。", "④ 怎么验：验。", "⑤ 还有什么没定：无。",
       "- 结论：五问全答出；本包收敛。", "",
+      "### 包 1 五件同包原件", "",
+      `- 当前方案卡：\`quality/evidence/convergence/cards.md#工作包-1\`；包=1；批次=batch-1；卡节sha256=${p5Sha(card)}`,
+      `- 当前质询：\`quality/evidence/talk/discussion-p1.md\`；${identity}`,
+      `- 当前冷读：\`${coldRef}\`；${identity}`,
+      `- 当前对抗：\`quality/evidence/talk/adversarial-p1.md\`；${identity}`,
+      `- 当前真实答复：\`quality/evidence/talk/answer-p1.md\`；${identity}`, "",
     ].join("\n"));
     return { task, materials };
   }
@@ -744,6 +766,69 @@ describe("P11 run-checks material convergence gaps", () => {
     const dir = temp("p11-rc0-");
     writeFileSync(join(dir, "decision-log.md"), "# T\n## 级别与路线\n- 推荐级别：复杂\n");
     expect(runMaterial(dir).status).toBe(0);
+  });
+  it("reads the direction checker pointer form and names a missing same-package class", () => {
+    const digest = "a".repeat(64);
+    const dir = material([
+      "# 清单",
+      "| 包 | 目标 | 边界 | 方案与取舍 | 验收 | 风险 | 依赖 | 消费者 | 未决/无 | 状态 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 1 controlled | a | b | c | d | e | 无 | f | 无 | 已收敛 |",
+      "",
+      "### 包 1 五件同包原件",
+      `- 当前方案卡：\`quality/evidence/convergence/cards.md#工作包-1\`；包=1；批次=batch-1；卡节sha256=${digest}`,
+      `- 当前冷读：\`quality/evidence/decision-maker/p01/cold-read.md\`；任务=same-package；包=1；批次=batch-1；卡节sha256=${digest}`,
+      `- 当前对抗：\`quality/evidence/decision-maker/p01/adversarial.md\`；任务=same-package；包=1；批次=batch-1；卡节sha256=${digest}`,
+      `- 当前真实答复：\`quality/evidence/decision-maker/p01/answer.md\`；任务=same-package；包=1；批次=batch-1；卡节sha256=${digest}`,
+    ].join("\n"));
+    // The same pointer parse as the direction checker: a backticked current
+    // checklist path, not only a "清单：" line.
+    writeFileSync(join(dir, "decision-log.md"), ["# T", "## 级别与路线", "- 推荐级别：复杂", "\`quality/evidence/decision-log-refs/convergence-checklist.md\`", ""].join("\n"));
+    const result = runMaterial(dir);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("质询");
+  });
+  it("names a missing checklist when packages are already declared", () => {
+    const dir = temp("p11-rc-missing-");
+    writeFileSync(join(dir, "decision-log.md"), "# T\n## 级别与路线\n- 推荐级别：复杂\n#### WP1 — controlled\n- **结果与消费者**：受控。\n");
+    const result = runMaterial(dir);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("收敛清单指针未取得");
+  });
+  it("fails a declared package set with no authoritative module rows", () => {
+    const dir = material(["# 清单", "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |", ""].join("\n"));
+    writeFileSync(join(dir, "decision-log.md"), ["# T", "## 级别与路线", "- 推荐级别：复杂", "#### WP1 — controlled", "清单：`quality/evidence/decision-log-refs/convergence-checklist.md`", ""].join("\n"));
+    const result = runMaterial(dir);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("权威模块集合未取得或重复");
+  });
+  it("fails duplicated module rows", () => {
+    const dir = material(["# 清单", "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |", "| 1 | 已收敛 | x | y | 无 |", "| 1 | 已收敛 | x | y | 无 |", ""].join("\n"));
+    writeFileSync(join(dir, "decision-log.md"), ["# T", "## 级别与路线", "- 推荐级别：复杂", "#### WP1 — controlled", "清单：`quality/evidence/decision-log-refs/convergence-checklist.md`", ""].join("\n"));
+    const result = runMaterial(dir);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("权威模块集合未取得或重复");
+  });
+  it("keeps the five old evidence-gap classes in the shared run-checks predicate", async () => {
+    const { isDirectionMaterialFailure } = (await import("../../tools/cli/check-stage-steps.mjs")).directionMaterialApi();
+    for (const gap of ["缺冷读原件", "聊天呈现未取得", "冷读五问未绑定", "UI设计源首问", "冷读原件摘要不符"]) {
+      expect(isDirectionMaterialFailure(gap), `${gap} must stay a failure at the run-checks seam`).toBe(true);
+    }
+  });
+  it("rejects a non-card evidence file used as the current card", () => {
+    const digest = "a".repeat(64);
+    const dir = material(["# 清单", "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |", "| 1 | 已收敛 | x | y | 无 |", "", "### 包 1 五件同包原件", `- 当前方案卡：\`quality/evidence/decision-maker/p01/notes.md#工作包-1\`；包=1；批次=batch-1；卡节sha256=${digest}`, ""].join("\n"));
+    const result = runMaterial(dir);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("不是方案卡原件");
+  });
+  it("fails duplicate five-original blocks through the same predicate as the direction checker", async () => {
+    const { isDirectionMaterialFailure } = (await import("../../tools/cli/check-stage-steps.mjs")).directionMaterialApi();
+    expect(isDirectionMaterialFailure("1 controlled：包 1 同包五件：重复声明块")).toBe(true);
+    const dir = material(["# 清单", "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |", "| 1 | 已收敛 | x | y | 无 |", "", "### 包 1 五件同包原件", "- 当前方案卡：`quality/evidence/convergence/cards.md#工作包-1`；包=1；批次=batch-1；卡节sha256=" + "a".repeat(64), "", "### 包 1 五件同包原件", "- 当前方案卡：`quality/evidence/convergence/cards.md#工作包-1`；包=1；批次=batch-1；卡节sha256=" + "a".repeat(64), ""].join("\n"));
+    const result = runMaterial(dir);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("同包五件：重复声明块");
   });
 });
 

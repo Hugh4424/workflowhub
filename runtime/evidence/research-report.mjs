@@ -392,5 +392,3 @@ export async function publishResearchReport({ recordDir, slug = "research", repo
   const path = await task.appendRecord({dir:"quality/evidence/research",slug,ext:"json",bytes});
   return Object.freeze({ ref: `quality/evidence/research/${basename(path)}`, path, value });
 }
-
-export { REPORT_REF as RESEARCH_REPORT_REF };

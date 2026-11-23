@@ -32,9 +32,12 @@ import { deliveredMaterialId, authenticatedEvidenceBytes } from "../../runtime/r
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, compactVerifyCodeMaterials, gitDiffPath, verifyCodeChangedPaths } from "../../runtime/review/review-input-bounds.mjs";
+import { capturePreExecutionTaskChangeScope, collectTaskChangeScope } from "../../workflows/build-code/change-scope.mjs";
 import { captureReviewSource, readScopedReviewMaterial } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
+import { validateAcceptanceEvidence } from "../../runtime/evidence/acceptance-evidence-validator.mjs";
+import { buildRiskAcceptance, deriveSeriousReviewPause, validateRiskAcceptance } from "../../runtime/review/stage-review-disposition.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -581,13 +584,19 @@ function trustedReviewReadScope(context,request,value){
   return Object.freeze({...value,repositories:Object.freeze(repositories),evidenceFiles:Object.freeze(value.evidenceFiles.map(item=>Object.freeze({...item}))),taskRoot:context.task.taskPath});
 }
 
-function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource){
-  let selected=null;
+function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource,changeScope){
+  let selected=null,reconciliation=changeScope??null;
   if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'
       && (request.phase_id != null || (request.review_kind??request.reviewKind??null)!==null)){
     const index=context.artifacts.read('phases/index.md');
     const phases=Object.fromEntries(phaseFilesFromIndex(index).map(ref=>[ref,context.artifacts.read(ref)]));
-    const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope});
+    // A restricted read domain cannot be compared with the pre-crop range: report
+    // the real reason instead of claiming a match, and never widen the read.
+    const insufficient = scope.repositories.every(repo=>repo.paths.length===0);
+    if (insufficient) reconciliation = Object.freeze({ status: 'unknown_change_scope',
+      reason: '精确读域不足（approved read scope is empty）：只有声明内路径，裁剪前完整范围未取得', changed_paths: Object.freeze([]) });
+    const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope,
+      changeScope:reconciliation, phase_id:request.phase_id});
     const phase=parsed.facts?.phase_rows?.find(row=>row.id===request.phase_id);
     if(parsed.errors.some(error=>(phase&&error.startsWith(`${phase.path} unsafe Write set path:`))||(error.startsWith('phases/index.md:')&&error.includes(` ${request.phase_id} (`)&&error.includes('unsafe write set path:'))))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
     selected=phase?.write_set;
@@ -625,7 +634,7 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
   }catch(error){for(const source of captures)source.dispose?.();throw error;}
 }
 
-function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope) {
+function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope, changeScope) {
   if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
   // A light implementation has no Phase contract: retain the captured whole
@@ -636,7 +645,8 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot, r
   });
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
-  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope });
+  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope,
+    phase_id: request.phase_id, changeScope });
   const phase = parsed.facts?.phase_rows?.find((row) => row.id === request.phase_id);
   const invalidEmptyScope = phase?.write_set?.length === 0 && parsed.errors.some(error =>
     error.startsWith(`${phase.path} `) && /Write set is missing|Write set none declaration is invalid|unsafe Write set path:|write set differs from Phase index|must declare Phase /.test(error));
@@ -646,14 +656,17 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot, r
     const repo=reviewReadScope.repositories.find(repo=>repo.paths.includes(relative(repo.sourceRoot,path)));
     return repo ? [`repos/${repo.id}/${relative(repo.sourceRoot,path)}`] : [];
   }) : phase.write_set;
+  const contractFacts = Object.freeze({ contract_ok: parsed.ok, contract_error_count: parsed.errors.length,
+    contract_errors: parsed.errors, ac_coverage: parsed.facts?.ac_coverage ?? null,
+    fr_coverage: parsed.facts?.fr_coverage ?? null, command_oracle_checks: parsed.facts?.command_oracle_checks ?? null,
+    // The comparison comes from the pre-crop range, never from the cropped diff.
+    write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
+  // No comparable source means no crop: keep the unavailable fact, do not invent a diff.
+  if (typeof source.diffPath !== "string") return Object.freeze({ ...source, contract_facts: contractFacts });
   const selected = compactReviewDiff(readFileSync(source.diffPath, "utf8"), { writeSet: selectedPaths }).diff;
   const diffPath = join(dirname(source.diffPath), `phase-${request.phase_id}.diff`);
   writeFileSync(diffPath, selected, { flag: "wx", mode: 0o600 });
-  return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8"),
-    contract_facts: Object.freeze({ contract_ok: parsed.ok, contract_error_count: parsed.errors.length,
-      contract_errors: parsed.errors, ac_coverage: parsed.facts?.ac_coverage ?? null,
-      fr_coverage: parsed.facts?.fr_coverage ?? null, command_oracle_checks: parsed.facts?.command_oracle_checks ?? null }),
-  });
+  return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8"), contract_facts: contractFacts });
 }
 
 function phaseReviewDiffBase(context, request) {
@@ -665,6 +678,34 @@ function phaseReviewDiffBase(context, request) {
   const cursor = readTaskFacts(taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code")?.phase_progress;
   return cursor && cursor.phase_id === request.phase_id && typeof cursor.base_head === "string" && GIT_OID.test(cursor.base_head)
     ? cursor.base_head : null;
+}
+
+// A Phase projection needs a comparable pre-crop range. A restricted read
+// domain or a missing Phase start is a named unavailable input, never a claim
+// of "no differences"; terminal/document reviews pass nothing and stay unchanged.
+function phaseReviewChangeScope(context, request, reviewReadScope, cursorDiffBase) {
+  if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null
+      || (request.review_scope ?? request.reviewScope) !== "phase" || context.manifest?.activation_cohort !== "post"
+      || request.phase_id == null) return undefined;
+  if (reviewReadScope) return Object.freeze({ status: "unknown_change_scope",
+    reason: "受限读域：只有声明的批准路径，裁剪前完整范围未取得", changed_paths: Object.freeze([]) });
+  if (cursorDiffBase === null) return Object.freeze({ status: "unknown_change_scope",
+    reason: "缺当前 Phase 匹配的 base_head：不用任务起点或当前 HEAD 冒充 Phase 起点", changed_paths: Object.freeze([]) });
+  return collectTaskChangeScope({ workspace: context.workspace, baseline: cursorDiffBase,
+    taskId: context.task?.identity?.taskId });
+}
+
+// A Git collection failure in the same entry that must report the comparison
+// yields an explicit unavailable source, not a fabricated empty diff: the
+// packet keeps the real reason and no changed paths.
+function unavailablePhaseReviewSource(context, changeScope, error) {
+  return Object.freeze({
+    sourceRoot: context.workspace?.worktreeRoot ?? null, capturedHead: null, baseCommit: null,
+    changedPaths: Object.freeze([]), collection_error: String(error?.message ?? error),
+    coverage_limit: "no source was collected; the current Phase range could not be compared",
+    write_set_reconciliation: changeScope ?? null,
+    dispose() {},
+  });
 }
 
 export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
@@ -686,13 +727,30 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
   const cursorDiffBase = phaseReviewDiffBase(context, request);
   const scope=trustedReviewReadScope(context,request,typeof resolveReviewReadScope==='function' ? resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : reviewReadScope);
-  const source = scope ? captureScopedReviewSource(context,request,scope,trusted.attachmentRoot,captureSource) : captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
-    includeDiff: true, taskId: context.task.identity.taskId,
-    ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
+  const changeScope = phaseReviewChangeScope(context, request, scope, cursorDiffBase);
+  let source;
+  try {
+    source = scope ? captureScopedReviewSource(context,request,scope,trusted.attachmentRoot,captureSource,changeScope) : captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
+      includeDiff: true, taskId: context.task.identity.taskId,
+      ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
+  } catch (error) {
+    // Only the same entry's own unavailable read domain degrades: a real source,
+    // route or usage error still propagates with its own message.
+    const message = String(error?.message ?? "");
+    // A real collection failure (Git range, approved read domain, source capture)
+    // is the only kind that degrades; cancellation, usage and route errors keep
+    // their own message and exit.
+    const collectionFailure = error?.code === "SOURCE_UNAVAILABLE"
+      || /SOURCE_UNAVAILABLE|读域|approved read scope/.test(message)
+      || /^Command failed: git\b/.test(message) || /not a git repository/.test(message);
+    const unavailableReadDomain = changeScope?.status === "unknown_change_scope" && collectionFailure;
+    if (!unavailableReadDomain) throw error;
+    source = unavailablePhaseReviewSource(context, changeScope, error);
+  }
   try {
     const changedPaths = reviewScope === 'terminal' ? source.changedPaths : undefined;
     const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
-    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope);
+    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope,changeScope);
     const built = buildMaterials({
       reviewDataRoot: trusted.attachmentRoot,
       attachmentRoot: trusted.attachmentRoot,
@@ -726,7 +784,9 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     let packet;
     try {
       const manifest = built.deliveryManifest ?? built.manifest;
-      packet = candidateExperiment && Array.isArray(manifest)
+      // An empty delivery manifest is not a packet to project; the OCR body
+      // contract is validated against the files the packet builder delivered.
+      packet = candidateExperiment && Array.isArray(manifest) && manifest.length > 0
         ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource)
         : built;
     } catch (error) {
@@ -1265,7 +1325,9 @@ async function writeReadinessOriginal(context, phaseId, record) {
 // probes is the dispatch condition: a missing table fails by name, a changed
 // material fingerprint is refused as stale, and an unchanged passing original
 // is reused so repeated calls never re-run non-idempotent probes.
-async function evaluateBuildCodeReadiness(context, materials, phaseId) {
+// The pre-crop scope is collected once by the caller with the same baseHead the
+// cursor will reuse; this entry only projects the existing fact.
+async function evaluateBuildCodeReadiness(context, materials, phaseId, changeScope) {
   const spec = materials["spec.md"], index = materials["phases/index.md"];
   const phases = Object.fromEntries(Object.entries(materials).filter(([file]) =>
     file.startsWith("phases/") && file !== "phases/index.md"));
@@ -1276,7 +1338,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId) {
     throw new Error(`ORACLE-PHASE-READINESS: missing readiness table in ${phaseFile} `
       + `(build-code dispatch requires the five columns 命令/期望/证据/机器或人判/负责人; owner=计划负责人)`);
   }
-  const parsed = validatePostPhaseContract({ spec, index, phases, require_readiness: true });
+  const parsed = validatePostPhaseContract({ spec, index, phases, require_readiness: true,
+    phase_id: phaseId, changeScope });
   if (!parsed.ok) throw new Error(`ORACLE-PHASE-READINESS: ${parsed.errors.join("; ")}`);
   if (table.error) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness ${table.error}`);
   if (!table.rows.length) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness table has no probe rows (missing probe; owner=计划负责人)`);
@@ -1288,7 +1351,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId) {
   }
   if (previous && previous.record.material_sha256 === material_sha256) {
     if (previous.record.status === "pass" && !previous.marker) {
-      return Object.freeze({ ref: previous.ref, record: previous.record, reused: true });
+      return Object.freeze({ ref: previous.ref, record: previous.record, reused: true,
+        write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
     }
     if (previous.marker) {
       // The stale refusal was reviewed; this rerun is the explicit recovery.
@@ -1404,7 +1468,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId) {
     || !Array.isArray(written.readBack?.probes) || written.readBack.probes.length !== probes.length) {
     throw new Error(`ORACLE-PHASE-READINESS: readiness original read-back does not match the executed probes: ${written.ref}`);
   }
-  return Object.freeze({ ref: written.ref, record, reused: false });
+  return Object.freeze({ ref: written.ref, record, reused: false,
+    write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
 }
 
 async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
@@ -1422,7 +1487,6 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
     if (!phaseProgressTargetExists(inputCursor, materials)) {
       throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
     }
-    const readiness = await evaluateBuildCodeReadiness(context, materials, inputCursor.phase_id);
     const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
       row?.record_kind === "stage" && row.stage === "build-code") ?? null;
     const cursor = currentRow?.phase_progress;
@@ -1432,6 +1496,11 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     }).trim();
     if (!GIT_OID.test(baseHead)) throw new TypeError("phase_progress requires a real Phase start Git commit");
+    // Collect the pre-crop range once, with the same revision that is about to
+    // become this Phase's start; the cursor below reuses it, never re-reads HEAD.
+    const changeScope = await capturePreExecutionTaskChangeScope({ workspace: context.workspace,
+      baseline: baseHead, taskId: context.identity.taskId });
+    const readiness = await evaluateBuildCodeReadiness(context, materials, inputCursor.phase_id, changeScope);
     const phaseProgress = Object.freeze({
       phase_id: inputCursor.phase_id,
       task_id: inputCursor.task_id,
@@ -1473,6 +1542,8 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       phase_progress: phaseProgress,
       record_ref: written.ref,
       action: written.action,
+      // Report-only fact; never persisted to readiness.v1 or the stage row.
+      write_set_reconciliation: readiness.write_set_reconciliation ?? null,
     });
   });
 }
@@ -1785,7 +1856,25 @@ function terminalAssessmentQuality(context, row) {
     const verdicts=[];
     for(const {ref,raw} of sources){
       if(!requireFact(ref.ref!==a.final_report?.ref&&ref.sha256!==a.final_report?.sha256,`acceptance ${entry.id}: final report cannot be its own upstream verdict`))continue;
-      if(raw!==null)try{const verdict=originalVerdict(JSON.parse(raw),entry.id);if(verdict!==null)verdicts.push(verdict);}catch{}
+      if(raw!==null)try{const value=JSON.parse(raw);
+        // Any AC-shaped quality/evidence original carrying result+refs is an
+        // acceptance-evidence candidate and is validated unconditionally; the
+        // self-declared schema_version is not a gate. Legacy plain verdicts
+        // ({id:"AC-…", result, refs}) are projected onto the current contract
+        // before validation, so an empty/wrong refs list cannot pass. Non-AC
+        // proof facts (for example a finding verification with result+refs but
+        // finding_id only) keep the originalVerdict path and are not reclassified.
+        const candidate = plain(value)&&ref.ref.startsWith("quality/evidence/")&&("result" in value)&&("refs" in value)
+          ? (typeof value.acceptance_criterion_id==="string" ? value
+            : typeof value.id==="string"&&/^AC-[A-Za-z0-9._:-]+$/.test(value.id)
+              ? {schema_version:"acceptance-evidence.v1",acceptance_criterion_id:value.id,result:value.result,refs:value.refs}
+              : null)
+          : null;
+        if(candidate){
+          try{validateAcceptanceEvidence(candidate,`acceptance ${entry.id}`);}
+          catch(error){gaps.push(`acceptance ${entry.id}: ${error.message}`);}
+        }
+        const verdict=originalVerdict(value,entry.id);if(verdict!==null)verdicts.push(verdict);}catch{}
     }
     const conflicting=verdicts.includes("inconsistent")||new Set(verdicts).size>1;
     requireFact(!conflicting,`acceptance ${entry.id}: inconsistent applicable original verdicts`);
@@ -1894,13 +1983,45 @@ function terminalAssessmentQuality(context, row) {
       if(!requireFact(typeof id==="string"&&ds.length===1,`finding ${id}: missing unique disposition`))continue;
       const d=ds[0];requireFact(sameReference(d.original_review_ref,a.review),`finding ${id}: original review mismatch`);
       const rejected=d.status==="rejected_invalid";
-      requireFact(d.status==="fixed"||rejected,`finding ${id}: unresolved; risk acceptance not inferred`);
-      if(!rejected)readRefs(d.fix_refs,`finding ${id} fix`);
-      const verifications=readRefs(d.verification_refs,`finding ${id} independent verification`);
+      const accepted=d.status==="accepted_risk";
+      let acceptedResolved=false;
+      if(accepted){
+        // accepted_risk is consumed from the authoritative terminal input field
+        // risk_acceptances. Each entry is the existing risk-acceptance shape
+        // (finding_id, selected_option, reply, reply_ref, accepted_at,
+        // authorized_risk_finding_ids); the reply_ref must be a current task
+        // confirmation original whose verbatim reply contains this reply.
+        const acceptances=Array.isArray(a.risk_acceptances)?a.risk_acceptances:null;
+        if(!acceptances){
+          gaps.push(`finding ${id}: missing risk_acceptances; a serious risk cannot be accepted by declaration alone`);
+        }else{
+          const matches=acceptances.filter(v=>v?.finding_id===id);
+          if(matches.length!==1){gaps.push(`finding ${id}: risk acceptance denominator differs (${matches.length})`);}
+          else{
+            const acceptance=matches[0];
+            try{
+              const pause=deriveSeriousReviewPause({taskId:context.identity.taskId,stage:"build-code",reviewRef:a.review.ref,result:review});
+              buildRiskAcceptance({pause,findingId:id,selectedOption:acceptance.selected_option,replyRef:acceptance.reply_ref,reply:acceptance.reply,acceptedAt:acceptance.accepted_at});
+              validateRiskAcceptance({acceptance,pause});
+              const authorized=Array.isArray(acceptance.authorized_risk_finding_ids)?acceptance.authorized_risk_finding_ids:[];
+              requireFact(authorized.includes(id),`finding ${id}: risk acceptance is not authorized by the current decision`);
+              requireFact(typeof acceptance.reply==="string"&&acceptance.reply.trim().length>0,`finding ${id}: risk acceptance reply is empty`);
+              const replyRef=acceptance.reply_ref;
+              requireFact(typeof replyRef==="string"&&replyRef.startsWith("quality/evidence/human-confirmations/")&&!replyRef.includes("\\")&&!replyRef.split("/").some(part=>!part||part==="."||part===".."),`finding ${id}: risk acceptance reply_ref must name a task confirmation original`);
+              const original=JSON.parse(context.task.readRecordBytes(replyRef).toString("utf8"));
+              requireFact(original?.stage==="build-code"&&typeof original.reply==="string"&&original.reply.includes(acceptance.reply),`finding ${id}: risk acceptance reply differs from the actual user original`);
+              acceptedResolved=true;
+            }catch(error){gaps.push(`finding ${id}: ${error.message}`);}
+          }
+        }
+      }
+      requireFact(d.status==="fixed"||rejected||acceptedResolved,`finding ${id}: unresolved; risk acceptance not inferred`);
+      if(!rejected&&!accepted)readRefs(d.fix_refs,`finding ${id} fix`);
+      const verifications=accepted?[]:readRefs(d.verification_refs,`finding ${id} independent verification`);
       const paths=list(d.affected_paths,`finding ${id} affected paths`);
       const originalPaths=Array.isArray(f.affected_paths)?f.affected_paths:typeof f.file==="string"?[f.file]:typeof f.path==="string"?[f.path]:typeof f.location?.path==="string"?[f.location.path]:[];
-      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(originalPath(p)))&&(rejected||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
-      requireFact(verifications.some(({raw,ref})=>{if(raw===null)return false;let proof;try{proof=JSON.parse(raw);}catch{return false;}
+      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(originalPath(p)))&&(rejected||accepted||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
+      if(!accepted)requireFact(verifications.some(({raw,ref})=>{if(raw===null)return false;let proof;try{proof=JSON.parse(raw);}catch{return false;}
         if(!identity(proof)||!locatorMatches(proof,f,index)||proof.result!=="pass"||!sameReference(proof.original_review_ref,a.review)||!independent(proof.reader,`finding ${id} verifier`,ref,id))return false;
         if(rejected&&!requireFact(proof.disposition==="rejected_invalid"&&typeof proof.reason==="string"&&proof.reason.trim().length>0,`finding ${id}: invalidity not independently explained`))return false;
         readRefs(proof.refs,`finding ${id} proof execution`);checkPaths(proof.implementation,`finding ${id} proof`,paths);return true;
@@ -2243,7 +2364,38 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   }
   if (command === "authorize-operation") {
     if (!["commit", "push", "merge", "archive", "cleanup", "pr"].includes(values.operation) || !values["subject-ref"]) throw new TypeError("authorize requires a supported operation and --subject-ref");
-    const grant=await context.task.recordGitAuthorization({cwd:context.workspace.worktreeRoot,operation:values.operation,confirmationRef:values["subject-ref"],...(values.stage==="build-code"&&values.operation==="commit"?{phase:"build-code"}:{})});
+    // A grant must cite a real confirmation original, not an arbitrary string.
+    // Bind it to the current task tree, the CLI stage and a verbatim reply; a
+    // fake or foreign ref is rejected before any authorization record is written.
+    const confirmationRef = values["subject-ref"];
+    const confirmationDir = join(context.task.taskPath, "quality", "evidence", "human-confirmations");
+    const invalidConfirmation = message => Object.assign(new TypeError(message), { code: "AUTHORIZATION_CONFIRMATION_INVALID" });
+    if (typeof confirmationRef !== "string" || !isAbsolute(confirmationRef) || resolve(confirmationRef) !== confirmationRef) throw invalidConfirmation("authorize --subject-ref must be an absolute confirmation original under quality/evidence/human-confirmations");
+    if (dirname(confirmationRef) !== confirmationDir) throw invalidConfirmation("authorize --subject-ref is outside the current task confirmations");
+    let confirmation;
+    try {
+      const stat = lstatSync(confirmationRef);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw invalidConfirmation("authorize --subject-ref must be a single-link regular confirmation original");
+      confirmation = JSON.parse(readFileSync(confirmationRef, "utf8"));
+    } catch (error) {
+      if (error.code === "AUTHORIZATION_CONFIRMATION_INVALID") throw error;
+      throw invalidConfirmation(`authorize --subject-ref is unreadable or invalid: ${error.message}`);
+    }
+    if (!confirmation || typeof confirmation !== "object" || Array.isArray(confirmation)) throw invalidConfirmation("authorize --subject-ref must name a confirmation object");
+    if (confirmation.stage !== values.stage) throw invalidConfirmation("authorize confirmation stage differs from the CLI stage");
+    if (typeof confirmation.reply !== "string" || !confirmation.reply.trim()) throw invalidConfirmation("authorize confirmation requires a non-empty verbatim reply");
+    // A rejected or unrelated decision must never mint a Git grant. This is a
+    // pure exact whitelist: normalize trim+lowercase and require full equality.
+    // No substring, suffix or prefix matching. Values come from real
+    // confirmation originals; a new label must be added to this set explicitly.
+    const approvedDecisions = new Set([
+      "approved", "accepted", "authorized", "confirmed", "allowed", "approved-with-amendments",
+      // Real cross-repository authorization labels observed in task originals.
+      "cross-repo-auth", "p6-cross-repo-auth", "p7-cross-repo-auth",
+    ]);
+    const normalizedDecision = typeof confirmation.decision === "string" ? confirmation.decision.trim().toLowerCase() : "";
+    if (!approvedDecisions.has(normalizedDecision)) throw invalidConfirmation("authorize confirmation decision must express approval; rejected or unknown decisions cannot authorize");
+    const grant=await context.task.recordGitAuthorization({cwd:context.workspace.worktreeRoot,operation:values.operation,confirmationRef,...(values.stage==="build-code"&&values.operation==="commit"?{phase:"build-code"}:{})});
     return { status: "recorded", ...grant };
   }
   if (command === "run") {
@@ -2308,7 +2460,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
       run_execute: "build-code: mutually exclusive phase_progress cursor or terminal_assessment_ref ordinary original reference only; build-prd: supplied step outcomes require an explicit planning task type for writes; no input returns not-started/ref=null without writing; records do not certify business or quality success; no official stage execution",
       actions: {
         doctor: ["workspace"],
-        status: ["begin", "repair"],
+        status: ["begin"],
         run: ["draft", "execute"],
         review: ["record"],
         verify: ["execute"],
@@ -2350,7 +2502,6 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   const internalOperation = ({
     "doctor:workspace": "doctor",
     "status:begin": "status",
-    "status:repair": "status",
     "run:execute": "run",
     "run:draft": "artifact",
     "review:record": "review-record",

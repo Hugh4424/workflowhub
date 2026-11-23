@@ -1,9 +1,10 @@
 // ORACLE-CONV-CARD: reads the make-decision method, its step manifest and the
-// decision-log template as text only.
-// Passing proves those three documents describe the ten-cell convergence card,
-// the five cold-read questions and the unchanged ten-column/five-category ledger
-// shape. It does not prove any real task writes a card, nor that an independent
-// reader answers the five questions.
+// decision-maker card template as text only.
+// Passing proves those documents describe the current eleven-cell convergence
+// card (with 验收 four items and 配套与影响 four items), the six cold-read
+// questions, the nine adversarial questions and the unchanged
+// ten-column/five-category ledger shape. It does not prove any real task writes
+// a card, nor that a reader answers the six questions.
 // The UI-only guard covers the convergence-card block only: text appended after
 // its closing line (the next stage's UI-package additions) is out of scope.
 // A missing or misplaced closing line yields an empty card section, never a
@@ -17,15 +18,15 @@ import { describe, expect, test } from 'vitest';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const METHOD = 'workflows/make-decision/SKILL.md';
 const STEPS = 'workflows/make-decision/steps.json';
-const TEMPLATE = 'skills/decision-log/templates/decision-log-template.md';
+const TEMPLATE = 'skills/decision-maker/templates/card.md';
 const BASELINE = '998614bd'; // task baseline; the ledger shape must stay byte-identical
 
-const CELLS = ['结果', '对应需求', '现状缺口', '方案与取舍', '边界', '数据与状态', '验收', '风险与回退', '未决', '白话复述'];
-const CELL_LIST = `十格是${CELLS.join('、')}`;
-const QUESTIONS = ['改什么', '为什么', '边界', '怎么验', '还有什么没定'];
-const QUESTION_LIST = `冷读五问是${QUESTIONS.join('、')}`;
+const CELLS = ['结果', '对应需求', '现状缺口', '方案与取舍', '边界', '数据与状态', '验收', '风险与回退', '未决', '白话复述', '配套与影响'];
+const CELL_LIST = `十一格是${CELLS.join('、')}`;
+const QUESTIONS = ['改什么', '为什么', '边界', '怎么验', '还有什么没定', '配套'];
+const QUESTION_LIST = '冷读六问是改什么、为什么、边界、怎么验、还有什么没定、配套还要改什么、迁什么、删什么、会影响谁';
 const NOT_CONVERGED = '答不出即未收敛';
-const CARD_HEADING = '### 方案卡怎么写';
+const CARD_HEADING = '| 格 | 写什么 |';
 // The card section inside method step 9 has explicit boundaries so the UI-only
 // check stays inside it: the next stage appends its UI-package additions after
 // the closing line, and those additions must not turn this test red.
@@ -85,10 +86,12 @@ function checkConvergenceCard({ method, steps, template, baselineMethod }) {
 
   if (!step.includes(CARD_START)) gaps.push('第 9 步缺方案卡段');
   else if (!card) gaps.push('方案卡段缺结尾定位句');
-  if (!card.includes(CELL_LIST)) gaps.push('第 9 步缺十格名单');
+  if (!card.includes(CELL_LIST)) gaps.push('第 9 步缺十一格名单');
   for (const cell of CELLS) if (!card.includes(cell)) gaps.push(`第 9 步缺格名：${cell}`);
-  if (!card.includes(QUESTION_LIST)) gaps.push('第 9 步缺冷读五问名单');
-  for (const question of QUESTIONS) if (!card.includes(question)) gaps.push(`第 9 步冷读五问缺：${question}`);
+  if (!card.includes(QUESTION_LIST)) gaps.push('第 9 步缺冷读六问名单');
+  for (const question of QUESTIONS) if (!card.includes(question)) gaps.push(`第 9 步冷读六问缺：${question}`);
+  if (!card.includes('对抗九问')) gaps.push('第 9 步缺对抗九问');
+  if (!card.includes('同一审查者') || !/最多两轮/.test(card)) gaps.push('第 9 步缺同一审查者两轮封顶');
   if (!card.includes(NOT_CONVERGED)) gaps.push(`第 9 步缺「${NOT_CONVERGED}」`);
   for (const pattern of UI_ONLY) {
     if (pattern.test(card)) {
@@ -100,12 +103,21 @@ function checkConvergenceCard({ method, steps, template, baselineMethod }) {
   const observed =
     (steps.steps ?? []).find((step) => step.step_slug === 'module-convergence')?.observable_result ?? '';
   if (!observed.includes('方案卡与冷读记录')) gaps.push('步骤表第 9 项可见结果缺「方案卡与冷读记录」');
+  if (!observed.includes('十一格')) gaps.push('步骤表第 9 项可见结果缺「十一格」');
+  if (!observed.includes('六问')) gaps.push('步骤表第 9 项可见结果缺「六问」');
+  if (!observed.includes('九问')) gaps.push('步骤表第 9 项可见结果缺「九问」');
+  if (!/两轮/.test(observed)) gaps.push('步骤表第 9 项可见结果缺「两轮」');
 
   const templateBody = templateSection(template);
-  if (!templateBody) gaps.push('模板缺方案卡一节');
+  if (!templateBody) gaps.push('模板缺十一格卡表');
   else {
-    for (const cell of CELLS) if (!templateBody.includes(cell)) gaps.push(`模板方案卡一节缺格名：${cell}`);
-    if (!templateBody.includes('冷读五问')) gaps.push('模板方案卡一节缺冷读五问');
+    for (const cell of CELLS) if (!templateBody.includes(cell)) gaps.push(`模板十一格卡缺格名：${cell}`);
+    for (const item of ['通过条件', '失败条件', '反例', '证据']) {
+      if (!templateBody.includes(item)) gaps.push(`模板验收四件缺：${item}`);
+    }
+    for (const item of ['配套调整', '配套迁移', '配套移除', '影响范围']) {
+      if (!templateBody.includes(item)) gaps.push(`模板配套与影响四项缺：${item}`);
+    }
   }
 
   const current = ledgerShape(method);
@@ -125,7 +137,7 @@ const fixture = () => ({
 });
 
 describe('ORACLE-CONV-CARD convergence card contract', () => {
-  test('第 9 步写出十格方案卡与冷读五问，模板有方案卡一节，十列与五类形状不变', () => {
+  test('第 9 步写出十一格方案卡与冷读六问，模板有十一格表，十列与五类形状不变', () => {
     const gaps = checkConvergenceCard(fixture());
     expect(gaps, `ORACLE-CONV-CARD 缺口：${gaps.join('；')}`).toEqual([]);
   });

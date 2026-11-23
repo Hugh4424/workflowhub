@@ -11,8 +11,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
-import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import Ajv2020 from "ajv/dist/2020.js";
 
+const resultSchema=JSON.parse(readFileSync(new URL("../../runtime/review/schemas/result.schema.json",import.meta.url),"utf8"));
+const validateResult=new Ajv2020({allErrors:true,strict:true,strictRequired:false,formats:{"date-time":true}}).compile(resultSchema);
 const roots = [];
 
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -244,7 +246,7 @@ describe("code review records unavailable when OCR is missing or below the minim
         expect(review.provider_results.some(member => member.provider === "wh-review")).toBe(false);
         expect(review).not.toHaveProperty("fallback");
         expect(String(review.error.message)).toMatch(NOT_INSTALLED_FACT);
-        expect(() => validateSchema("result", review)).not.toThrow();
+        expect(validateResult(review)).toBe(true);
       });
   });
 
@@ -313,7 +315,7 @@ describe("canonical review request subject provenance", () => {
       else expect(Object.hasOwn(actual.request,"subject")).toBe(false);
       expect(actual.request.material_keys).toContain("acceptance_criteria");
       expect(actual.request).not.toHaveProperty("material_digest");expect(actual.request).not.toHaveProperty("snapshot_tree");
-      expect(()=>validateSchema("result",actual)).not.toThrow();
+      expect(validateResult(actual)).toBe(true);
     });
   });
 });

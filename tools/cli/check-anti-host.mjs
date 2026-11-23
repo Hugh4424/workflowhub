@@ -22,6 +22,7 @@
 import { readFileSync } from "fs";
 import { join, resolve } from "path";
 import { fileURLToPath } from "url";
+import { scanCoreFiles } from "./scan-core-files.mjs";
 
 // --------------------------------------------------------------------------
 // Four anti-host regex classes
@@ -191,10 +192,8 @@ async function main() {
       process.exit(2);
     }
   } else {
-    // Default: use the shared boundary anchor
-    const { scanCoreFiles } = await import(
-      new URL("./scan-core-files.mjs", import.meta.url).href
-    );
+    // Default: use the shared boundary anchor. Static import keeps the
+    // dependency inside the Runner release closure without a build-time list.
     filesToScan = scanCoreFiles();
   }
 

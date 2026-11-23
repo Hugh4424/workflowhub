@@ -944,12 +944,6 @@ function ocrDiffSourceMappings(diffText){
   return oldRemaining||newRemaining ? null : mapped;
 }
 
-function ocrDiffSourceLine(diffText,targetPath,diffLine){
-  if(!Number.isSafeInteger(diffLine)||diffLine<1||!safeOcrSnapshotPath(targetPath))return null;
-  const mapped=ocrDiffSourceMappings(diffText)?.get(diffLine);
-  return mapped?.path===targetPath ? {line:mapped.line,patch:mapped.patch} : null;
-}
-
 function ocrByteLineStart(bytes, line) {
   if (!Number.isSafeInteger(line) || line < 1) return null;
   if (line === 1) return 0;

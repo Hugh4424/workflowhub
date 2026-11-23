@@ -6,7 +6,7 @@
 
 ## 两种 run:execute 的生产者与消费者
 
-- 公共入口为 tools/cli/stage-runtime.mjs#stageRuntimeCliMain，委托 stageRuntimeMain。build-code 分支互斥接收 phase_progress 或 terminal_assessment_ref；前者复用 writeBuildCodePhaseProgressCursor 保存现有单行游标，后者复用 writeTerminalAssessmentReference 保存一项普通原件引用，同stage外层锁fresh merge保原cursor/evidence/review。status:begin/repair 的 derivePhaseProgressStatus 读取游标，terminalAssessmentQuality读取被引用独立原件及真实来源链；游标或引用本身均不产生完成事实，缺证据仍unknown/incomplete，不增加持久完成标记。
+- 公共入口为 tools/cli/stage-runtime.mjs#stageRuntimeCliMain，委托 stageRuntimeMain。build-code 分支互斥接收 phase_progress 或 terminal_assessment_ref；前者复用 writeBuildCodePhaseProgressCursor 保存现有单行游标，后者复用 writeTerminalAssessmentReference 保存一项普通原件引用，同stage外层锁fresh merge保原cursor/evidence/review。status:begin 的 derivePhaseProgressStatus 读取游标（`status:repair` 已于 2026-11-23 退役：决定人用户，来源 P5/T006 与 decision-log 包7；公共 help 与 publicRoute 不再列它），terminalAssessmentQuality读取被引用独立原件及真实来源链；游标或引用本身均不产生完成事实，缺证据仍unknown/incomplete，不增加持久完成标记。
 - build-prd 分支以当前 decision-log.md 中明确的规划任务类型作为写入条件；producer 为 runtime/task/portable-workflow-run.mjs#runPortableWorkflow，消费 workflows/build-prd/steps.json 与显式 step_results 的逐步原件，保存 quality/evidence/portable-workflow-outcomes/build-prd/terminal 下的普通记录。doctor/status 的 projectPortableWorkflowStatus 读取同一记录。无 input 返回 not-started/ref=null 且不写终态；failed 的 run exit1，成功诊断读取的 exit0 不漂白 failed。
 
 上述调用点按当前 tools/cli/stage-runtime.mjs 的 stageRuntimeCliMain、writeBuildCodePhaseProgressCursor、writeTerminalAssessmentReference、terminalAssessmentQuality 与 runtime/task/portable-workflow-run.mjs 的 runPortableWorkflow 回读；行号随实现移动，以实际符号与调用为准。它们是当前调用事实，不是复活旧 task-topology、stage handler 或第二 writer 的理由。

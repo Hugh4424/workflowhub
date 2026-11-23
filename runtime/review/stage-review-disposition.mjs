@@ -1,5 +1,10 @@
 import { WORKFLOW_STAGE_SET } from "../stage/stage-registry.mjs";
-// 退役登记见 docs/architecture/move-map.json 本文件条目（ADR-037）：零非测试消费者，owner 确认前不删。
+// 退役登记见 docs/architecture/move-map.json 本文件条目，判死判活的原来源是归档决定日志
+// specs/archive/workflowhub-review-efficiency-20261007/decision-log.md 的 037 决定节（:740；F-003/F-006 见 :130），
+// 不是 docs/adr/0037-*.md（那是“采用跨语言写作规则”，与本退役无关）。
+// 决定：保留实现并接当前消费者 tools/cli/stage-runtime.mjs 的 terminalAssessmentQuality；
+// 未决：原“零非测试消费者”判断被 F-003/F-006 冲突推翻，删除须 owner 重新判定且消费者改接；
+// 理由与来源随归档决定日志和退役登记只读保留，不新增门、许可或未来 actor。
 const STAGES=WORKFLOW_STAGE_SET;
 const STATUSES=new Set(["fixed","rejected_invalid","accepted_risk","needs_human","user_decided"]);
 function object(value,label){if(!value||typeof value!=="object"||Array.isArray(value))throw new TypeError(`${label} must be an object`);return value;}
