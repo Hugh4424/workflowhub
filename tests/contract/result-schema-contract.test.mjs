@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const OLD_IMPLEMENTATION = "../../runtime/review/schema-validator.mjs";
 const RESULT_SCHEMA = "../../runtime/review/schemas/result.schema.json";
@@ -12,6 +12,7 @@ describe("ORACLE-SCHEMA-RETIREMENT old implementation versus retained contract",
     try { await import(OLD_IMPLEMENTATION); loaded = true; } catch { /* load failure or missing file */ }
     expect(loaded, "the retired schema-validator module must not load").toBe(false);
 
+    expect(existsSync(new URL(OLD_IMPLEMENTATION, import.meta.url)), "the retired module file must be physically absent").toBe(false);
     const schema = JSON.parse(readFileSync(new URL(RESULT_SCHEMA, import.meta.url), "utf8"));
     expect(schema).toBeTypeOf("object");
     expect(schema.$schema).toContain("json-schema.org");

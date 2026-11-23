@@ -2373,6 +2373,17 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (!confirmation || typeof confirmation !== "object" || Array.isArray(confirmation)) throw invalidConfirmation("authorize --subject-ref must name a confirmation object");
     if (confirmation.stage !== values.stage) throw invalidConfirmation("authorize confirmation stage differs from the CLI stage");
     if (typeof confirmation.reply !== "string" || !confirmation.reply.trim()) throw invalidConfirmation("authorize confirmation requires a non-empty verbatim reply");
+    // A rejected or unrelated decision must never mint a Git grant. This is a
+    // pure exact whitelist: normalize trim+lowercase and require full equality.
+    // No substring, suffix or prefix matching. Values come from real
+    // confirmation originals; a new label must be added to this set explicitly.
+    const approvedDecisions = new Set([
+      "approved", "accepted", "authorized", "confirmed", "allowed", "approved-with-amendments",
+      // Real cross-repository authorization labels observed in task originals.
+      "cross-repo-auth", "p6-cross-repo-auth", "p7-cross-repo-auth",
+    ]);
+    const normalizedDecision = typeof confirmation.decision === "string" ? confirmation.decision.trim().toLowerCase() : "";
+    if (!approvedDecisions.has(normalizedDecision)) throw invalidConfirmation("authorize confirmation decision must express approval; rejected or unknown decisions cannot authorize");
     const grant=await context.task.recordGitAuthorization({cwd:context.workspace.worktreeRoot,operation:values.operation,confirmationRef,...(values.stage==="build-code"&&values.operation==="commit"?{phase:"build-code"}:{})});
     return { status: "recorded", ...grant };
   }
