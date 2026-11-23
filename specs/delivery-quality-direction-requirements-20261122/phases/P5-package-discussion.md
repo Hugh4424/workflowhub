@@ -181,6 +181,12 @@ node skills/decision-maker/scripts/validate-card.mjs /Users/Hugh/Hugh/Knowledge/
 保其他写主的调整、当前真实原答和失败；恢复后只复跑受影响正反例。
 需新增步骤、改变退出强度或换验收口径时，交原决定人处理该路径。
 
+## 本 Phase 自带判据小结
+
+- 验了什么：gate 18 passed（`quality/tests/p05-evidence-gaps.green2.output`）；只缺质询点名且 exit 0；五件缺件/错绑、未收敛、错序、跨包与旧批次答复仍走原非零出口；`质询：无／未取得` 算缺失。
+- 没验什么：真实逐包答复、超 14 行真实件、第 12/13 步全集读回（均 incomplete/unavailable）。
+- 未验项条件与 owner：真实逐包答复由用户产生；长答复读回与独立首判由未参与读者执行。
+
 ## 下一消费者拿什么继续？
 
 获准实施后，本任务主会话先组织核实并恢复唯一收敛清单和可回读的原件指针。
@@ -218,7 +224,7 @@ node skills/decision-maker/scripts/validate-card.mjs /Users/Hugh/Hugh/Knowledge/
 - **来源 / FR / AC**: R-001、R-007；决定 5；FR-DISCUSS-001、AC-P5-001。包内完成收敛与真实答复，未收敛不先整体细审，答复读全集而非截行。
 - **输入**: P4/T004 的 AC-P4-001 技术交回，已合入的任务一默认卡及步骤；本任务主会话组织五件与 U-005 真实全文，超十四物理行的真实件未取得，旧占位不作原话。
 - **文件 / 符号**: `workflows/make-decision/SKILL.md`、`workflows/make-decision/steps.json`、`workflows/make-decision/step-consumer-design.md` 的既有步骤；`tools/cli/check-stage-steps.mjs` 符号 `p5StrictGaps`；`tests/contract/check-stage-steps.test.mjs` 与 `tests/contract/decision-evidence-consumption.test.mjs` `p5Fixture`、既有报告组。
-- **动作**: 先冻结全收敛、只缺质询与未收敛对照；在同包已绑定讨论中补报告级点名。梳理第 9、11–14 步及根对照说明，保第 5、6 步同源与第 10 步整体用途。
+- **动作**: 先冻结全收敛、只缺质询与未收敛对照；在同包已绑定讨论中补报告级点名。梳理第 9、11–14 步及根对照说明，保第 5、6 步同源与第 10 步整体用途。另修同一 CLI 的「报告级提示被退出谓词误吃」问题（同一判读面的缺陷归位修复，不改变任何退出语义）。
 - **输出 / 失败**: 现有报告点名「讨论原件缺质询」但不改退出；错序、错用原答、截断或跨包问题不回原包均由独立读者具名。夹具回收不覆盖业务失败。
 - **边界 / 禁止改动**: 规格判据、冻结测试、旧卡、真实原话、答复索引、任务一通用入口与红线切换；不新增阶段、确认或硬失败。
 - **依赖**: blocked_by P4 技术交回；不等 AC-P4-002 真实事件。已合入版本只约束共享路径；实际时序以当次原件核实。
@@ -228,7 +234,7 @@ node skills/decision-maker/scripts/validate-card.mjs /Users/Hugh/Hugh/Knowledge/
 - **预期退出码**: RED nonzero; GREEN 0。只缺质询的入口仍 0，未收敛保原非零；语义结论不由退出码产生。
 - **RED 目标失败**: ORACLE-MD-005；只有「其余材料合法时，缺质询未点名」断言失败是目标 RED。夹具/配置、环境、未收集或本来通过分开。
 - **GREEN 判定器**: ORACLE-MD-005；补齐时无新增缺口，只缺质询时点名且仍 0，未收敛仍失败。ORACLE-FULL-REPLY-READBACK 另判时序和全文正反例。
-- **证据**: RED unavailable — 本次只修订计划，未运行目标用例。规划 `quality/tests/p05-discussion.red.output`、`quality/tests/p05-discussion.green.output`、`quality/tests/p05-baseline.output`、`quality/tests/p05-full-reply.readback.md`；原始命令以实际捕获为准。
+- **证据**: RED/GREEN 已落盘：`quality/tests/p05-evidence-gaps.red.output`、`quality/tests/p05-evidence-gaps.red.receipt.json`、`quality/tests/p05-evidence-gaps.green.output`、`quality/tests/p05-evidence-gaps.green2.output`（GREEN 实测 18 passed | 110 skipped）；人读回读 `quality/tests/p05-full-reply.readback.md`（真实讨论回放面 unavailable、超 14 物理行真实件未取得）。设计期的 `p05-discussion.*`、`p05-baseline.output` 从未落盘，改指上述实际原件、不建副本；设计件 `p05/card.md:11` 的「11 passed / 78 skipped」是设计期预期，以本条实测为准。设计期三条 grep 期望里，`grep -n "14 行"` 与 `grep -n "计划草案骨架"` 仍命中方法正文（`SKILL.md:344,351`；`SKILL.md:328,331`、`steps.json:182`），`grep -n "以真实计划骨架逐项质询"` 已无输出；命中的是正文义务句，不删内容凑空，该三条不再作本 Phase 验收门槛。
 - **覆盖上限**: 只证本次同包过程与全文读取，历史报告、编排绿灯和真实首卡不互替。
 - **停止 / 恢复**: 版本不符或阶段 4 未交回只停相应路径；退出回归或邻项误报回原写主撤本卡增量；真实答复缺失由本任务主会话核恢复条件；改方向或验收回决定人。
 - **完成**: 前置（不作完成条件）：同一具名命令与辅助命令真实读回。完成条件（只写效果）：独立判当包真实收敛、全文及故意弄坏的路径；材料未得如实保缺口。
@@ -241,7 +247,7 @@ node skills/decision-maker/scripts/validate-card.mjs /Users/Hugh/Hugh/Knowledge/
 - **消费者**: P6 独立计划作者；P7 整链验证者
 - **gate_cmd**: `npx --no-install vitest run tests/contract/decision-evidence-consumption.test.mjs -t "P5 stage-steps evidence gaps" --no-cache --reporter=verbose`
 - **oracle**: ORACLE-MD-005；全文与顺序由 ORACLE-FULL-REPLY-READBACK 判
-- **evidence_path**: planned: `quality/tests/p05-discussion.green.output`；`quality/tests/p05-full-reply.readback.md`
+- **evidence_path**: `quality/tests/p05-evidence-gaps.green2.output`；`quality/tests/p05-full-reply.readback.md`
 - **STOP**: 同版或真实答复缺失只停相应观察；本任务先补可核原件，真实超长件到时复验；无在途时序依据由本任务主会话停对应共享切换并查原记录；退出回归回本阶段原写主；方向或验收变更回决定人。
 - **覆盖 AC**: AC-P5-001
-- **Done**: 前置（不作完成条件）：具名命令、原输出和退出可回读。完成条件（只写效果）：AC-P5-001 需报告对照、独立同包时序与全文原件；人读未执行记 incomplete，真实供件客观不存在时保 unavailable，由本任务主会话记录并安排恢复，均不得冒通过。
+- **Done**: 前置（不作完成条件）：具名命令、原输出和退出可回读。完成条件（只写效果，按 8 值档位逐条承接 AC）：AC-P5-001：incomplete；证据 quality/tests/p05-evidence-gaps.green2.output（机器面 18 passed）、quality/tests/p05-full-reply.readback.md（真实回放面 unavailable）；未通过原因：逐包真实答复仍是 {ans} 占位、超 14 行真实答复未取得、第 12/13 步全集读回未做。

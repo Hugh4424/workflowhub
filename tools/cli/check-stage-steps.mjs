@@ -675,10 +675,12 @@ function chatReceiptOk({ id, block, taskPath, batch }) {
     return true;
   } catch { return false; }
 }
-function discussionBindingOk({ id, block, taskPath, batch }) {
+function boundDiscussionRef(block) {
   const line = String(block ?? '').split(/\r?\n/).find(value => /就地讨论|讨论原件/.test(value) && /`[^`]+`/.test(value));
-  if (!line) return false;
-  const ref = /`([^`]+)`/.exec(line)?.[1];
+  return /`([^`]+)`/.exec(line ?? '')?.[1] ?? null;
+}
+function discussionBindingOk({ id, block, taskPath, batch }) {
+  const ref = boundDiscussionRef(block);
   if (!ref) return false;
   try {
     const text = readTaskOriginal(taskPath, ref.split('#')[0]);
@@ -692,10 +694,40 @@ function discussionBindingOk({ id, block, taskPath, batch }) {
 function p5StrictGaps({ id, block, taskPath, batch }) {
   const gaps = [];
   if (!/真实问答/.test(block ?? '')) gaps.push('缺真实问答指针');
-  if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) gaps.push('冷读五问未绑定');
+  const discussionBound = Boolean(batch) && discussionBindingOk({ id, block, taskPath, batch });
+  if (!discussionBound) gaps.push('冷读五问未绑定');
+  // The bound discussion original carries this package's 质询 line. Only the
+  // tagged line's existence is machine-read; its wording, in-original order,
+  // the applicable object and whether the reply really answers stay AC-P5-001
+  // human-read. This gap is report-only: it is absent from the failure lists,
+  // and the exit predicates drop it before matching (a row name may itself
+  // contain failure words like 复读/轮次). A missing/misbound 质询 original still
+  // fails through the five-original declaration path, never through this hint.
+  else if (!discussionGrillOk({ block, taskPath })) gaps.push('讨论原件缺质询');
   if (!chatReceiptOk({ id, block, taskPath, batch })) gaps.push('聊天呈现未取得');
   if (!/(先设计|先给设计|设计先于|先展示后提问|设计后提问)/.test(block ?? '')) gaps.push('先设计后提问缺证');
   return gaps;
+}
+// Same placeholder convention as run-checks/check-decision-log-chain none():
+// 无 / 没有 / 未取得 / 未知 are not content, even with a trailing explanation.
+function placeholderOnly(value) {
+  const text = String(value ?? '').replace(/[*_`。；;，,\s]/g, '');
+  return text === ''
+    || /^(?:无|没有|none|未取得|未知|n\/a|—|-{1,2})$/i.test(text)
+    || /^(?:无|没有|未取得|未知|none|n\/a|—)(?=[。；;，,、：:]|\s|$)/i.test(String(value ?? '').trim());
+}
+function discussionGrillOk({ block, taskPath }) {
+  const ref = boundDiscussionRef(block);
+  if (!ref) return false;
+  try {
+    const text = readTaskOriginal(taskPath, ref.split('#')[0]);
+    // Literal line shape is defined by steps.json step 9 (identity of the line,
+    // not just a word): a line beginning 质询： (optionally behind a list bullet).
+    // Placeholders use the repository's none() convention, so 质询：无 / 未取得 do
+    // not pass. The content itself stays human-read.
+    const match = /^\s*(?:[-*]\s*)?质询\s*[：:]\s*(.*)$/m.exec(String(text));
+    return Boolean(match) && !placeholderOnly(match[1]);
+  } catch { return false; }
 }
 function coldReadGaps({ id, body, taskPath, taskName }) {
   const gaps = [], errors = [];
@@ -900,10 +932,19 @@ const CONVERGENCE_FAILURE_PATTERNS = Object.freeze([
   /方案卡形状不可读/, /缺一卡一次冷读/, /缺一次冷读/, /轻档缺收敛清单/, /小改/,
   /UI设计源首问/, /证据标签非原件/, /证据缺当前原件/, /引用旧清单/,
 ]);
+// A package row is named by its own text (for example "5 复读对照"), so a
+// report-only hint can contain failure-looking words. The hint is dropped here
+// before any failure pattern reads the string; it never names an evidence or
+// direction failure on its own. Real gaps keep their own entries and still fail.
+const REPORT_ONLY_GAP_PATTERN = /讨论原件缺质询/;
 export function isConvergenceEvidenceFailure(gap) {
-  return CONVERGENCE_FAILURE_PATTERNS.some(pattern => pattern.test(String(gap)));
+  const text = String(gap);
+  if (REPORT_ONLY_GAP_PATTERN.test(text)) return false;
+  return CONVERGENCE_FAILURE_PATTERNS.some(pattern => pattern.test(text));
 }
 function isDirectionMaterialFailure(gap) {
+  const text = String(gap);
+  if (REPORT_ONLY_GAP_PATTERN.test(text)) return false;
   return [
     // Direction-only material failures. The shared evidence list below is the
     // same one both public exits use, so this predicate cannot drift from them.
@@ -2532,7 +2573,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps。');
+    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps；「讨论原件缺质询」只报告、不改退出码。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));

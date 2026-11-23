@@ -393,7 +393,12 @@ describe("ORACLE-MD-P1 answer source and tone consumption", () => {
 
 const p5Sha = (text) => createHash("sha256").update(text).digest("hex");
 
-function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${id}`, chatFor = () => false, realQaFor = () => true, orderFor = () => false, deferFor = () => false, deferValue, cardsExtra = '', pendingFor = () => "无" } = {}) {
+// grillFor adds the discussion original's 质询 content (questions + user reply);
+// the legal default carries it, and a case removes only that line. The other
+// overrides name the existing hard-failure paths: a missing/misbound 质询 ref,
+// an answer borrowed from another package or an older batch, and a reversed
+// ask-then-design order.
+function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${id}`, chatFor = () => false, realQaFor = () => true, orderFor = () => false, orderTextFor = () => "先设计后提问：先给设计稿，只有真歧义才问。", deferFor = () => false, deferValue, cardsExtra = '', pendingFor = () => "无", grillFor = () => true, grillRefFor = () => null, answerRefFor = () => null, answerBatchFor = () => null } = {}) {
   const root = temp("p5-stage-steps-");
   const task = join(root, "task");
   const materials = join(root, "materials");
@@ -420,13 +425,14 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
     put(task, coldRef, cold);
     const packageEvidence = `quality/evidence/convergence/package-evidence-${id}.md`;
     put(task, packageEvidence, `包 ${id} 的真实原件字节。\n`);
-    const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n用户原话：可以。\n批次：${batch}\n${identity}\n`;
+    const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n${grillFor(id) ? "质询：本包新出现的已定词汇与难逆取舍；问题原文：受控；用户答复：可以。\n" : ""}用户原话：可以。\n批次：${batch}\n${identity}\n`;
     const discussionRef = `quality/evidence/talk/discussion-p${id}.md`;
     put(task, discussionRef, discussion);
     const adversarialRef = `quality/evidence/talk/adversarial-p${id}.md`;
     put(task, adversarialRef, `# 对抗 ${id}\n\n九问与处置：受控。\n${identity}\n`);
     const answerRef = `quality/evidence/talk/answer-p${id}.md`;
-    put(task, answerRef, `# 真实答复 ${id}\n\n用户原话：可以。\n${identity}\n`);
+    const answerIdentity = `任务=task；包=${id}；批次=${answerBatchFor(id) ?? batch}；卡节sha256=${p5Sha(card)}`;
+    put(task, answerRef, `# 真实答复 ${id}\n\n用户原话：可以。\n${answerIdentity}\n`);
     let chatLine = "聊天展示：已发十格卡。";
     if (chatFor(id)) {
       const receipt = `工作包 ${id} 聊天回执\n\n批次：${batch}\n卡：工作包 ${id}\n`;
@@ -435,7 +441,7 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
       chatLine = `聊天回执：\`${receiptRef}\`；sha256 \`${p5Sha(receipt)}\`；批次 ${batch}；卡 \`${cards}#工作包-${id}\`；sha256 \`${p5Sha(card)}\``;
     }
     const marks = [chatLine];
-    if (orderFor(id)) marks.push("先设计后提问：先给设计稿，只有真歧义才问。");
+    if (orderFor(id)) marks.push(orderTextFor(id));
     if (deferFor(id)) marks.push("可推迟：性能镜头推迟，owner=后续阶段，最迟承接=终末验收。");
     if (deferValue !== undefined) marks.push(`可推迟：${deferValue}`);
     rows.push(format === 'ten'
@@ -469,10 +475,10 @@ function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${
       "8. 审查处置：`quality/reviews/direction.json`。", "",
       `### 包 ${id} 五件同包原件`, "",
       `- 当前方案卡：\`${cards}#工作包-${id}\`；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
-      `- 当前质询：\`${discussionRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
+      `- 当前质询：\`${grillRefFor(id) ?? discussionRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
       `- 当前冷读：\`${coldRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
       `- 当前对抗：\`${adversarialRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`,
-      `- 当前真实答复：\`${answerRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`, "",
+      `- 当前真实答复：\`${answerRefFor(id) ?? answerRef}\`；任务=task；包=${id}；批次=${batch}；卡节sha256=${p5Sha(card)}`, "",
       ...marks, "",
     ].join("\n"));
   }
@@ -2000,4 +2006,82 @@ it("P03 coverage ignores requirement-like rows inside a fenced example", () => {
   expect(summary, result.output).toBeTruthy();
   expect(summary).toContain("requirements 2/2 covered");
   expect(result.output).not.toContain("R-777");
+});
+
+// P5 ORACLE-MD-005 report-level 质询 gap: a converged package whose discussion
+// original is readable and batch-bound but has no 质询 content is named in the
+// public report, and the exit stays 0. The five-material hard failures (missing
+// or another-package 质询 original), the unconverged path, the reversed
+// ask-then-design order and an answer borrowed from another package or an older
+// batch stay non-zero, so the report-only gap cannot wash a real failure into a
+// pass. In-original show-before-answer line order is AC-P5-001 human-read; the
+// machine cases here cover the required 展示/原话 binding and the design-order
+// proof that the report owns.
+describe("P5 stage-steps evidence gaps — 讨论原件缺质询", () => {
+  const p5Run = (fixture) => spawnSync(process.execPath, [join(ROOT, "tools/cli/check-stage-steps.mjs"), `--task-path=${fixture.task}`, `--material-root=${fixture.materials}`, `--repo-root=${ROOT}`, "--stage=make-decision", "--json"], { encoding: "utf8", timeout: 60_000 });
+  const p5Public = (fixture) => {
+    const result = p5Run(fixture);
+    expect(result.stdout, result.stderr).toBeTruthy();
+    return { result, report: JSON.parse(result.stdout) };
+  };
+  const namedGrillGaps = (report) => report.convergence.gaps.filter(gap => /讨论原件缺质询/.test(gap));
+
+  it("names the missing 质询 on an otherwise legal package without changing exit 0", () => {
+    const { result, report } = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, grillFor: (id) => id !== 1 }));
+    const named = namedGrillGaps(report);
+    expect(named).toHaveLength(1);
+    expect(named[0]).toMatch(/^1：讨论原件缺质询/);
+    expect(report.convergence.gaps.some(gap => /^未收敛：/.test(gap))).toBe(false);
+    expect(result.status, result.stdout).toBe(0);
+  });
+
+  it("keeps a five-part legal package free of the 质询 gap and at exit 0", () => {
+    const { result, report } = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true }));
+    expect(namedGrillGaps(report)).toEqual([]);
+    expect(report.convergence.gaps).toEqual([]);
+    expect(result.status, result.stdout).toBe(0);
+  });
+
+  it("keeps an unconverged package on the original non-zero path despite the report-only 质询 gap", () => {
+    const { result, report } = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, grillFor: (id) => id !== 1, pendingFor: (id) => (id === 1 ? "无（C05-P3 归 C12）" : "无") }));
+    expect(report.convergence.gaps).toContain("未收敛：1");
+    expect(result.status).toBe(1);
+  });
+
+  it("points out a reversed ask-then-design order instead of accepting it", () => {
+    const reversed = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, orderTextFor: () => "先提问后设计：先问清再出设计稿。" }));
+    expect(reversed.report.convergence.gaps).toContain("1：先设计后提问缺证");
+    expect(reversed.result.status).toBe(1);
+    const ordered = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true }));
+    expect(ordered.report.convergence.gaps).not.toContain("1：先设计后提问缺证");
+    expect(ordered.result.status).toBe(0);
+  });
+
+  it("requires the discussion original's 展示 and 原话 binding before the package counts", () => {
+    const fixture = p5Fixture({ chatFor: () => true, orderFor: () => true });
+    const path = join(fixture.task, "quality/evidence/talk/discussion-p1.md");
+    writeFileSync(path, readFileSync(path, "utf8").replace(/^讨论前展示：.*\n/m, ""));
+    const { result, report } = p5Public(fixture);
+    expect(report.convergence.gaps).toContain("1：冷读五问未绑定");
+    expect(report.convergence.gaps).toContain("未收敛：1");
+    expect(result.status).toBe(1);
+  });
+
+  it("still rejects a missing or another-package 质询 declaration at non-zero", () => {
+    const missing = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, grillRefFor: (id) => (id === 1 ? "quality/evidence/talk/discussion-missing-p1.md" : null) }));
+    expect(missing.report.convergence.gaps.some(gap => /^包 1 质询：原件不可回读/.test(gap))).toBe(true);
+    expect(missing.result.status).toBe(1);
+    const cross = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, grillRefFor: (id) => (id === 1 ? "quality/evidence/talk/discussion-p2.md" : null) }));
+    expect(cross.report.convergence.gaps).toContain("包 1 质询：原件包号不符（声明 2）");
+    expect(cross.result.status).toBe(1);
+  });
+
+  it("still rejects an answer borrowed from another package or an older batch", () => {
+    const cross = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, answerRefFor: (id) => (id === 1 ? "quality/evidence/talk/answer-p2.md" : null) }));
+    expect(cross.report.convergence.gaps).toContain("包 1 真实答复：原件包号不符（声明 2）");
+    expect(cross.result.status).toBe(1);
+    const stale = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, answerBatchFor: (id) => (id === 1 ? "batch-old" : null) }));
+    expect(stale.report.convergence.gaps).toContain("包 1 真实答复：原件批次不符");
+    expect(stale.result.status).toBe(1);
+  });
 });
