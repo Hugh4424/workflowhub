@@ -261,8 +261,8 @@ async function materialTaskRecordRoot(materialRoot) {
   } catch { return undefined; }
 }
 
-async function materialConvergenceErrors(root, files) {
-  const { convergencePointerRefs, fiveMaterialDeclarationGaps, fiveMaterialHeading } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+async function materialConvergenceErrors(root, files, { taskPath = null } = {}) {
+  const { convergencePointerRefs, coldReadGaps, fiveMaterialDeclarationGaps, fiveMaterialHeading } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
   const decision = String(files?.['decision-log.md'] ?? '');
   // The direction checker and this material reader share one pointer parse:
   // any backticked current convergence-checklist path, not only a "清单：" line.
@@ -291,13 +291,16 @@ async function materialConvergenceErrors(root, files) {
   if (declaredIds.length && (!ledgerIds.length || new Set(ledgerIds).size !== ledgerIds.length)) {
     errors.push('权威模块集合未取得或重复');
   }
+  // Every 已收敛 row goes through the main checker's own cold-read parser. This
+  // entry keeps no weaker regex copy: the trigger is the row's real state, and the
+  // criterion (six/ five answers, reader independence, card digest, re-read) is the
+  // one the other convergence entry already applies.
   for (const line of ledger.split('\n')) {
     if (!/^\s*\|/.test(line)) continue;
     const cells = line.split('|').map(cell => cell.trim());
     const id = cells[1], state = cells[2];
     if (!/^\d+$/.test(id) || !/^已收敛/.test(state ?? '')) continue;
-    const block = new RegExp(`##\\s*工作包\\s*${id}(?![0-9])[\\s\\S]*?(?=\\n##\\s*工作包\\s*\\d|$)`).exec(ledger)?.[0] ?? '';
-    if (!/冷读|真实问答|聊天呈现/.test(block)) errors.push(`包 ${id} 已收敛但缺冷读/真实问答原件`);
+    for (const gap of coldReadGaps({ id, body: ledger, taskPath, taskName: `包 ${id}` }).errors) errors.push(gap);
   }
   // Every 已收敛 row needs its five-original declaration; block absence is a
   // named gap, not a legacy pass. File-byte identity still needs --task-path.
@@ -663,7 +666,7 @@ async function runMaterialChecks(root, { stage } = {}) {
       const errors = [...inspection.errors];
       if (!String(inspection.files["decision-log.md"] ?? "").trim()) errors.push("decision-log.md 未取得：make-decision 阶段至少要有一份可读决策日志");
       for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
-      const convergenceErrors = await materialConvergenceErrors(root, inspection.files);
+      const convergenceErrors = await materialConvergenceErrors(root, inspection.files, { taskPath: await materialTaskRecordRoot(root) });
       errors.push(...convergenceErrors);
       if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`); return false; }
       console.log(`[run-checks][material] ${root} stage=make-decision：本次只核 decision-log 可读与材料结构错误=0；未要求 spec.md/phases，不判阶段完成，也不证明步骤齐备`);

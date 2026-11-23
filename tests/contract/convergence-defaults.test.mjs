@@ -114,8 +114,39 @@ async function fixture(kind) {
     sections.push(`### 包 ${id}\n${refs.join("\n")}`);
   }
   put(TASK, "quality/evidence/convergence/cards.md", cards.join("\n"));
+  // TCR-P4-T005 (F1): the cold-read contract now triggers on every row whose state
+  // is 已收敛, whatever the table shape. Materialize the current cold-read shape for
+  // this frozen fixture so its positive cases keep testing rounds and acceptance;
+  // no assertion changes, and each negative case still fails for its own reason.
+  const coldBlocks = [];
+  for (let id = 1; id <= 3; id += 1) {
+    const revision = kind === "delete-eleventh" ? 1 : kind === "unchanged" ? 1 : 2;
+    const digest = sha(cardSection(id, revision).trim());
+    const reader = `subagent:controlled-reader-${id}`;
+    const coldRef = `quality/evidence/convergence/cold-read-${id}.md`;
+    const answers = ["① 改什么：受控改动。", "② 为什么：受控理由。", "③ 边界：受控边界。", "④ 怎么验：受控验证。", "⑤ 还有什么没定：无。"];
+    const coldBytes = [
+      `# 受控冷读 ${id}`, "",
+      `- 读者：${reader}，未参与本包写作，只读本包卡。`,
+      `- 读的卡：\`quality/evidence/convergence/cards.md#工作包-${id}\`，节摘要 sha256 \`${digest}\`。`,
+      "- 五问原答：", ...answers, "- 结论：五问全答出；本包收敛。", "",
+    ].join("\n");
+    const coldDigest = sha(coldBytes);
+    put(TASK, coldRef, coldBytes);
+    coldBlocks.push([
+      `## 工作包 ${id}：受控包 ${id}`, "",
+      "### 收敛格（本轮）", "", "| 项 | 值 |", "| --- | --- |",
+      `| 当前卡节 | \`quality/evidence/convergence/cards.md#工作包-${id}\`；sha256 \`${digest}\` |`,
+      `| 当前冷读 | \`${coldRef}\`；sha256 \`${coldDigest}\`；读者 ${reader}；context=none |`,
+      `| 首轮冷读 | \`${coldRef}\`；sha256 \`${coldDigest}\`；读者 ${reader} |`,
+      "| 修订 | 无 |", "",
+      `### 冷读记录（P${id}）`, "",
+      `- 读者：${reader}，未参与本包写作，只读本包卡。`,
+      "- 五问原答：", ...answers, "- 结论：五问全答出；本包收敛。", "",
+    ].join("\n"));
+  }
   const rows = [1, 2, 3].map(id => `| ${id} controlled${id} | D-00${id} 做什么 | D-00${id} 不做什么 | details§${id} | AC-0${id} | D-00${id} 风险 | 无 | controlled consumer AC-0${id} | OI-00${id} | 已收敛 |\n`).join("");
-  put(TASK, "quality/evidence/decision-log-refs/convergence-checklist.md", rows + "\n" + sections.join("\n\n"));
+  put(TASK, "quality/evidence/decision-log-refs/convergence-checklist.md", rows + "\n" + sections.join("\n\n") + "\n\n" + coldBlocks.join("\n"));
   return openTask(created.taskPath, { projectName: "fixture", taskId: "convergence-defaults" });
 }
 

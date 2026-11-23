@@ -5,7 +5,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSyn
 import { createHash } from 'node:crypto';
 import { resolve, dirname, relative, isAbsolute, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runFinalChainCheck } from '../../runtime/task/final-chain-runner.mjs';
+import { runFinalChainCheck, EVIDENCE_KINDS } from '../../runtime/task/final-chain-runner.mjs';
 import { openTask } from '../../runtime/task/task-handle.mjs';
 import { execFileSync } from 'node:child_process';
 import { phaseFilesFromIndex } from '../../runtime/task/material-workspace.mjs';
@@ -115,18 +115,83 @@ function sectionAfterHeading(raw, anchor) {
   while (end < lines.length && !new RegExp(`^#{1,${found.level}}\\s`).test(lines[end])) end += 1;
   return lines.slice(found.index + 1, end).join('\n').trim() || null;
 }
-function directoryHasEvidence(path, depth = 3) {
-  let entries;
-  try { entries = readdirSync(path, { withFileTypes: true }); }
-  catch { return false; }
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
-    const child = join(path, entry.name);
-    if (entry.isFile()) {
-      try { if (statSync(child).size > 0) return true; } catch { /* unreadable is not evidence */ }
-    } else if (entry.isDirectory() && depth > 1 && directoryHasEvidence(child, depth - 1)) return true;
+// A declaration's kind is a real dispatch, not a label. The vocabulary is owned
+// by the runtime producer (`runtime/task/final-chain-runner.mjs`) and imported
+// here, so the two readers cannot drift.
+const DECLARED_EVIDENCE_KINDS = new Set(EVIDENCE_KINDS);
+// The authenticated command capture is the only shape a `test`/`command_receipt`
+// may take: argv, cwd, exit and the captured output original. A review JSON that
+// only renames its declared kind is not a command receipt.
+function commandReceiptGap(body, { taskPath, taskId, source, stepSlug } = {}) {
+  const fail = detail => `kind=test/command_receipt 需已认证命令捕获（argv/cwd/exit/output）：${detail}`;
+  let record;
+  try { record = JSON.parse(body); } catch { return fail('原件不是可解析的命令捕获 JSON'); }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return fail('原件不是命令捕获记录');
+  if (!Array.isArray(record.argv) || !record.argv.length || record.argv.some(value => typeof value !== 'string')) return fail('缺完整 argv');
+  if (typeof record.cwd !== 'string' || !record.cwd.trim()) return fail('缺 cwd');
+  if (!Number.isInteger(record.exit_code)) return fail('缺 exit_code');
+  if (record.exit_code !== 0) return fail(`exit_code=${record.exit_code}；非零、超时、取消或截断不得冒通过`);
+  if (typeof record.output_ref !== 'string' || !record.output_ref.trim()) return fail('缺 output_ref（不接受内联输出）');
+  const started = Date.parse(record.started_at), ended = Date.parse(record.ended_at);
+  if (!Number.isFinite(started) || !Number.isFinite(ended) || ended < started) return fail('缺可读的执行区间');
+  // Identity: the receipt must belong to this task and this step, not just look
+  // like a capture.
+  if (typeof record.task_id === 'string' && taskId && record.task_id !== taskId) return fail(`收据属于另一任务：${record.task_id}`);
+  if (typeof record.stage === 'string' && source && !source.endsWith(`${record.stage}/steps.json`)) return fail(`收据阶段 ${record.stage} 不是当前步骤表`);
+  if (typeof record.step_slug === 'string' && stepSlug && record.step_slug !== stepSlug) return fail(`收据步骤 ${record.step_slug} 不是当前步骤`);
+  const argv = record.argv.join(' ');
+  const stageFlag = /--stage=([^\s]+)/.exec(argv)?.[1];
+  const stepFlag = /--step=([^\s]+)/.exec(argv)?.[1];
+  if (stageFlag && source && !source.includes(`/${stageFlag}/`)) return fail(`argv --stage=${stageFlag} 不是当前阶段`);
+  if (stepFlag && !/^\d+$/.test(stepFlag)) return fail(`argv --step=${stepFlag} 不是步骤号`);
+  // The captured output original must be readable, inside the task root, non-empty.
+  if (typeof taskPath !== 'string' || !taskPath) return fail('缺任务根，无法回读 output_ref');
+  const outRef = record.output_ref.trim();
+  if (isAbsolute(outRef) || outRef.split('/').some(part => !part || part === '..' || part === '.')) return fail('output_ref 越界或为空');
+  try {
+    const root = realpathSync(taskPath), outPath = realpathSync(resolve(taskPath, outRef)), rel = relative(root, outPath);
+    if (rel === '..' || rel.startsWith('../') || isAbsolute(rel)) return fail('output_ref 越出任务根');
+    if (!readFileSync(outPath).length) return fail('output_ref 原件为空');
+  } catch (error) { return fail(`output_ref 原件不可读：${error.message}`); }
+  return null;
+}
+function reviewRecordGap(body, { taskId } = {}) {
+  const fail = detail => `kind=review 需现行 review 记录（stage 与 status/outcome 可读）：${detail}`;
+  let record;
+  try { record = JSON.parse(body); } catch { return fail('原件不是 review JSON'); }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return fail('原件不是 review 对象');
+  if (Array.isArray(record.argv) || 'exit_code' in record) return fail('命令捕获不能代替 review 记录');
+  if (typeof record.stage !== 'string' || !record.stage.trim()) return fail('缺 stage');
+  if (!(typeof record.status === 'string' && record.status.trim()) && !(typeof record.outcome === 'string' && record.outcome.trim())) return fail('缺 status/outcome');
+  // Identity and the canonical result pointer are part of the review contract; a
+  // bare stage+status pair is not a review record.
+  if (typeof record.task_id !== 'string' || !record.task_id.trim()) return fail('缺 task_id');
+  if (taskId && record.task_id !== taskId) return fail(`review 属于另一任务：${record.task_id}`);
+  const resultRef = record.result_ref ?? record.review_result_ref ?? record.material_id ?? null;
+  if (typeof resultRef !== 'string' || !resultRef.trim()) return fail('缺 result_ref/review_result_ref');
+  return null;
+}
+// The remaining registered kinds each read their own real content instead of
+// accepting any non-empty file. The comparators are deliberately named and
+// minimal: they reject a clearly different artifact, and never invent a pass.
+function kindSpecificGap(kind, body, { taskId } = {}) {
+  const has = pattern => pattern.test(body);
+  if (kind === 'talk_original' || kind === 'human_confirmation') {
+    if (!has(/用户原文|真实答复|答复[：:]|回复[：:]|"?reply"?|"?answer"?|确认|approved|用户选择/)) {
+      return `kind=${kind} 需真实问答/确认答复；原件里没有答复正文`;
+    }
+    if (taskId && has(/"?task_id"?|任务[=:：]/) && !body.includes(taskId)) return `kind=${kind} 答复原件的任务身份不是当前任务`;
+    return null;
   }
-  return false;
+  if (kind === 'cost_ledger') {
+    if (!has(/窗口|session|start_ref|until|token|成本|budget/i)) return `kind=${kind} 需当前阶段成本账本（窗口与会话身份）；原件里没有窗口/成本字段`;
+    return null;
+  }
+  if (kind === 'git_authorization') {
+    if (!has(/HEAD|commit|[a-f0-9]{40}|授权|confirmation/i)) return `kind=${kind} 需真实 Git 授权原件（操作、确认 ref 与 HEAD）；原件里没有这些字段`;
+    return null;
+  }
+  return null;
 }
 function evidenceRootFor(ref, taskPath, materialRoot) {
   if (/^(?:quality\/|facts\.jsonl$|main-agent-cost\.md$)/.test(ref)) return { label: '任务', root: taskPath };
@@ -154,10 +219,14 @@ function executionOriginalFields(body, ref) {
   }
 }
 
-function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, identity = {}, namedOnly = false, taskId, source, stepSlug } = {}) {
+function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, identity = {}, namedOnly = false, taskId, source, stepSlug, requireTaskIdentity = false } = {}) {
   const kind = typeof entry?.kind === 'string' ? entry.kind : null;
   const raw = typeof entry?.uri_or_path === 'string' ? entry.uri_or_path.trim() : '';
   const sharedNote = shared ? '；同 stage 多步共用，通用留痕不归本步' : '';
+  // `reading_input` is this checker's own card read, not a completion kind.
+  if (kind && !DECLARED_EVIDENCE_KINDS.has(kind) && kind !== 'reading_input') {
+    return { kind, ref: raw, present: false, reason: `未注册的 evidence kind：${kind}；先在声明面登记再计证据` };
+  }
   if (!raw) return { kind, ref: raw, present: false, reason: 'evidence 条目缺 uri_or_path' };
   if (kind === 'task_original_ref') return { kind, ref: raw, present: false, reason: '现有 facts 的本步具名原件 ref 未取得；逻辑槽不是固定物理文件名' };
   if (FACTS_EVIDENCE(raw)) return { kind: kind ?? 'phase_task_facts', ref: raw, present: null, reason: 'facts 补充通道' };
@@ -195,16 +264,32 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, i
   catch (error) { return { kind, ref: raw, present: false, reason: `原件不可读：${error.message}` }; }
   if (stat.isDirectory()) {
     if (anchor) return { kind, ref: raw, present: false, reason: '目录不能带节锚点' };
-    if (namedOnly || Object.keys(identity).length) return { kind, ref: raw, present: false, reason: '目录仅作导航；本步具名当前原件未取得' };
-    const present = directoryHasEvidence(path);
-    return { kind, ref: raw, present, reason: present ? '目录内有非空原件' + sharedNote : '目录内没有非空原件' };
+    // A directory is navigation only, for every step and every identity. It never
+    // satisfies a completion declaration: the physical original must be a named
+    // file or the producer's unique eligible dynamic ref.
+    return { kind, ref: raw, present: false, navigation: true,
+      reason: `目录仅作导航；不满足完成声明（需具名文件或唯一动态 ref）${sharedNote}` };
   }
   if (!stat.isFile()) return { kind, ref: raw, present: false, reason: '原件不是普通文件' };
   let body;
   try { body = readFileSync(path, 'utf8'); }
   catch (error) { return { kind, ref: raw, present: false, reason: `原件不可读：${error.message}` }; }
+  // The declared kind decides the real comparison before any identity read: a
+  // test slot must be an authenticated command capture, and a review slot must be
+  // the review contract record. Renaming a kind alone cannot move a declaration
+  // into the other comparison.
+  if (kind === 'test' || kind === 'command_receipt') {
+    const gap = commandReceiptGap(body, { taskPath, taskId, source, stepSlug });
+    if (gap) return { kind, ref: raw, present: false, reason: gap };
+  }
+  if (kind === 'review') {
+    const gap = reviewRecordGap(body, { taskId });
+    if (gap) return { kind, ref: raw, present: false, reason: gap };
+  }
+  const specific = kindSpecificGap(kind, body, { taskId });
+  if (specific) return { kind, ref: raw, present: false, reason: specific };
   // A section anchor or prose extension cannot bypass execution identity.
-  if (label === '任务' && Object.keys(identity).length) {
+  if (label === '任务' && (Object.keys(identity).length || requireTaskIdentity)) {
       let original;
       try { original = executionOriginalFields(body, ref); }
       catch (error) { return { kind, ref: raw, present: false, reason: error.message }; }
@@ -1176,7 +1261,7 @@ export function convergenceChecklistGaps({ taskPath, taskId, body, level = null 
 // Single exported seam for the two internal readers. run-checks imports this
 // object instead of copying the pointer, class or failure lists.
 export function directionMaterialApi() {
-  return { convergencePointerRefs, convergenceChecklistGaps, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, isConvergenceEvidenceFailure, fiveMaterialHeading: FIVE_MATERIAL_HEADING, lightPackageGaps };
+  return { convergencePointerRefs, convergenceChecklistGaps, coldReadGaps, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, isConvergenceEvidenceFailure, fiveMaterialHeading: FIVE_MATERIAL_HEADING, lightPackageGaps };
 }
 // A skill read is evidence only when the host opened the declared file in the
 // current call and the authenticated capture kept the original bytes. The
@@ -1191,12 +1276,20 @@ function skillRefParts(value) {
   const separator = raw.indexOf('#');
   return separator < 0 ? { file: raw, anchor: null } : { file: raw.slice(0, separator), anchor: raw.slice(separator + 1) || null };
 }
-function declaredSkillRef(name, step) {
-  return { file: `workflows/${name}/SKILL.md`, anchor: step?.method_anchor ?? '方法' };
+// The step table's own method file: a flow table resolves to that flow's SKILL,
+// never to the complex root method.
+function skillFileFor(source, name) {
+  const flow = /^workflows\/[^/]+\/flows\/([^/]+)\/steps\.json$/.exec(String(source ?? ''));
+  return flow ? `workflows/${name}/flows/${flow[1]}/SKILL.md` : `workflows/${name}/SKILL.md`;
+}
+function declaredSkillRef(skillFile, step) {
+  return { file: skillFile, anchor: step?.method_anchor };
 }
 function cardSkillRef({ taskPath, materialRoot, repoRoot, name, stepId, commit }) {
   const report = runStageStepsCheck({ taskPath, materialRoot, repoRoot, stage: name, step: stepId, card: true, commit });
-  const path = report.card?.paths?.find(value => typeof value === 'string' && value.startsWith(`workflows/${name}/SKILL.md`));
+  const row = report.stages?.find(item => item.stage === name)?.steps?.find(item => item.step_id === stepId);
+  const skillFile = skillFileFor(row?.source, name);
+  const path = report.card?.paths?.find(value => typeof value === 'string' && value.startsWith(`${skillFile}#`));
   if (!path) throw Error(`当前卡未给出 ${name} 第 ${stepId} 步声明的技能位置`);
   return skillRefParts(path);
 }
@@ -1295,10 +1388,10 @@ function readStepSkill({ skillPath, stage: name, step: stepId, taskPath, materia
   const workspace = worktreeIdentity(materialRoot);
   if (workspace.head !== commit) throw Error(`提交身份 unavailable：--commit 必须等于真实工作区 HEAD ${workspace.head}`);
   const requested = skillRefParts(skillPath);
-  if (requested.file !== `workflows/${name}/SKILL.md`) throw Error(`技能位置不在当前卡声明内：${requested.file || '（空）'}，声明为 workflows/${name}/SKILL.md`);
   const cardDeclared = cardSkillRef({ taskPath, materialRoot, repoRoot: repository, name, stepId, commit });
+  if (requested.file !== cardDeclared.file) throw Error(`技能位置不在当前卡声明内：${requested.file || '（空）'}，声明为 ${cardDeclared.file}`);
   if (requested.anchor && requested.anchor !== cardDeclared.anchor) throw Error(`技能锚不在当前卡声明内：${requested.anchor}，当前卡声明为 ${cardDeclared.anchor}`);
-  const declared = { file: `workflows/${name}/SKILL.md`, anchor: cardDeclared.anchor };
+  const declared = { file: cardDeclared.file, anchor: cardDeclared.anchor };
   const path = resolve(repository, declared.file);
   const named = lstatSync(path);
   if (!named.isFile() || named.isSymbolicLink()) throw Error(`${declared.file} 不是单链接普通文件`);
@@ -1487,7 +1580,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   // Every completed step needs this call's own read receipt. A task with no
   // loading record is unknown, not a legacy completion: the explicit binding is
   // the only identity, and history is never selected as the current read.
-  const skillLoadFor = (name, step) => {
+  const skillLoadFor = (name, step, skillFile) => {
     const binding = typeof currentReadReceipt === 'string' && currentReadReceipt.trim() ? currentReadReceipt.trim() : null;
     if (!binding) return skillLoadFailure('本次调用缺 --current-read-receipt；缺当次技能读取不能支持本步完成');
     const key = `${name}#${step.step_id}`;
@@ -1498,10 +1591,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       // The live HEAD is only read to locate the worktree the capture ran in;
       // it is no longer compared with the captured commit (see the limits).
       result = validateSkillReadReceipt({ taskPath, receiptRef: binding, stage: name, step: step.step_id,
-        declared: declaredSkillRef(name, step), materialRoot, workspace });
+        declared: declaredSkillRef(skillFile, step), materialRoot, workspace });
       if (result.ok) {
+        const declared = declaredSkillRef(skillFile, step);
         const later = laterSkillReadReceipt(taskPath, result.ref, name, step.step_id,
-          declaredSkillRef(name, step).file, declaredSkillRef(name, step).anchor, result.ended);
+          declared.file, declared.anchor, result.ended);
         if (later) result = skillLoadFailure(later);
       }
     } catch (error) { result = skillLoadFailure(`当前读取回执不可校验：${error.message}`); }
@@ -1556,6 +1650,18 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       reports.push({ stage: name, source, definition: 'unavailable', definition_error: reason, mapping: '未配置', steps: [] });
       continue;
     }
+    // Both declaration fields are mandatory for every step: no silent fallback to
+    // the root `#方法` anchor and no `false` masking a missing boolean. A missing
+    // field is a definition error, not a missing execution fact.
+    const definitionFieldGaps = new Map();
+    for (const step of definitions) {
+      const missing = [];
+      if (typeof step.method_anchor !== 'string' || !step.method_anchor.trim()) missing.push('method_anchor（方法入口）');
+      if (typeof step.requires_user_reply !== 'boolean') missing.push('requires_user_reply（显式布尔）');
+      if (missing.length) definitionFieldGaps.set(step.step_slug,
+        `${source} 第 ${step.step_id} 步（${step.step_slug}）缺 ${missing.join('、')}：定义错误，不回落 #方法、不用 false 掩盖`);
+    }
+    for (const reason of definitionFieldGaps.values()) errors.push(reason);
     const declaredCounts = new Map();
     for (const step of definitions) for (const entry of (Array.isArray(step.completion_evidence) ? step.completion_evidence : [])) {
       if (!FACTS_EVIDENCE(entry?.uri_or_path)) declaredCounts.set(entry.uri_or_path, (declaredCounts.get(entry.uri_or_path) ?? 0) + 1);
@@ -1566,11 +1672,30 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const declared = (Array.isArray(step.completion_evidence) ? step.completion_evidence : []).map(entry => entry.uri_or_path === 'phases/{phase}.md'
         ? { ...entry, uri_or_path: phaseRef ?? entry.uri_or_path } : entry);
       const dynamic = originalsFor(name, source, step.step_slug);
-      const checks = [...declared.filter(entry => !dynamic.length || entry.kind !== 'task_original_ref'), ...dynamic]
+      const dynamicChecks = dynamic.map(entry => readDeclaredEvidence(entry, { taskPath, materialRoot, shared: false,
+        identity: executionIdentity, namedOnly: card || selectedStep !== undefined, taskId: manifest.task_id, source,
+        stepSlug: step.step_slug, requireTaskIdentity: true }));
+      // Zero eligible refs leaves the logical slot unfinished; more than one is an
+      // ambiguity. The checker never resolves it by taking the newest or the first.
+      const eligible = dynamicChecks.filter(check => check.present === true);
+      const dynamicSlot = !dynamic.length ? []
+        : eligible.length === 1 ? [eligible[0]]
+          : [{ kind: 'task_original', ref: eligible.length ? eligible.map(check => check.ref).join('、') : dynamicChecks.map(check => check.ref).join('、'),
+            present: false,
+            reason: eligible.length > 1
+              ? `多个合格动态引用（${eligible.length}）：歧义，不取最新也不取第一份；需生产者只写本步唯一合格 ref`
+              : `本步逻辑槽未取得唯一合格动态 ref：${dynamicChecks.map(check => `${check.ref}（${check.reason}）`).join('；')}` }];
+      const evaluated = declared.filter(entry => entry.kind !== 'task_original_ref')
         .filter(entry => !FACTS_EVIDENCE(entry?.uri_or_path))
         .filter((entry, index, all) => all.findIndex(item => item.uri_or_path === entry.uri_or_path) === index)
         .map(entry => readDeclaredEvidence(entry, { taskPath, materialRoot, shared: (declaredCounts.get(entry.uri_or_path) ?? 0) > 1, identity: executionIdentity,
           namedOnly: card || selectedStep !== undefined, taskId: manifest.task_id, source, stepSlug: step.step_slug }));
+      // A declared logical slot with no producer ref stays visible as unfinished.
+      if (!dynamic.length) for (const entry of declared.filter(item => item.kind === 'task_original_ref')) {
+        evaluated.push(readDeclaredEvidence(entry, { taskPath, materialRoot, identity: executionIdentity, namedOnly: true,
+          taskId: manifest.task_id, source, stepSlug: step.step_slug }));
+      }
+      const checks = [...evaluated, ...dynamicSlot];
       const factsDeclared = declared.some(entry => FACTS_EVIDENCE(entry?.uri_or_path));
       const original = checks.find(check => check.present === true) ?? null;
       const declaredPhysical = declared.filter(entry => entry.kind !== 'task_original_ref' && !FACTS_EVIDENCE(entry.uri_or_path));
@@ -1586,7 +1711,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         : null;
       const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
         evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
-        evidence: checks, result: step.observable_result, method_anchor: step.method_anchor ?? '方法', requires_user_reply: step.requires_user_reply === true };
+        evidence: checks, result: step.observable_result, method_anchor: step.method_anchor, requires_user_reply: step.requires_user_reply };
+      const definitionGap = definitionFieldGaps.get(step.step_slug);
+      if (definitionGap) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [], definition_error: definitionGap, gap: definitionGap };
       if (pageTriggerGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: pageTriggerGap };
       if (uiGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: uiGap };
       if (producerFailure) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [],
@@ -1609,10 +1736,26 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         gap: `${source}#${step.step_slug} 缺判定消费/原件标记` };
       // Only the existing final-chain producer can establish completion. A
       // readable artifact is trace, never a completion verdict.
+      // A declaration face with no readable original (empty, unreadable, or only
+      // navigation directories) is itself a gap: the producer's word does not
+      // complete the step while its own declaration is unmet.
+      // Any declared physical original that is missing (or every declaration
+      // unreadable, or only navigation directories) blocks completion: one missing
+      // peer is enough, not just an all-missing face.
+      // Any declared physical original without its own readable check is a gap —
+      // one missing peer is enough, not just an all-missing face.
+      const missingDeclaredPhysical = declaredPhysical.filter(entry => !checks.some(check => check.present === true && check.ref === entry.uri_or_path));
+      const declarationUnsupported = missingDeclaredPhysical.length > 0
+        || (checks.length > 0 && !checks.some(check => check.present === true));
       if (producerState === 'completed' && producerCurrent) {
-        const skillLoad = skillLoadFor(name, step);
+        const skillLoad = skillLoadFor(name, step, skillFileFor(source, name));
         if (!skillLoad.ok) return { ...identity, judgment: '未判定', state: 'unavailable', basis: row?.basis ?? [],
           gap: `当前步骤只接受当次技能读取：${skillLoad.reason}；旧加载或旧完成原件不能支持本次完成` };
+        // One missing declared peer (or only navigation) is enough: the producer's
+        // own declaration is unmet, so the step cannot be reported completed.
+        if (declarationUnsupported) return { ...identity,
+          judgment: '未留痕', state: 'incomplete', basis: row?.basis ?? [],
+          gap: `既有 producer 判完成；声明面缺原件（${checks.filter(check => check.present !== true).map(check => `${check.ref || '（缺路径）'}（${check.reason}）`).join('；') || '步骤表未声明'}）；声明缺口阻止完成` };
         return { ...identity,
           judgment: '已完成', state: 'completed', basis: row?.basis ?? [],
           skill_load: { ref: skillLoad.ref, sha256: skillLoad.event.sha256, bytes: skillLoad.event.bytes, at: skillLoad.event.at },
@@ -1633,8 +1776,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         gap: `${missing}；facts 补充通道${factsDeclared ? (row ? `未判完成${producerGap ? `（${producerGap}）` : ''}` : '缺行') : '未声明'}` };
     });
     if (producerFailure) errors.push(`读不到步骤定义：${source} 的证据生产者读取失败（${producerFailure}）；留痕状态未判定`);
-    reports.push({ stage: name, source, definition: producerFailure ? 'unavailable' : 'available',
-      definition_error: producerFailure, mapping: steps.every(row => row.consumer && row.evidence_location) ? '已配置' : '未配置', steps });
+    const definitionError = producerFailure ?? (definitionFieldGaps.size ? [...definitionFieldGaps.values()].join('；') : null);
+    reports.push({ stage: name, source, definition: definitionError ? 'unavailable' : 'available',
+      definition_error: definitionError, mapping: steps.every(row => row.consumer && row.evidence_location) ? '已配置' : '未配置', steps });
   }
   if (stage && !stages.includes(stage)) errors.push(`未知阶段：${stage}`);
   let modules = [];
@@ -1953,18 +2097,19 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     if (!modules.length) errors.push(`${convergenceRef}: 未读到模块行`);
     // A self-declared 已收敛 row still has to show its own independent cold read:
     // a per-package 冷读记录 section that safely reads back the card section
-    // digest, the cold-read original digest and the five answers, and that a
-    // revision was re-read by a new reader.  Bare markers and headings do not pass.
-    // Cold-read readback applies to every format that can say 已收敛, including a
-    // five-column status table. These gaps stay in complete/gaps only: the public
-    // exit code reflects the 状态 column, as make-decision states.
+    // digest, the cold-read original digest and the five/six answers, and that a
+    // revision was re-read by a new reader. Bare markers and headings do not pass.
+    // The trigger is the row's own state, never a five-column table nor a
+    // 「目标与成功意图」 header: a pure ten-column row that says 已收敛 without its
+    // cold read fails too. These gaps stay in complete/gaps only: the public exit
+    // code reflects the 状态 column, as make-decision states.
     const fullTen = headerCells.includes('目标与成功意图');
     const modsForStrict = modules;
     const packageBatchMap = new Map(modules.map(row => {
       const id = /^\d+/.exec(row.name)?.[0];
       return [id, id ? packageBatches(packageBlock(body, id)) : []];
     }));
-    if (fiveColumn || fullTen) for (const row of modules) {
+    for (const row of modules) {
       if (row.state !== '已收敛') continue;
       const id = /^\d+/.exec(row.name)?.[0];
       const gaps = [];
@@ -1981,7 +2126,10 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         // the 真实问答 pointer itself is a gap. Two-package controlled fixtures
         // stay governed by their own frozen oracles.
         const block = packageBlock(body, id);
-        if (block && Array.isArray(modsForStrict) && modsForStrict.length >= 3) {
+        // The extra P5 strict pair (真实问答/讨论批次/先设计后提问) stays a
+        // full-ledger rule: F1 only widens the cold-read trigger, it does not
+        // impose the three-plus-package extras on a bare ten-column row.
+        if ((fiveColumn || fullTen) && block && Array.isArray(modsForStrict) && modsForStrict.length >= 3) {
           const batch = (packageBatchMap.get(id) ?? [])[0] ?? null;
           gaps.push(...p5StrictGaps({ id, block, taskPath, batch }));
           // 讨论原件四要素/批次对不上：不是证据缺口，而是未收敛点名。
@@ -2155,7 +2303,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         ? 'UI 任务需要真实用户答复；未答停在本步。非 UI 任务在本步写不适用＋理由后继续。'
         : '需要真实用户答复；未答停在本步。'
       : '缺少本步必需输入时停止该路径，保留原因、负责人和恢复条件。'}可读或 exit 0 不代表完成；按本步判据独立核对。`,
-    paths: [...new Set([`workflows/${stage}/SKILL.md#${current.method_anchor}`, current.source,
+    paths: [...new Set([`${skillFileFor(current.source, stage)}#${current.method_anchor}`, current.source,
       (current.evidence.find(item => item.present === true) ?? current.evidence.find(item => item.ref && !item.ref.endsWith('/') && item.kind !== 'task_original_ref'))?.ref].filter(Boolean))],
     evidence: current.evidence.length ? current.evidence : [{ ref: current.evidence_location, present: false, reason: '尚未取得具名原件' }],
     self_check: `node tools/cli/check-stage-steps.mjs --stage=${stage} --step=${current.step_id} --card --task-path=${taskPath}${materialRoot ? ` --material-root=${materialRoot}` : ''}${runId ? ` --run-id=${runId}` : ''}${phase ? ` --phase=${phase}` : ''}${commit ? ` --commit=${commit}` : ''}`,

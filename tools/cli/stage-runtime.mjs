@@ -32,6 +32,7 @@ import { deliveredMaterialId, authenticatedEvidenceBytes } from "../../runtime/r
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, compactVerifyCodeMaterials, gitDiffPath, verifyCodeChangedPaths } from "../../runtime/review/review-input-bounds.mjs";
+import { capturePreExecutionTaskChangeScope, collectTaskChangeScope } from "../../workflows/build-code/change-scope.mjs";
 import { captureReviewSource, readScopedReviewMaterial } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -581,13 +582,19 @@ function trustedReviewReadScope(context,request,value){
   return Object.freeze({...value,repositories:Object.freeze(repositories),evidenceFiles:Object.freeze(value.evidenceFiles.map(item=>Object.freeze({...item}))),taskRoot:context.task.taskPath});
 }
 
-function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource){
-  let selected=null;
+function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource,changeScope){
+  let selected=null,reconciliation=changeScope??null;
   if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'
       && (request.phase_id != null || (request.review_kind??request.reviewKind??null)!==null)){
     const index=context.artifacts.read('phases/index.md');
     const phases=Object.fromEntries(phaseFilesFromIndex(index).map(ref=>[ref,context.artifacts.read(ref)]));
-    const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope});
+    // A restricted read domain cannot be compared with the pre-crop range: report
+    // the real reason instead of claiming a match, and never widen the read.
+    const insufficient = scope.repositories.every(repo=>repo.paths.length===0);
+    if (insufficient) reconciliation = Object.freeze({ status: 'unknown_change_scope',
+      reason: '精确读域不足（approved read scope is empty）：只有声明内路径，裁剪前完整范围未取得', changed_paths: Object.freeze([]) });
+    const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope,
+      changeScope:reconciliation, phase_id:request.phase_id});
     const phase=parsed.facts?.phase_rows?.find(row=>row.id===request.phase_id);
     if(parsed.errors.some(error=>(phase&&error.startsWith(`${phase.path} unsafe Write set path:`))||(error.startsWith('phases/index.md:')&&error.includes(` ${request.phase_id} (`)&&error.includes('unsafe write set path:'))))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
     selected=phase?.write_set;
@@ -625,7 +632,7 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
   }catch(error){for(const source of captures)source.dispose?.();throw error;}
 }
 
-function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope) {
+function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope, changeScope) {
   if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
   // A light implementation has no Phase contract: retain the captured whole
@@ -636,7 +643,8 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot, r
   });
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
-  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope });
+  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope,
+    phase_id: request.phase_id, changeScope });
   const phase = parsed.facts?.phase_rows?.find((row) => row.id === request.phase_id);
   const invalidEmptyScope = phase?.write_set?.length === 0 && parsed.errors.some(error =>
     error.startsWith(`${phase.path} `) && /Write set is missing|Write set none declaration is invalid|unsafe Write set path:|write set differs from Phase index|must declare Phase /.test(error));
@@ -646,14 +654,17 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot, r
     const repo=reviewReadScope.repositories.find(repo=>repo.paths.includes(relative(repo.sourceRoot,path)));
     return repo ? [`repos/${repo.id}/${relative(repo.sourceRoot,path)}`] : [];
   }) : phase.write_set;
+  const contractFacts = Object.freeze({ contract_ok: parsed.ok, contract_error_count: parsed.errors.length,
+    contract_errors: parsed.errors, ac_coverage: parsed.facts?.ac_coverage ?? null,
+    fr_coverage: parsed.facts?.fr_coverage ?? null, command_oracle_checks: parsed.facts?.command_oracle_checks ?? null,
+    // The comparison comes from the pre-crop range, never from the cropped diff.
+    write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
+  // No comparable source means no crop: keep the unavailable fact, do not invent a diff.
+  if (typeof source.diffPath !== "string") return Object.freeze({ ...source, contract_facts: contractFacts });
   const selected = compactReviewDiff(readFileSync(source.diffPath, "utf8"), { writeSet: selectedPaths }).diff;
   const diffPath = join(dirname(source.diffPath), `phase-${request.phase_id}.diff`);
   writeFileSync(diffPath, selected, { flag: "wx", mode: 0o600 });
-  return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8"),
-    contract_facts: Object.freeze({ contract_ok: parsed.ok, contract_error_count: parsed.errors.length,
-      contract_errors: parsed.errors, ac_coverage: parsed.facts?.ac_coverage ?? null,
-      fr_coverage: parsed.facts?.fr_coverage ?? null, command_oracle_checks: parsed.facts?.command_oracle_checks ?? null }),
-  });
+  return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8"), contract_facts: contractFacts });
 }
 
 function phaseReviewDiffBase(context, request) {
@@ -665,6 +676,34 @@ function phaseReviewDiffBase(context, request) {
   const cursor = readTaskFacts(taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code")?.phase_progress;
   return cursor && cursor.phase_id === request.phase_id && typeof cursor.base_head === "string" && GIT_OID.test(cursor.base_head)
     ? cursor.base_head : null;
+}
+
+// A Phase projection needs a comparable pre-crop range. A restricted read
+// domain or a missing Phase start is a named unavailable input, never a claim
+// of "no differences"; terminal/document reviews pass nothing and stay unchanged.
+function phaseReviewChangeScope(context, request, reviewReadScope, cursorDiffBase) {
+  if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null
+      || (request.review_scope ?? request.reviewScope) !== "phase" || context.manifest?.activation_cohort !== "post"
+      || request.phase_id == null) return undefined;
+  if (reviewReadScope) return Object.freeze({ status: "unknown_change_scope",
+    reason: "受限读域：只有声明的批准路径，裁剪前完整范围未取得", changed_paths: Object.freeze([]) });
+  if (cursorDiffBase === null) return Object.freeze({ status: "unknown_change_scope",
+    reason: "缺当前 Phase 匹配的 base_head：不用任务起点或当前 HEAD 冒充 Phase 起点", changed_paths: Object.freeze([]) });
+  return collectTaskChangeScope({ workspace: context.workspace, baseline: cursorDiffBase,
+    taskId: context.task?.identity?.taskId });
+}
+
+// A Git collection failure in the same entry that must report the comparison
+// yields an explicit unavailable source, not a fabricated empty diff: the
+// packet keeps the real reason and no changed paths.
+function unavailablePhaseReviewSource(context, changeScope, error) {
+  return Object.freeze({
+    sourceRoot: context.workspace?.worktreeRoot ?? null, capturedHead: null, baseCommit: null,
+    changedPaths: Object.freeze([]), collection_error: String(error?.message ?? error),
+    coverage_limit: "no source was collected; the current Phase range could not be compared",
+    write_set_reconciliation: changeScope ?? null,
+    dispose() {},
+  });
 }
 
 export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
@@ -686,13 +725,30 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
   const cursorDiffBase = phaseReviewDiffBase(context, request);
   const scope=trustedReviewReadScope(context,request,typeof resolveReviewReadScope==='function' ? resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : reviewReadScope);
-  const source = scope ? captureScopedReviewSource(context,request,scope,trusted.attachmentRoot,captureSource) : captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
-    includeDiff: true, taskId: context.task.identity.taskId,
-    ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
+  const changeScope = phaseReviewChangeScope(context, request, scope, cursorDiffBase);
+  let source;
+  try {
+    source = scope ? captureScopedReviewSource(context,request,scope,trusted.attachmentRoot,captureSource,changeScope) : captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
+      includeDiff: true, taskId: context.task.identity.taskId,
+      ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
+  } catch (error) {
+    // Only the same entry's own unavailable read domain degrades: a real source,
+    // route or usage error still propagates with its own message.
+    const message = String(error?.message ?? "");
+    // A real collection failure (Git range, approved read domain, source capture)
+    // is the only kind that degrades; cancellation, usage and route errors keep
+    // their own message and exit.
+    const collectionFailure = error?.code === "SOURCE_UNAVAILABLE"
+      || /SOURCE_UNAVAILABLE|读域|approved read scope/.test(message)
+      || /^Command failed: git\b/.test(message) || /not a git repository/.test(message);
+    const unavailableReadDomain = changeScope?.status === "unknown_change_scope" && collectionFailure;
+    if (!unavailableReadDomain) throw error;
+    source = unavailablePhaseReviewSource(context, changeScope, error);
+  }
   try {
     const changedPaths = reviewScope === 'terminal' ? source.changedPaths : undefined;
     const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
-    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope);
+    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope,changeScope);
     const built = buildMaterials({
       reviewDataRoot: trusted.attachmentRoot,
       attachmentRoot: trusted.attachmentRoot,
@@ -726,7 +782,9 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     let packet;
     try {
       const manifest = built.deliveryManifest ?? built.manifest;
-      packet = candidateExperiment && Array.isArray(manifest)
+      // An empty delivery manifest is not a packet to project; the OCR body
+      // contract is validated against the files the packet builder delivered.
+      packet = candidateExperiment && Array.isArray(manifest) && manifest.length > 0
         ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource)
         : built;
     } catch (error) {
@@ -1265,7 +1323,9 @@ async function writeReadinessOriginal(context, phaseId, record) {
 // probes is the dispatch condition: a missing table fails by name, a changed
 // material fingerprint is refused as stale, and an unchanged passing original
 // is reused so repeated calls never re-run non-idempotent probes.
-async function evaluateBuildCodeReadiness(context, materials, phaseId) {
+// The pre-crop scope is collected once by the caller with the same baseHead the
+// cursor will reuse; this entry only projects the existing fact.
+async function evaluateBuildCodeReadiness(context, materials, phaseId, changeScope) {
   const spec = materials["spec.md"], index = materials["phases/index.md"];
   const phases = Object.fromEntries(Object.entries(materials).filter(([file]) =>
     file.startsWith("phases/") && file !== "phases/index.md"));
@@ -1276,7 +1336,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId) {
     throw new Error(`ORACLE-PHASE-READINESS: missing readiness table in ${phaseFile} `
       + `(build-code dispatch requires the five columns 命令/期望/证据/机器或人判/负责人; owner=计划负责人)`);
   }
-  const parsed = validatePostPhaseContract({ spec, index, phases, require_readiness: true });
+  const parsed = validatePostPhaseContract({ spec, index, phases, require_readiness: true,
+    phase_id: phaseId, changeScope });
   if (!parsed.ok) throw new Error(`ORACLE-PHASE-READINESS: ${parsed.errors.join("; ")}`);
   if (table.error) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness ${table.error}`);
   if (!table.rows.length) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness table has no probe rows (missing probe; owner=计划负责人)`);
@@ -1288,7 +1349,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId) {
   }
   if (previous && previous.record.material_sha256 === material_sha256) {
     if (previous.record.status === "pass" && !previous.marker) {
-      return Object.freeze({ ref: previous.ref, record: previous.record, reused: true });
+      return Object.freeze({ ref: previous.ref, record: previous.record, reused: true,
+        write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
     }
     if (previous.marker) {
       // The stale refusal was reviewed; this rerun is the explicit recovery.
@@ -1404,7 +1466,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId) {
     || !Array.isArray(written.readBack?.probes) || written.readBack.probes.length !== probes.length) {
     throw new Error(`ORACLE-PHASE-READINESS: readiness original read-back does not match the executed probes: ${written.ref}`);
   }
-  return Object.freeze({ ref: written.ref, record, reused: false });
+  return Object.freeze({ ref: written.ref, record, reused: false,
+    write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
 }
 
 async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
@@ -1422,7 +1485,6 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
     if (!phaseProgressTargetExists(inputCursor, materials)) {
       throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
     }
-    const readiness = await evaluateBuildCodeReadiness(context, materials, inputCursor.phase_id);
     const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
       row?.record_kind === "stage" && row.stage === "build-code") ?? null;
     const cursor = currentRow?.phase_progress;
@@ -1432,6 +1494,11 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     }).trim();
     if (!GIT_OID.test(baseHead)) throw new TypeError("phase_progress requires a real Phase start Git commit");
+    // Collect the pre-crop range once, with the same revision that is about to
+    // become this Phase's start; the cursor below reuses it, never re-reads HEAD.
+    const changeScope = await capturePreExecutionTaskChangeScope({ workspace: context.workspace,
+      baseline: baseHead, taskId: context.identity.taskId });
+    const readiness = await evaluateBuildCodeReadiness(context, materials, inputCursor.phase_id, changeScope);
     const phaseProgress = Object.freeze({
       phase_id: inputCursor.phase_id,
       task_id: inputCursor.task_id,
@@ -1473,6 +1540,8 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       phase_progress: phaseProgress,
       record_ref: written.ref,
       action: written.action,
+      // Report-only fact; never persisted to readiness.v1 or the stage row.
+      write_set_reconciliation: readiness.write_set_reconciliation ?? null,
     });
   });
 }

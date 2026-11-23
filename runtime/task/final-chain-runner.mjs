@@ -744,6 +744,16 @@ function criterionRef(repo, ref, source, limits) {
   return target+'#'+anchor;
 }
 
+// The single declared-evidence vocabulary. The declaration tables, the final
+// chain producer and the step checker all read this one list; an unregistered
+// value is a named gap, never a silent readable-file pass. `task_original` is the
+// checker's own projection of a producer's dynamic ref.
+export const EVIDENCE_KINDS = Object.freeze(['material', 'quality_draft', 'quality_evidence',
+  'research_report', 'decision_log_section', 'test', 'command_receipt', 'review', 'talk_original',
+  'human_confirmation', 'handoff', 'cost_ledger', 'git_authorization', 'phase_task_facts',
+  'task_original_ref', 'task_original']);
+const FACT_EVIDENCE_KINDS = new Set(EVIDENCE_KINDS);
+
 function stepObligationDeclarations(materialRoot) {
   let raw;
   try { raw = readOriginal(materialRoot, "step-consumer-design.md"); }
@@ -902,8 +912,21 @@ function workflowReport(definitionRoot, taskPath, materialRoot, level, facts, ac
   if (!stageScope.verified) limits.push("阶段候选或实际行来源不充分；缺阶段行不推未调用，stage_skip_rate保持null");
   const evidence = [...skillConflicts].map(key=>{const step=skillRows.get(key).step;return {source:step.source,step_slug:step.step_slug,conflict:true};});
   for (const row of facts) for (const entry of row.evidence?.value ?? []) {
+    const declaredKind = text(entry.kind) ? entry.kind : null;
+    if (declaredKind && !FACT_EVIDENCE_KINDS.has(declaredKind)) {
+      limits.push(`${entry.ref}: evidence kind ${declaredKind} 未注册；不按证据计，交原声明 owner 登记`);
+      continue;
+    }
     const command = actualCommands.find(item=>item.ref === (entry.receipt_ref ?? entry.ref));
     if (command && text(entry.source) && text(entry.step_slug)) evidence.push({source:entry.source,step_slug:entry.step_slug,program:command});
+    // A `test`/`command_receipt` entry is only evidence as an authenticated command
+    // capture. A human original that merely renames its kind cannot satisfy it, so
+    // a broken kind never completes the step through the human channel.
+    if (declaredKind === 'test' || declaredKind === 'command_receipt') {
+      if (!command) limits.push(`${entry.ref}: kind=${declaredKind} 需已认证命令捕获（argv/cwd/exit/output）；人读原件不能替代`);
+      continue;
+    }
+    if (declaredKind === 'task_original_ref' || declaredKind === 'phase_task_facts') continue;
     const source = read(entry.ref);
     if (!source.verified) continue;
     const original = originalFields(source.raw);
@@ -916,6 +939,19 @@ function workflowReport(definitionRoot, taskPath, materialRoot, level, facts, ac
   // manifest cannot declare steps, so counting its sentinel as one step would
   // invent a fact. The sentinel row above carries the undetermined status.
   const rows = selected.length ? evaluateWorkflowSteps({steps:selected,evidence,level,stageScope}) : [];
+  // A step that declares no completion evidence at all has a definition gap, not
+  // a satisfied obligation: the producer's word cannot complete it.
+  const declaredGap = new Map(selected
+    .filter(step => !Array.isArray(step.completion_evidence) || step.completion_evidence.length === 0)
+    .map(step => [`${step.source}\0${step.step_slug}`, step]));
+  for (const row of rows) {
+    const step = declaredGap.get(`${row.source}\0${row.step_slug}`);
+    if (!step || row.state !== 'completed') continue;
+    row.state = 'incomplete';
+    const reason = `${row.source}#${row.step_slug}: 声明面没有完成原件（completion_evidence 为空）；声明缺口阻止完成`;
+    row.limits = [...(row.limits ?? []), reason];
+    limits.push(reason);
+  }
   return {workflow_steps:[...rows,...definitionRows],workflow_metrics:rows.length ? summarizeWorkflow(rows,stageScope) : null};
 }
 
