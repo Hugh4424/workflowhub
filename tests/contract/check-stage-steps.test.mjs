@@ -2433,3 +2433,160 @@ describe('P3 current convergence version: rounds, six/nine and same reviewer', (
     expect(report.convergence.gaps.join('\n')).toMatch(/缺一次冷读/);
   });
 });
+
+// ORACLE-INVALIDATED-LINE-FIELDS (P4/T004): a direction change must keep the
+// archived c06 line working while the same line gains 标注人／修改权／理由／新依据／
+// 受影响位置／接手人. New fields are report-only: a missing 标注人 is a named gap,
+// never an error, and never a reason to drop the old 待重做 verdict.
+describe('invalidated line fields — archived line, new responsibility fields and gaps', () => {
+  // Verbatim archived line from specs/archive/workflowhub-ui-frontend-c06-spec-driven-implementation-20261031/decision-log.md:21
+  // (steps 4–15 invalidated, steps 1–3 reused); it carries none of the new labels.
+  const c06Line = '- 失效步骤：4、5、6、7、8、9、10、11、12、13、14、15；阶段：make-decision；重做范围：按 2026-11-01 新版 make-decision 规范重跑；未失效：1、2、3 的原始需求与调研结论（复用）。';
+  const fullLine = ({ annotator = '标注人：p04-test-author；', owner = '接手人：P6 独立计划作者；' } = {}) =>
+    '- 失效步骤：4～15；阶段：make-decision；重做范围：按新版第 9 步规范重跑；'
+    + annotator
+    + '修改权：材料主会话＋用户；理由：旧口径把“阶段：build-code”写进了受影响位置；'
+    + '新依据：decision-log.md#决定12、requirement-change-log.md#变更1；'
+    + '受影响位置：首卡 P4 失效段与第 9 步台账；'
+    + owner
+    + '未失效：1、2、3';
+  // One controlled task root: the same temporary-root recipe as the existing
+  // stageScopeCase, widened to the 15 real archived step ids plus a second stage
+  // whose name appears inside the new 理由 value.
+  function invalidationCase(line) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p4-invalidated-fields-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const repo = join(root, 'repo'), task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      const evidence = [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }];
+      const counts = { 'make-decision': 15, 'build-plan': 1, 'build-code': 2, 'build-prd': 1 };
+      const slugOf = (stage, index) => `${stage === 'make-decision' ? 'step' : `${stage}-step`}-${index + 1}`;
+      const manifest = (stage, count) => ({ schema_version: '2.0.0', stage_slug: stage, steps: Array.from({ length: count }, (_, index) => ({ step_id: index + 1, step_slug: slugOf(stage, index), method_anchor: '方法', requires_user_reply: false, observable_result: 'Controlled. 判定消费：workflows/' + stage + '/SKILL.md#方法；原件：decision-log.md#级别与路线', completion_evidence: evidence })) });
+      for (const stage of Object.keys(counts)) {
+        put(repo, `workflows/${stage}/SKILL.md`, '# C\n## 方法\nOwned.\n');
+        put(repo, `workflows/${stage}/steps.json`, manifest(stage, counts[stage]));
+      }
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'invalidated-fields-case', baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post' });
+      put(task, 'facts.jsonl', '');
+      put(materials, 'decision-log.md', '# C\n## 级别与路线\n- 推荐级别：复杂\n' + line + '\n');
+      put(materials, 'step-consumer-design.md', Object.entries(counts).flatMap(([stage, count]) =>
+        Array.from({ length: count }, (_, index) => `| [${stage}](x) \`${slugOf(stage, index)}\` | observation | human | owner |`)).join('\n') + '\n');
+      return checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: repo });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  const stepsOf = (report, stage) => report.stages.find(row => row.stage === stage)?.steps ?? [];
+  const verdicts = (report, stage) => stepsOf(report, stage).map(step => step.judgment);
+
+  it('keeps every archived c06 step 4–15 待重做 and leaves the reused steps 1–3 alone', () => {
+    const report = invalidationCase(c06Line);
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id >= 4).map(step => step.judgment)).toEqual(Array(12).fill('待重做'));
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id <= 3).map(step => step.judgment)).toEqual(Array(3).fill('已留痕'));
+    expect(report.supersede.invalidated).toEqual(['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']);
+  });
+
+  it('reads 标注人、受影响位置 and 接手人 from a complete new line without changing scope or verdicts', () => {
+    const report = invalidationCase(fullLine());
+    const records = report.supersede.records ?? [];
+    expect(records).toHaveLength(1);
+    const record = JSON.stringify(records[0]);
+    for (const value of ['p04-test-author', '材料主会话＋用户', '按新版第 9 步规范重跑', '旧口径把“阶段：build-code”写进了受影响位置', 'decision-log.md#决定12', '首卡 P4 失效段与第 9 步台账', 'P6 独立计划作者']) {
+      expect(record).toContain(value);
+    }
+    expect(report.supersede.gaps).toEqual([]);
+    expect(report.supersede.invalidated).toEqual(['4～15']);
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id >= 4).map(step => step.judgment)).toEqual(Array(12).fill('待重做'));
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id <= 3).map(step => step.judgment)).toEqual(Array(3).fill('已留痕'));
+    // The 理由 value names build-code; the real scope stays make-decision.
+    expect(verdicts(report, 'build-code').every(judgment => judgment !== '待重做')).toBe(true);
+  });
+
+  it('names the missing 标注人 gap on a new line and still keeps its steps 待重做', () => {
+    const report = invalidationCase(fullLine({ annotator: '' }));
+    const gaps = report.supersede.gaps ?? [];
+    expect(gaps.length).toBeGreaterThan(0);
+    expect(gaps.join('\n')).toContain('标注人');
+    expect(report.errors.join('\n')).not.toContain('标注人');
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id >= 4).every(step => step.judgment === '待重做')).toBe(true);
+    expect(report.supersede.invalidated).toHaveLength(1);
+  });
+
+  it('names a missing 接手人 gap without changing the step verdict', () => {
+    const report = invalidationCase(fullLine({ owner: '' }));
+    const gaps = report.supersede.gaps ?? [];
+    expect(gaps.join('\n')).toContain('接手人');
+    expect(report.errors.join('\n')).not.toContain('接手人');
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id >= 4).every(step => step.judgment === '待重做')).toBe(true);
+  });
+
+  it('names the new fields missing from the archived c06 line only as report gaps', () => {
+    const report = invalidationCase(c06Line);
+    const gaps = (report.supersede.gaps ?? []).join('\n');
+    for (const field of ['标注人', '受影响位置', '接手人']) expect(gaps).toContain(field);
+    expect(report.errors.join('\n')).not.toMatch(/标注人|受影响位置|接手人/);
+    expect(stepsOf(report, 'make-decision').filter(step => step.step_id >= 4).every(step => step.judgment === '待重做')).toBe(true);
+  });
+
+  it('does not invalidate neighbouring steps outside the recorded range', () => {
+    const report = invalidationCase('- 失效步骤：4；阶段：make-decision；重做范围：只重跑第 4 步');
+    const steps = stepsOf(report, 'make-decision');
+    expect(steps.find(step => step.step_id === 4).judgment).toBe('待重做');
+    expect(steps.filter(step => step.step_id !== 4).map(step => step.judgment)).toEqual(Array(14).fill('已留痕'));
+  });
+
+  it('does not infer numbers across a missing, unknown or other stage', () => {
+    const missingStage = invalidationCase('- 失效步骤：2');
+    expect(verdicts(missingStage, 'make-decision').every(judgment => judgment !== '待重做')).toBe(true);
+    expect(missingStage.errors.join('\n')).toContain('未写可识别阶段');
+    const unknownStep = invalidationCase('- 失效步骤：99；阶段：make-decision');
+    expect(verdicts(unknownStep, 'make-decision').every(judgment => judgment !== '待重做')).toBe(true);
+    expect(unknownStep.errors.join('\n')).toContain('未匹配当前阶段步骤表');
+    const otherStage = invalidationCase('- 失效步骤：2；阶段：build-code');
+    expect(verdicts(otherStage, 'make-decision').every(judgment => judgment !== '待重做')).toBe(true);
+    expect(verdicts(otherStage, 'build-code')[1]).toBe('待重做');
+  });
+
+  it('keeps named field gaps out of errors so the existing exit semantics stay unchanged', () => {
+    const complete = invalidationCase(fullLine());
+    const missing = invalidationCase(fullLine({ annotator: '' }));
+    expect(missing.errors).toEqual(complete.errors);
+    expect(missing.convergence.gaps).toEqual(complete.convergence.gaps);
+  });
+});
+
+// A gate card writes `--task-path /path`; the checker used to accept only
+// `--key=value` and still exit 0 while reporting every real flag as unsupported,
+// so the gate checked nothing. The same task/material read must be observable
+// through the card's space-separated form.
+describe('CLI space-separated flags — gate commands are not silently ignored', () => {
+  function spacedFixture(line) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'cli-space-flags-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const repo = join(root, 'repo'), task = join(root, 'task'), materials = join(root, 'materials');
+    const evidence = [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }];
+    const counts = { 'make-decision': 15, 'build-plan': 1, 'build-code': 1, 'build-prd': 1 };
+    const slugOf = (stage, index) => `${stage === 'make-decision' ? 'step' : `${stage}-step`}-${index + 1}`;
+    for (const [stage, count] of Object.entries(counts)) {
+      put(repo, `workflows/${stage}/SKILL.md`, '# C\n## 方法\nOwned.\n');
+      put(repo, `workflows/${stage}/steps.json`, { schema_version: '2.0.0', stage_slug: stage, steps: Array.from({ length: count }, (_, index) => ({ step_id: index + 1, step_slug: slugOf(stage, index), method_anchor: '方法', requires_user_reply: false, observable_result: `Controlled. 判定消费：workflows/${stage}/SKILL.md#方法；原件：decision-log.md#级别与路线`, completion_evidence: evidence })) });
+    }
+    put(task, 'task.json', { schema_version: '1.0.0', task_id: 'cli-space-flags-case', baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post' });
+    put(task, 'facts.jsonl', '');
+    put(materials, 'decision-log.md', '# C\n## 级别与路线\n- 推荐级别：复杂\n' + line + '\n');
+    put(materials, 'step-consumer-design.md', Object.entries(counts).flatMap(([stage, count]) =>
+      Array.from({ length: count }, (_, index) => `| [${stage}](x) \`${slugOf(stage, index)}\` | observation | human | owner |`)).join('\n') + '\n');
+    return { root, repo, task, materials };
+  }
+
+  it('reads `--task-path <dir>` and `--material-root <dir>` from the card form instead of ignoring them', () => {
+    const fixture = spacedFixture('- 失效步骤：4；阶段：make-decision；重做范围：只重跑第 4 步');
+    try {
+      const result = spawnSync(process.execPath, [entry, '--stage=make-decision', '--task-path', fixture.task, '--material-root', fixture.materials, '--repo-root', fixture.repo, '--json'], { cwd: fixture.repo, encoding: 'utf8' });
+      expect(result.status).toBe(0);
+      const report = JSON.parse(result.stdout);
+      expect(report.errors.join('\n')).not.toContain('不支持参数');
+      expect(report.errors.join('\n')).not.toMatch(/材料根未取得|当前任务事实不可读|taskPath must be absolute/);
+      expect(report.supersede.invalidated).toEqual(['4']);
+      expect(report.stages.find(stage => stage.stage === 'make-decision').steps.find(step => step.step_id === 4).judgment).toBe('待重做');
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+});

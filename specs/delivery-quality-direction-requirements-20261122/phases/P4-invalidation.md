@@ -215,6 +215,14 @@ node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path=/Users/Hu
 - **停止 / 恢复**: 实际技术交回冲突退原写主；旧行或退出语义回归只撤本卡解析增量并复验；真实事件未到由主会话等真实新决定；改文失败回阶段 6，改 AC 或方向回原决定人。
 - **完成**: 前置（不作完成条件）：定向命令及退出有真实读回。完成条件（只写效果）：独立核旧行、责任与不误伤邻项；真实事件由独立读者核实读和改文，缺事件只保本条未完成，不阻技术交回。
 
+## 本 Phase 自带判据小结
+
+- 验了什么：冻结组 `invalidated line fields` 8 条用例（RED 原件 `p04-invalidated.red.output` 为 4 failed | 4 passed；GREEN 回执 `p04-invalidated.green.output`、`p04-invalidated.green4.output` 为 8 passed | 218 skipped）；空格分隔参数组单列 1 条（`p04-invalidated.green2.output`、`p04-invalidated.green5.output` 为 1 passed）。
+- 计数口径：冻结组 8 条用例、六个标签（标注人、修改权、理由、新依据、受影响位置、接手人）、六类缺字段。设计件里的「Tests 4 passed (4)」「五个新标签」「五条缺字段」是设计期预期，保留不改，以本条实测为准；gate 过滤词仍是 `invalidated line fields`，不改过滤词。
+- 没验什么：AC-P4-002 的真实改向事件未发生，真实首卡改文与独立读者首判未取得。真实任务上空格式命令 exit 1（7 条既有「未收敛」材料缺口）；等号式基线跑同一真实任务同样 exit 1，属既有收敛缺口，不是本条回归。
+- 未验项条件与 owner：真实 supersede 由用户方向变更产生，主会话组织材料写主与阶段 6 独立作者；独立读者首判落 `quality/tests/p04-real-change.readback.md`。
+- 范围扩展（主会话授权）：本 Phase 写集含 `tools/cli/check-stage-steps.mjs`，卡里的「动作」只写窄改 `invalidatedSteps` 与报告投影；执行中另修一处跨阶段缺陷——该 CLI 原来只认 `--key=value`，而 P1 阶段卡写的是空格分隔（P2、P3 与本卡用等号），命令因此 exit 0 且 errors 里全是「不支持参数」，P1 的 gate 就是这样空过的（fail-open）。现在两种写法都接受。影响：空格形式现在真检查，遇到既有收敛缺口会 exit 1；这是此前被隐藏的真实信号，不是回归。它不改变「报告级缺口与退出语义」的关系——具名字段缺口仍只进报告，不改退出码。
+
 ## 机器字段（校验器用，人可跳过）
 
 - **全局规格**: `spec.md#实现设计全局权威`
@@ -226,4 +234,4 @@ node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path=/Users/Hu
 - **evidence_path**: planned: `quality/tests/p04-invalidated.green.output`；`quality/tests/p04-real-change.readback.md`
 - **STOP**: 技术交回版本冲突停受影响文件并退原写主；真实事件缺失停改文首判；退出语义回归回 P4，材料回主会话，卡回 P6；改方向或验收回原决定人。
 - **覆盖 AC**: AC-P4-001、AC-P4-002
-- **Done**: 前置（不作完成条件）：具名命令、原始输出与退出读回。完成条件（只写效果）：AC-P4-001 以兼容及反例原件判并按方法第 9 步交技术版；AC-P4-002 逐处实读并核实际改文，真实变更未发生时 unavailable，不挡技术交回。路径见本块，均非实际通过声明。
+- **Done**: 前置（不作完成条件）：具名命令、原始输出与退出读回。完成条件（只写效果，按 8 值档位逐条承接两条 AC）：AC-P4-001：pass；证据 quality/tests/p04-invalidated.green4.output（冻结组 8 passed）、quality/tests/2026-11-24-034-p4-test-readback.md（独立测试判定）。AC-P4-002：unavailable；证据 quality/evidence/decision-maker/p04/design.md 与 decision-log.md 包 4 段（无 supersede 行）；恢复条件：本任务发生真实 supersede 后，由独立读者按旧新决定→失效行→实读→改文复读。
