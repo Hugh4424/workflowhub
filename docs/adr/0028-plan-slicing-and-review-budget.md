@@ -3,6 +3,7 @@
 - 状态：accepted
 - 日期：2026-09-11
 - 范围：S4-slicing、S4-review-result-deduplication
+- 状态说明：S4-review-result-deduplication 的 canonical 复用/导入 reader 已于 2026-11-23（P6 `76fd1673`）退役并移除；`recordSimpleReviewRequest` 仍是当前派发 owner，在 `runtime/review/review-record-route.mjs:216` 导出、`tools/cli/stage-runtime.mjs:2233` 使用。该部分只读保留作历史，其余部分（S4-slicing advisory）仍有效。
 
 ## 背景
 
@@ -29,6 +30,8 @@ current。validator、stage handler 和 status 只消费同一份现场派生结
 或 marker 解析是否异常，validator 都显示诊断并精确退出 0；`unexplained_overage`
 可以提醒质量，但不能阻断同一工作范围的补充说明或实施。当前交付的最终计划
 必须用同一规则自检，且不能为 `unexplained_overage`。
+
+> 2026-11-23 退役：本节的 canonical 复用/导入机制已移除（`readCanonicalReviewHistory`/`findReusableReview` 随 `b31d202e` 删除，`control-plane-inventory` 的 `review-result-deduplication` 条目为 `disposition: removed`，`workflow-evolution.mjs` 随 P6 `76fd1673` 删除）；原文不改，只读保留作历史，不据以新增实现。
 
 ### 正式审查结果复用与导入
 
