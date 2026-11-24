@@ -23,6 +23,7 @@
 | knowledge-graph | 开工与设计依据准备时以合法全文作采用判断；查询领域/历史经验、定位影响，或按许可更新图。 | [读取正文](knowledge-graph/SKILL.md)；[任务判断方法](knowledge-graph/references/knowledge-reuse.md) |
 | anysearch | 需要联网检索、核事实或读取外部页面。 | [读取正文](anysearch/SKILL.md) |
 | decision-log | 把已确认方向写为唯一决策与需求记录。 | [读取正文](decision-log/SKILL.md) |
+| decision-maker | make-decision 第 9 步逐包收敛：调研、设计、审查三角色，十一格卡，同源两路与独立异源审；主会话唯一写手。 | [读取正文](decision-maker/SKILL.md) |
 | unit-kernel | 四阶段共用的规则内核：审查周期、唯一写主、能定不问、升版核读者、发现四态、审查角色与终审分界，及设计与执行两条流水线；只按条号引用，不复制正文。 | [读取正文](unit-kernel/SKILL.md) |
 | deep-research | 方向仍有关键未知，需要深度调研与可回读来源。 | [读取正文](deep-research/SKILL.md) |
 | grill-with-docs | 通过追问检验方案，并维护术语与架构决定。 | [读取正文](grill-with-docs/SKILL.md) |

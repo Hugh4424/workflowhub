@@ -274,28 +274,28 @@ skills:
     update_policy: 比较固定 commit 后的安全边界和 bundle，再人工升级
   - name: decision-log
     path: skills/decision-log/SKILL.md
-    local_version: 1.0.0
-    last_reviewed_at: "2026-09-22"
+    local_version: 1.1.0
+    last_reviewed_at: "2026-11-25"
     status: native
     metrics_enabled: true
     purpose: 生成下游唯一权威需求记录
     design_idea: 将已收敛输入固化为结构化 decision log
     used_by_stages: *stages_make_decision
     upstream: []
-    local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。
+    local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。2026-11-25 升 1.1.0（minor）：本任务 P10 把 v2 十一格模板改为引内核 R6、删逐格判据正文，并补通用「答复索引只有这一份」读法；U-012 消歧待闭；SKILL.md 正文未动，模板为 bundle 内现有文件。
     dependency_closure: ["skills/grill-with-docs","skills/spec-specify","skills/material-writing"]
     update_policy: 随 stage 合同变更审查
   - name: decision-maker
     path: skills/decision-maker/SKILL.md
-    local_version: 0.2.0
-    last_reviewed_at: "2026-11-20"
+    local_version: 0.3.0
+    last_reviewed_at: "2026-11-25"
     status: native
     metrics_enabled: true
     purpose: 逐包收敛的三角色技能，保证调研、设计、审查分开，卡片能钉住角色原件与包级答复
     design_idea: 每包调研+设计+审查；十一格卡按真表格行判；验收要通过与失败分开并带反例；卡末绑角色原件与包级答复；没有三角色回传/冷读/对抗不算收敛
     used_by_stages: [make-decision]
     upstream: []
-    local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。P6/T009 核真：make-decision 的 skill-deps.yaml 已把本技能登记为阶段依赖（P3/5f192573 随新默认流程接线），故 used_by_stages 保持 [make-decision] 而非置空；本技能仍无 steps.json 步骤节点，只由该阶段依赖与散文条件入口消费。
+    local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。P6/T009 核真：make-decision 的 skill-deps.yaml 已把本技能登记为阶段依赖（P3/5f192573 随新默认流程接线），故 used_by_stages 保持 [make-decision] 而非置空；本技能仍无 steps.json 步骤节点，只由该阶段依赖与散文条件入口消费。2026-11-25 升 0.3.0（minor）：本任务 P10/P11 增真实原答与跨包供件读法、一包同源冷读+对抗两路及独立异源审和卡节摘要绑定；保持主会话唯一写手与两轮封顶，不新增机器第六件或第二审查路径。
     dependency_closure: ["skills/decision-log","skills/material-writing","skills/talk-with-zhipeng","skills/wh-review","skills/unit-kernel"]
     update_policy: 随 make-decision 合同变更审查
   - name: unit-kernel
@@ -442,8 +442,8 @@ skills:
     update_policy: 随 make-decision 交互合同变更审查
   - name: spec-prd
     path: skills/spec-prd/SKILL.md
-    local_version: 1.2.0
-    last_reviewed_at: '2026-11-05'
+    local_version: 1.3.0
+    last_reviewed_at: '2026-11-25'
     status: native
     metrics_enabled: true
     purpose: build-prd 唯一正式 PRD 内容 owner
@@ -456,7 +456,7 @@ skills:
         skill_url: &matt_to_spec_url https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/to-spec/SKILL.md
         adopted:
           - skills/engineering/to-spec/SKILL.md#user-stories — 以真实角色、诉求、收益组织本技能User Stories；本地两步地图/详情和真实确认合同保留
-    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。2026-11-05 升 1.2.0：PRD 改为头部 + 7 节 + 附录 B/C，每卡六字段逐字段内容要求，五列地图，四行写对照物与独立复算，决策覆盖表进附录 B，验收不写比例、计数或零值；bundle 文件清单不变。
+    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。2026-11-05 升 1.2.0：PRD 改为头部 + 7 节 + 附录 B/C，每卡六字段逐字段内容要求，五列地图，四行写对照物与独立复算，决策覆盖表进附录 B，验收不写比例、计数或零值；bundle 文件清单不变。2026-11-25 升 1.3.0（minor）：本任务 P6/P7 增任务卡/子任务六字段与四行验收、地图唯一索引及分节审查指针，分节方法与卡节摘要算法仍留 task-maker；不复制方法或新增第三次内容调用。
     dependency_closure: ["skills/spec-specify","skills/stage-handoff","skills/project-norm-init","skills/material-writing"]
     update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
   - name: spec-research
@@ -557,8 +557,8 @@ skills:
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
-    local_version: 1.3.0
-    last_reviewed_at: '2026-09-22'
+    local_version: 1.4.0
+    last_reviewed_at: '2026-11-25'
     status: adapted
     metrics_enabled: true
     purpose: 在 spec 中生成全局实现设计，并逐个生成独立 Phase 文件
@@ -607,7 +607,7 @@ skills:
         skill_url: *matt_writing_mechanics_url
         adopted:
           - skills/productivity/writing-for-agents/SKILL-MECHANICS.md#invocation — 调用与路由边界
-    local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；owner 为 build-plan。现有 bundle 增 check-reader-record（第11步核七段/五问/命令退出的记录形态）、check-authoring-budget（逐材料只报告结构读数，超预算仍退0）、authoring-contract（第6/7步作者与brief实际读取），consumer 为 build-plan作者、独立冷读者、build-code和spec-analyze。测试为 post-cohort-authoring-files及C07七个具名authoring契约测试；当这三职责由独立验证的既有替代完整承接且本附件无真实消费者时删除相应附件/指针，保历史原件；不新增控制面或质量裁决
+    local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；owner 为 build-plan。现有 bundle 增 check-reader-record（第11步核七段/五问/命令退出的记录形态）、check-authoring-budget（逐材料只报告结构读数，超预算仍退0）、authoring-contract（第6/7步作者与brief实际读取），consumer 为 build-plan作者、独立冷读者、build-code和spec-analyze。测试为 post-cohort-authoring-files及C07七个具名authoring契约测试；当这三职责由独立验证的既有替代完整承接且本附件无真实消费者时删除相应附件/指针，保历史原件；不新增控制面或质量裁决。2026-11-25 升 1.4.0（minor）：本任务 P4/P5 增首卡开工就绪与判据成本/期限/资源/范围三笔账、纯指针索引的写入集指针与同源摘要口径，模板同步；只改写法与索引权威，不新增阶段、检查器或第二份计划权威。
     dependency_closure: ["skills/simplicity-guard","skills/spec-specify","skills/material-writing"]
 
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
@@ -788,7 +788,7 @@ skills:
     metrics_enabled: true
     purpose: 工程计划顺序、边界、失败模式和验证审查 lens
     design_idea: report-only engineering plan review
-    used_by_stages: *stages_build_plan
+    used_by_stages: [build-plan, make-decision]
     upstream:
       - <<: *gstack_7c9d_review_20260714
         path: plan-eng-review
@@ -832,10 +832,10 @@ skills:
     purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
     standalone: true
-    used_by_stages: [build-prd]
-    consumer: skills/stage-close/SKILL.md (target-branch sync conflicts); core/task-close.mjs:1411 (merge conflict error path)
+    used_by_stages: []
+    consumer: skills/stage-close/SKILL.md (target-branch sync conflicts and merge conflict recovery)
     upstream: []
-    local_changes: WorkflowHub close 冲突恢复约束；由stage-close在目标分支同步预演发现冲突时复用；消费者为skills/stage-close/SKILL.md与core/task-close.mjs:1411
+    local_changes: WorkflowHub close 冲突恢复约束；由stage-close在目标分支同步预演发现冲突时复用；消费者为skills/stage-close/SKILL.md
     dependency_closure: []
     update_policy: 随 stage-close 目标分支同步和 build-code 终末 close 合同变更审查
   - name: debate
@@ -1032,7 +1032,7 @@ skills:
     purpose: 为三种真实起点定位适用专业来源并接线原专业 owner
     design_idea: new/legacy 按类复用真实源、缺口局部显露、实际 consumer 与适用范围可读
     standalone: true
-    used_by_stages: [build-plan, build-code]
+    used_by_stages: [build-plan]
     upstream: []
     local_changes: |
       WorkflowHub 原生薄入口；owner 是五类专业规范接线维护者，各类规则仍归原专业owner。local_version沿既有2.0.0，不把本次审查日期冒新发行版本。
@@ -1121,7 +1121,7 @@ skills:
     purpose: 从本动作适用的真实专业来源逐类派生 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
-    used_by_stages: *stages_build_plan
+    used_by_stages: [build-plan, make-decision]
     upstream: []
     local_changes: WorkflowHub 原生只读 lens；owner 是 UI 来源只读作者，consumer 是现 build-plan UI 分支和 build-prd 条件设计分支的 plan-design-review 输入；按project-norm-init职责读实际路径/稳定节/version/作用域及各类缺口，旧Design/Experience只作历史或可信输入；delete-condition consumer 经已审替代承接后
     dependency_closure: &deps_spec_ui ["skills/spec-specify","skills/project-norm-init"]
@@ -1135,7 +1135,7 @@ skills:
     purpose: 为 build-plan UI 分支与 build-prd 条件设计分支生成真实组件预览和截图证据
     design_idea: 真实组件输入、可运行本地渲染和用户授权降级
     standalone: true
-    used_by_stages: *stages_build_plan
+    used_by_stages: [build-plan, make-decision]
     upstream: []
     local_changes: WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后
     dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/project-norm-init"]
@@ -1246,7 +1246,7 @@ skills:
     standalone: true
     metrics_enabled: true
     purpose: 单一用户文案原文与四消费者/首次使用核对
-    used_by_stages: [build-plan, build-code]
+    used_by_stages: [build-plan]
     upstream: []
     local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
     dependency_closure: []
@@ -1259,7 +1259,7 @@ skills:
     standalone: true
     metrics_enabled: true
     purpose: 真实业务输入到十项完整提示词及下游消费
-    used_by_stages: [build-plan, build-code]
+    used_by_stages: []
     upstream: []
     local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
     dependency_closure: ["skills/ui-copy-discipline"]
@@ -1267,8 +1267,8 @@ skills:
 
   - name: phase-maker
     path: skills/phase-maker/SKILL.md
-    local_version: 0.1.0
-    last_reviewed_at: "2026-11-24"
+    local_version: 0.2.0
+    last_reviewed_at: "2026-11-25"
     status: native
     metrics_enabled: false
     standalone: true
@@ -1276,14 +1276,14 @@ skills:
     design_idea: 拆 Phase 按可独立验收结果，每卡写首读符号、首改路径、目标失败、写集前后写者与失败恢复；回读者只能沿卡内指针复读
     used_by_stages: [build-plan]
     upstream: []
-    local_changes: workflowhub 原生；P3 交付，consumer=build-plan 第 6 步与下游独立实施读者；完整写作方法仍归 skills/spec-plan/SKILL.md，本技能不复制全文，不新增阶段、检查器或第二份计划权威。
+    local_changes: workflowhub 原生；P3 交付，consumer=build-plan 第 6 步与下游独立实施读者；完整写作方法仍归 skills/spec-plan/SKILL.md，本技能不复制全文，不新增阶段、检查器或第二份计划权威。2026-11-25 升 0.2.0（minor）：本任务 P4/P5 增首卡纵切六件与三账、真实供件字段与首卡开工五列、未知半径与回读坏返回，并把索引写入集指针及摘要口径写进回读边界；仍只承接第 6 步首个可执行入口。
     dependency_closure: ["skills/spec-plan"]
     update_policy: 随 build-plan 第 6 步入口或 spec-plan 写作方法变更审查；无真实消费者且经独立验证替代后删除。
 
   - name: task-maker
     path: skills/task-maker/SKILL.md
-    local_version: 0.1.0
-    last_reviewed_at: "2026-11-24"
+    local_version: 0.2.0
+    last_reviewed_at: "2026-11-25"
     status: native
     metrics_enabled: false
     standalone: true
@@ -1291,14 +1291,14 @@ skills:
     design_idea: 同一作者在真实地图答复后展开同一稿任务分节，6 字段加四行验收；只有地图或无分节不能交，覆盖表只指向不复制决定正文
     used_by_stages: [build-prd]
     upstream: []
-    local_changes: workflowhub 原生；P3 交付，consumer=build-prd 第 4 步与沿 PRD 任务分节接手的下游读者；完整 PRD 方法仍归 skills/spec-prd/SKILL.md，本技能不复制全文，不新增任务卡字段、第二作者或第四检查器。
+    local_changes: workflowhub 原生；P3 交付，consumer=build-prd 第 4 步与沿 PRD 任务分节接手的下游读者；完整 PRD 方法仍归 skills/spec-prd/SKILL.md，本技能不复制全文，不新增任务卡字段、第二作者或第四检查器。2026-11-25 升 0.2.0（minor）：本任务 P6/P7 增规划稿门槛、同作者展开与地图即唯一索引、供件拒认，及同节两路+同一卡节摘要+一次处置的分节审查；不复制 spec-prd 全文或新增字段。
     dependency_closure: ["skills/spec-prd"]
     update_policy: 随 build-prd 第 4 步入口或 spec-prd 方法变更审查；无真实消费者且经独立验证替代后删除。
 
   - name: run-phase
     path: skills/run-phase/SKILL.md
-    local_version: 0.1.0
-    last_reviewed_at: "2026-11-24"
+    local_version: 0.2.0
+    last_reviewed_at: "2026-11-25"
     status: native
     metrics_enabled: false
     standalone: true
@@ -1306,7 +1306,7 @@ skills:
     design_idea: 每步只压成可执行操作契约，第 7 步仍由原 diff 所有人执行；代码四职责不变，不转移写权、不新增步骤或第二进度
     used_by_stages: [build-code]
     upstream: []
-    local_changes: workflowhub 原生；P3 交付，consumer=build-code 第 2–9 步执行者、独立审查者与只读测试者；完整方法、步骤编号和阶段门仍归 workflows/build-code/SKILL.md，本技能不复制全文，不新增状态或公共入口。
+    local_changes: workflowhub 原生；P3 交付，consumer=build-code 第 2–9 步执行者、独立审查者与只读测试者；完整方法、步骤编号和阶段门仍归 workflows/build-code/SKILL.md，本技能不复制全文，不新增状态或公共入口。2026-11-25 升 0.2.0（minor）：本任务 P8/P9 把第 2–6 步公开入口与可观察结果、第 7–9 步两方回报、审后一次提交、晚发现回原 Phase 和终末边界写进执行契约；不转移写权、不新增状态或公共入口。
     dependency_closure: ["skills/diagnosing-bugs","skills/knowledge-graph","skills/test-routing-advisor","skills/unit-kernel","skills/wh-review"]
     update_policy: 随 build-code 第 2–9 步入口、四职责或具体测试方法变更审查；无真实消费者且经独立验证替代后删除。
 
