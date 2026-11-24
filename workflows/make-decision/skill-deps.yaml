@@ -12,6 +12,9 @@ files:
   - flows/planning/SKILL.md
   - flows/planning/steps.json
 skills:
+  - name: unit-kernel
+    path: skills/unit-kernel/SKILL.md
+    trigger: shared_rules_kernel_version_and_clause_reference
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: stage_opening_and_research_and_diverge_internal_knowledge

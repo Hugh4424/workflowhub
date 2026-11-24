@@ -298,6 +298,20 @@ skills:
     local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。P6/T009 核真：make-decision 的 skill-deps.yaml 已把本技能登记为阶段依赖（P3/5f192573 随新默认流程接线），故 used_by_stages 保持 [make-decision] 而非置空；本技能仍无 steps.json 步骤节点，只由该阶段依赖与散文条件入口消费。
     dependency_closure: ["skills/decision-log","skills/material-writing","skills/talk-with-zhipeng","skills/wh-review"]
     update_policy: 随 make-decision 合同变更审查
+  - name: unit-kernel
+    path: skills/unit-kernel/SKILL.md
+    local_version: 1.0.0
+    last_reviewed_at: "2026-11-24"
+    status: native
+    metrics_enabled: false
+    standalone: true
+    purpose: 四阶段共用的规则内核：五条规则、设计与执行两条流水线、十一格卡与五段逐包格式的唯一权威归口与版本
+    design_idea: 独立内核加薄接线；四阶段只引自己消费的条号并保留阶段专属动作，冲突以内核为准，升版先改正文再核四个真实读者
+    used_by_stages: [build-code, build-plan, build-prd, make-decision]
+    upstream: []
+    local_changes: workflowhub 原生；规则正文只在 skills/unit-kernel/SKILL.md 改，四阶段各留一处「内核接线」五行（入口版本、消费条款、阶段输出、冲突回报、升版顺序），条号 R1–R99 唯一；十一格与五段只在此定归口，字段语义正文由 P2 的 references/unit-fields.json 承接；不新增 stage、gate、公共命令或 runtime 行为，也不接管阶段步骤编号与角色分工。
+    dependency_closure: []
+    update_policy: 随五条规则、两条流水线或四阶段真实读者变更审查；改正文先升版本，再逐条核四个入口的接线五行
   - name: deep-research
     path: skills/deep-research/SKILL.md
     local_version: 1.0.0

@@ -1,5 +1,8 @@
 stage: build-code
 skills:
+  - name: unit-kernel
+    path: skills/unit-kernel/SKILL.md
+    trigger: shared_rules_kernel_version_and_clause_reference
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: phase_start_research_and_before_targeted_implementation

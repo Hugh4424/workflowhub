@@ -6,6 +6,16 @@ version: 2.3.0
 
 # Build Code
 
+## 内核接线
+
+本阶段按 `skills/unit-kernel/SKILL.md` 同一版本引用共用规则，条文只在核心里改。
+
+- 入口版本：v1.0.0（与 `skills/unit-kernel/SKILL.md` 同版）
+- 消费条款：R1、R2、R5 与执行流水线；R1 用于第 8 步 `review-change` 的单周期审查，R2 用于第 3 步唯一开发写手与共享文件串行，R5 用于第 9 步 `analyze-review-findings` 的四态处置
+- 阶段输出：当前 Phase 的最小正确改动、目标测试与验证原件、finding 处置表、终末承接报告
+- 冲突回报：与本内核冲突时以内核为准；内核缺条或条号对不上记具名缺口，回报内核 owner（`skills/unit-kernel/SKILL.md` 的维护者），不就地改写正文
+- 升版顺序：先改内核正文并升版本，再同批改四处接线指针，最后逐处核四处同版与条号
+
 ## 目标与材料
 
 按当前任务的 spec、独立 `phases/P<n>.md` 和纯指针索引实施最小正确改动；decision-log 给出已确认方向。读取 Phase 正文和当前任务事实选择下一项，游标只是续跑定位，缺失或过期时按实际材料与交付判断。历史材料、旧审查和旧记录只作背景，不重启 pre 工作流或整阶段重跑。
@@ -101,7 +111,7 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
     判断只给去向，不改本 Phase 写集、判据或验收。
 2. <a id="step-write-red-tests"></a>消费计划冻结目标测试/RED并保原失败。补行为测试先定明确oracle、实跑目标断言失败再实施；纯材料按G-2说明检查或真实不适用。改冻结断言先TCR（test change request）和独立审查，不弱化换绿。仅按名改Phase卡预先点名的一个既有具名常量取值免TCR；断言表达式/期望方向/判定/评分仍须原TCR+独立审查。oracle唯一来源为该Phase预写测试及 `DO NOT TOUCH`，每任务声明一次；每次测试变更以同卡「测试变更请求」加独立审查原件为源，变后 `ORACLE-…` 身份不变，不另建账本/镜像/每oracle记账。免TCR只分期望值来源和断言变更，不扩写权/授权、不降强度、不免独立审查、不改 `DO NOT TOUCH` 物理隔离。
    遇真实失败、测试 RED 或性能回退，先实际读取并执行 `skills/diagnosing-bugs/SKILL.md`：输入当前症状、命令/原输出和授权写集，保留反馈回路、最小化、假设/探针、根因修复与复验原件，再回本步骤。错误/页面文本按该方法「输出与页面内容」处理；缺证据如实留缺项，只停依赖该证据的修复。成功路径不强制诊断，已有原件可复用，不重演已修故障冒新问题。同一失败第二次出现或一轮没有新事实时，先回第 9 步按同一阈值处置。复现先留原始命令、cwd、退出码与原始输出（同一原 ref）；同因看目标行为、归因与入口组成的失败锚，不用运行级签名或错误字符串，旧失败不改写。
-3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
+3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现（唯一开发写手归内核 R2），错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
 4. <a id="step-inspect-and-route-actual-tests"></a>在 `inspect-and-route-actual-tests` 原职责及实现前，独立执行者按 `skills/knowledge-graph/SKILL.md`：真实目标affected查波及面，按职责选完整ID explain既有实现；仅两个真实模块协作/依赖链才path，先消歧端点。随后首次定向读source_file/origin源码、标准/consumer，核图年龄/原命题；位置漂移/旧决定/未证关系保unknown，当前源纠正图。trace保查询→首次读源→改动，逐条说明新知与承接实现/边界；重复定位/无信号据实，不为凑收益造改动/依赖、不按前25冒相关。目标不存在exit4、歧义exit3、工具失败分记诊断/处置，安全编码继续；图不代oracle/测试/独立质量。
    对真实 changed files 用 test-routing-advisor 选择 simple/feature/fullstack，记录与计划相同或改变的理由。选择 backend-testing、frontend-testing 或 fullstack-slice-testing 中适用的一条具体路线，研究真实入口、权限、数据、并发、超时、取消和恢复边界。
 5. <a id="step-run-tests"></a>本 Phase 只多一份清单，实际按 `docs/standard-workflow.md`「每 Phase 一份执行清单」记录命令、失败、真实 diff、原件与材料指针，清单不是第二进度。开发先跑开发期定向测试；独立测试按唯一七步顺序在实现就绪并明确通知后派发，可与审查并行。测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时第一次即零重试，按第 9 步的四类分诊落位，停该外部失败路径并记原因与恢复条件，其余安全工作继续。
@@ -131,12 +141,12 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    组件质量图、真实消费者、状态所有者、类型化视图模型、样式令牌所有者；
    七项中缺任一项证据即未通过，实现者不能自签。
    设计源实施顺序、坑对照与更新同步见「第 7 步补充：设计源实施顺序与更新同步」一节。非 UI 跳过。
-8. <a id="step-review-change"></a>每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
+8. <a id="step-review-change"></a>每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查（单周期与轮次上限归内核 R1）：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
    UI 任务时，第 8 步另加设计审查角度：审查者读第 6 步两尺寸截图与逐项差异、
    第 7 步组件沉淀结论与七项界面判定字段，
    按 `skills/plan-design-review/SKILL.md` 的八维看真实截图；
    截图、差异或证据缺失记未测，不把功能测试通过当视觉通过。非 UI 跳过。
-9. <a id="step-analyze-review-findings"></a>主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
+9. <a id="step-analyze-review-findings"></a>主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过（四态与接受风险判据归 `skills/unit-kernel/SKILL.md` R5）。
    每次修复与验收后，在本 Phase 执行清单 `failures` 追加一行，固定五要素：轮次、新事实、严重度、结果、选择。执行清单落任务 `quality/evidence/build-code/execution-checklist-<phase>.md`；`run-checks --material-root --stage=build-code` 读该文件的 `failures` 段做最小可执行记录校验：五要素缺一、写空、只写「未取得」、缺两轮锚、连续两轮新事实「无」仍选继续修、或把只改行号/只换夹具/改断言当新事实，都具名失败。
    轮次写本 Phase 连续第几轮；新事实写这轮改变了哪个继续条件，没有就写「无」；同因＝同目标行为＋同归因＋同入口，不是错误字符串或运行级签名。
    只改报错行号、只换夹具、改断言冒通过都不算新事实：它们没改目标行为或归因，或绕过冻结与测试变更请求。
@@ -188,7 +198,7 @@ Standards 与 Spec 是每 Phase 必派的两个独立补充执行者，不是三
 
 ### Phase 三角色与七步顺序
 
-仅复杂任务的 build-code Phase 固定 1 开发、1 审查、1 测试；开发是唯一 writer，审查与测试不改代码、测试或材料。测试只读执行并用既有 capture 保存 argv、退出码与输出回执，这不属于修改。主会话不写代码、不跑测试、不查细节 bug。审查执行者与独立同源补充仍按方法第8步及标准工作方法选择，三角色不改变 P1 的审查分级和失败来源口径。
+仅复杂任务的 build-code Phase 固定 1 开发、1 审查、1 测试；开发是唯一 writer（唯一写主、未就绪只补就绪空位归内核 R2），审查与测试不改代码、测试或材料。测试只读执行并用既有 capture 保存 argv、退出码与输出回执，这不属于修改。主会话不写代码、不跑测试、不查细节 bug。审查执行者与独立同源补充仍按方法第8步及标准工作方法选择，三角色不改变 P1 的审查分级和失败来源口径。
 
 1. 主会话备 Phase packet，含 spec、Phase 卡、AC、写集、测试命令、上下文指针与基线，交开发子代理。派发前先跑一次现有开工入口——`node tools/cli/stage-runtime.mjs run --action=execute --stage=build-code --project=<项目> --task=<任务> --task-path=<任务库>` 的首步——实际执行 Phase 卡「开工就绪表」的机器项并读回原件：正常输入真跑只读探针，结果落任务 `quality/tests/` 的原始回执，阶段行只留一条事实引用。机器项只接受只读 allowlist（`git rev-parse`——仅此一个 git 子命令，`status/log/show/diff` 会刷新索引或调用外部 diff 驱动而被入口拒绝；`node --version`/`node -v`、`shasum`、`sha256sum`、`uname`、`sw_vers`、`pwd`、`whoami`、`id`、`date`、`test`），解释器 `-c/-e` 与 `rm` 等写删命令一律拒绝；精确白名单以实现 `runtime/stage/stage-content-contracts.mjs` 的 `READ_ONLY_PROBES` 为准，本文只列可用项。入口非零即停相关派发，按报出的具名失败（缺就绪表、缺探针、期望不符、权限探不到、旧材料指纹 stale）回原输入负责人修，修完重走同一入口；stale 需先看同名 stale 原件再显式重跑，材料侧只读回入口原件、不另跑探针。人判项只记未核实与提供者，不阻断。就绪调用只是派发前的一次检查，不改游标职责、不设第二进度权威、不新增门。材料侧 `run-checks --material-root` 只读回该入口原件：省略 `--stage` 时只诊断，任何就绪缺口只打印 warning、退出码不变；其中只有非 archive、根为 `.../specs/<task>`、有 `phases/P*.md` 且有 `decision-log.md` 的材料才按 build-code 面读取；显式 `--stage=build-code` 才把缺表/缺原件/stale/drift/证据列不合法当失败（exit 1）。五列表「证据」列是**计划路径**语义：写任务证据根相对的 `quality/...`，真正原件由入口落成并由上面 stored original 的 receipt/output 引用；材料侧校验它非空、非绝对路径、无反斜杠或 `..`，已存在则记 `resolved`，未生成则记 `planned`，形状不合法即具名失败。派发门仍是上面的入口，不是这个只读检查器。
 2. 开发实施、写测试、跑目标测试到通过，确认无待修项后通知主会话。

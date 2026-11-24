@@ -1,5 +1,8 @@
 stage: build-plan
 skills:
+  - name: unit-kernel
+    path: skills/unit-kernel/SKILL.md
+    trigger: shared_rules_kernel_version_and_clause_reference
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: stage_opening_and_existing_source_research
