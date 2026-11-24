@@ -75,7 +75,7 @@
 | R-024 | 每个任务/包/Phase 设计与执行后复盘；四阶段开头检索规范；当前任务＋域 README（U-027 覆盖跨历史）；规则表按域；结构优先；旧错证明；可见摘要 | 用户讨论 U-005–U-027 | P5/P6/P7 |
 | R-025 | 任务四先做设计和计划，build-code 等任务三合并后再做 | 用户讨论 U-025 | 跨包排期 |
 | R-026 | specs 按域存规范；每域 README 是规则表；AGENTS 只留指针；Improvements 保留未决 | 用户讨论 U-023/U-024 | P6 |
-| R-027 | 每包详细设计在决策日志每包十项内可读；任务库设计原件只作来源指针并登记 ref+sha；build-prd/build-plan 消费十项，不以摘要或目录猜测代替 | 用户 2026-11-25 反馈；talk/2026-11-25-001-package-detail.md | P0 材料合同；消费者 build-prd/build-plan；P5/P6 经验候选 |
+| R-027 | 决策日志、PRD、spec、Phase 卡都把对应任务/包/Phase 的细节写在正文；不以摘要、链接目录或“见某目录”代替；任务库原件只作来源指针并登记 ref+sha | 用户 2026-11-25 反馈；talk/2026-11-25-001-package-detail.md、talk/2026-11-25-002-r027-scope.md | P0 材料合同；消费者 make-decision/build-prd/build-plan/phase-maker；P5/P6 经验候选 |
 
 ### 原话与答复索引
 每条用户答复一行，完整原话与来源见 `requirement-index.md` §2 与 Talk 原件；主文只引用编号。
@@ -863,14 +863,17 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | 就绪五列 | 2026-11-24-126-readiness-p4.json human_rows 五键 | AC-007 ②未点名卡号/验收号、③缺首卡行 | P4 卡作者 |
 | 写集 | archive/phases/index.md:21 八路径与 P12 卡 :240 一致 | 卡内第二清单或摘要不符→具名失败 | 索引作者 |
 
-### R-027 对 build-prd 与 build-plan 的要求（2026-11-25 新增）
+### R-027 对决策日志、PRD、spec、Phase 的要求（2026-11-25 新增，范围更正）
 
-- 背景：决策日志第4段曾只留摘要，详细设计在任务库 `pN/design.md`；build-plan 默认读 decision-log/spec，不读任务库目录，导致细节不可达。
-- R-027：每包十项在决策日志内可读；任务库设计原件只作 ref+sha 指针；build-prd/build-plan 消费十项。
-- build-prd：写 PRD 需求与验收条款时，逐包读十项；PRD 的需求追踪必须指到十项里的验收与写集，不得以摘要代填。
-- build-plan：第 1 步读决策日志时逐包读十项；Phase 卡消费接口、写集、验收、风险、配套四项；写集按任务三指针模式；缺项写具名缺口，不猜目录。
-- 验收：决策日志每包十项齐；第 6 段登记七份 design；build-plan 的 Phase 卡能逐包指回十项；抽查一包能答出接口、写集、验收、风险。
-- owner：make-decision 作者写；build-prd/build-plan 作者消费；P5/P6 作为经验候选（材料放哪、谁读）。
+- 背景：决策日志第4段曾只留摘要，详细设计在任务库 `pN/design.md`；build-plan 默认读 decision-log/spec，不读任务库目录，导致细节不可达。用户 2026-11-25 更正：R-027 不止下游消费十项，而是四个载体都要写对应细节。
+- R-027：决策日志、PRD、spec、Phase 卡都把对应任务/包/Phase 的细节写在正文；不以摘要、链接目录或“见某目录/见某文件”代替；任务库原件只作来源指针，并以 ref+sha 登记。
+- 决策日志：每包十项写全（本段已补），不是摘要。
+- PRD（有 PRD 的任务）：按任务/包写需求、现状缺口、选定方案、验收、风险、配套与影响；需求追踪指到具体条目，不写“见 decision-log”。
+- spec：按包写接口、数据与状态、依赖与顺序、写集、验收、风险、配套四项；不写“见 design.md”代替正文；写集按任务三指针模式。
+- Phase 卡：写本 Phase 的 delta、文件/动作、验收、风险、边界；不写“见 spec”代替本 Phase 细节。
+- 检查：build-prd 的需求追踪逐包核；build-plan 的 B/C 表逐包核 spec/Phase；phase-maker 读 spec/decision-log 后写卡；build-code 逐 Phase 消费。正文缺细节写具名 finding/gap，不靠推断或目录猜。
+- 验收：四载体逐包抽查能答出接口/写集/验收/风险；build-plan 的 Phase 卡能指回对应包的十项；PRD/spec/Phase 没有“见某目录”代替正文。
+- owner：make-decision 写决策日志；build-prd 写 PRD；build-plan 写 spec/Phase；P5/P6 作为经验候选（材料放哪、谁读）。
 
 ### 跨包风险
 - 与任务三写集重叠（build-code/SKILL.md、steps.json、四个新技能）：任务四 build-code 等任务三合并后再做；设计/计划阶段只读任务三材料。
@@ -916,7 +919,7 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | D-011 | 自动作业与对外传输只写方法，不做演示；真实行为经用户 U-026 批准不交付，标 incomplete | P4 |
 | D-012 | 复发判定改为当前任务＋域 README，不扫历史；覆盖早期跨历史要求（U-027） | P5/P6 |
 | D-013 | 8 条退役全部处理（U-028）；每条有承接与决定人 | P7 |
-| D-014 | 每包十项是 build-prd/build-plan 的唯一材料入口；任务库设计原件只作 ref+sha 指针 | 跨包 |
+| D-014 | R-027：决策日志/PRD/spec/Phase 四载体都写对应细节，不以摘要或目录猜测代替；任务库原件只作 ref+sha 指针 | 跨包 |
 | D-010 | Improvements 保留未决角色，不改成规范索引 | P7 |
 
 ## 6. 证据索引
@@ -948,5 +951,6 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | 每包十项材料要求 | `quality/evidence/decision-log-refs/talk/2026-11-25-001-package-detail.md` | `48547e1477a2a4171d55a375a4aaf38d98a35b89fc3be9d199895e6dac03ee88` | 核 R-027 来源时 | 用户原话与选项1 |
 | 退役范围批准 | `quality/evidence/decision-log-refs/talk/2026-11-24-004-retirement.md` | `c21b7e9daecccb1f05f03be05de4407eee0d694142ae7d3f8175700c1226da97` | 核 8 条退役时 | 8 条与决定人 |
 | 范围缩减与复发口径 | `quality/evidence/decision-log-refs/talk/2026-11-24-005-scope-and-memory.md` | `91510881ee205a1db4fa727772c774379a3c0a54592d900e6bbc7fc348a99f4d` | 核 P4/P5 口径时 | U-026/U-027 |
+| R-027 范围更正 | `quality/evidence/decision-log-refs/talk/2026-11-25-002-r027-scope.md` | `ce061c2ac7024247092f9c1274197bb604a1be4c12907acc3d95cf3adc9ffc6c` | 核四载体范围时 | 用户原话 |
 - 一件原件一行，只写一条路径；已有原件不复制、不搬移。
 - 原件缺失写清缺什么、影响哪项、谁补；安全工作继续。
