@@ -6,7 +6,7 @@
 - 任务类型：普通任务（实现类）。改 WorkflowHub 自身的施工说明、简化审查、后端行为测试与检查结果读回，不新增阶段、确认点或第二套进度记录。
 - 一句话目标：让同一条业务规则在人工入口和自动作业上得到一致结果；坏数据能看到失败，维护者能定位该改哪条规则。
 - 级别与路线：复杂。推荐与真实选择见下；入口评估返回原件 `quality/evidence/entry-evaluation/2026-11-24-001-entry-evaluation.json`。
-- 当前状态：七包已逐包确认；方向审查与整体细节审查均已执行（细节审查 31 条，5 阻塞已按用户范围决定与材料同步处置）；最终确认待用户。未实施、未验收。
+- 当前状态：七包已逐包确认；方向审查与整体细节审查均已执行；main（含任务三）已合入当前分支（HEAD 19c9e114）；任务三复核为“部分可用”（25 项 13 pass/9 incomplete/1 inconclusive/2 deferred）；已完成合并后决策更新与联合验收清单；待阶段收尾与交接。未实施、未验收。
 
 ### 怎么读这份日志
 先读第 2、3 段，知道要解决什么、一共几个包。
@@ -245,6 +245,24 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | P6 | specs/code-changes/*、AGENTS.md（含 :136“及 verify 终末”改四项触发、:48 重复测试范围句改指针）、skills/knowledge-graph、skills/deep-research、tests；建立规则表状态列 | P6 实现者 | 与 P5 共写 AGENTS 指针（P5 先） |
 | P7 | skills/stage-handoff、stage-close、wh-review、docs/standard-workflow.md、specs/acceptance/acceptance.md、docs/architecture/real-entry-inventory.md、core/task-close.mjs、specs/Improvements.md、tests | P7 实现者 | AGENTS 由 P6 改；stage-reflection 由 P5 改，P7 只读；规则表状态列由 P6 建、P5 更新、P7 只读 |
 
+### 任务三合并后复核（2026-11-25）
+
+- main 合并：`82b17d65`；当前任务分支 HEAD `19c9e114`，无冲突。
+- 任务三最终：25 项 AC 中 13 pass、9 incomplete、1 inconclusive、2 deferred、0 fail；close 七动作全 completed，无 `DELIVERY_CLAIMS_REJECTED`；结论 `not_fully_achieved`。
+- 代码事实：4 个新技能与内核已落地；11 份冻结契约 111/111；写集改为“指针模式”（卡内字面写集被忽略）——任务四所有卡的写集形式随之改变；task type 解析未变；task-close 私有解析仍在；stage-handoff/close 未变；五技能无复盘节；模板行号漂移（动作 :713、文件/符号 :712、边界 :715）；move-map 未登 specs/{code-changes,design,frontend}。
+- 质量结论：部分可用。可用的有当前字节原件与独立判词；不可当完成的是 9 项缺真实下游/周期、AC-001 残余（冻结测试锁名单、门禁不捕重复正文）、AC-025 M1 覆盖缺口、close 未写 facts 行。
+
+### 前置联合验收（任务四必须与任务三同批核）
+
+| 链 | 正例原件 | 负例/阻断 | 责任人 |
+| --- | --- | --- | --- |
+| 入口清单＋五列 | phase-template:221-226；AC-005 首卡 7773B/5348ba5b | AC-025 M1 机检未抓；卡须改新写集指针 | P4 卡作者 |
+| 声明卡/声明门 | quality/tests/094-099 skill_binding.ok=true | AC-001 重复正文门禁 14 pass 仍绿 | P3 实现者 |
+| 受限样本 | p05-ac008-generate-once.json | 无真实下游卡 | P5 实现者 |
+| 预期/门身份 | gate-results/2026-11-24-034（gate_identity P12） | 001/002 旧 gate 绑定失配后重取；跨 HEAD 不可复用 | 独立签字人 |
+| 就绪五列 | 2026-11-24-126-readiness-p4.json human_rows 五键 | AC-007 ②未点名卡号/验收号、③缺首卡行 | P4 卡作者 |
+| 写集 | archive/phases/index.md:21 八路径与 P12 卡 :240 一致 | 卡内第二清单或摘要不符→具名失败 | 索引作者 |
+
 ### 跨包风险
 - 与任务三写集重叠（build-code/SKILL.md、steps.json、四个新技能）：任务四 build-code 等任务三合并后再做；设计/计划阶段只读任务三材料。
 - P4 无真实自动装配：若无真实入口，只验触发/拒绝，处理段记缺口。
@@ -256,7 +274,7 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | --- | --- | --- | --- |
 | OI-001 | P4 真实自动装配入口 | confirmed（U-026：只写方法，不做演示；真实行为不交付，标 incomplete） | 用户已决定；以后真有入口的任务补证 |
 | OI-002 | P4 对外传输入口 | confirmed（U-026：同上；OCR 与 git-authorize 只作同构/第二实例，不声称已验） | 用户已决定；以后真有入口的任务补证 |
-| OI-003 | 任务三入口清单/声明卡/受限样本/预期未齐 | open | 任务三 owner；build-code 前联合验收 |
+| OI-003 | 任务三 9 项 incomplete（AC-007/008/009/016/019/020/021/022/023）+ 2 deferred（011/013）+ 1 inconclusive（015）；入口清单、就绪五列、受限样本、预期未全交付 | open；已列联合验收 6 链 | 任务三 owner + 任务四对应包；build-code 前联合验收 |
 | OI-004 | 历史 close 行为变化（19/108） | confirmed（P7 已申报；历史不改，重收口时生效；补规划任务与普通任务回归测试） | P7 实现者 |
 | OI-005 | 跨历史扫描器噪音 | not_applicable（U-027：不扫历史） | 已取消 |
 
