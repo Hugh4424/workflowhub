@@ -194,6 +194,182 @@ describe('ORACLE-C07-REVIEW materials', () => {
     expect(run().stdout).toContain('fixed 0/4 有可读修复证据；缺口 4 条');
   });
 
+  it('reads only the current declared, task-owned card section', () => {
+    const base = root(), repo = join(base, 'repo');
+    const project = 'baseline-fixture', task = 'external-cards';
+    const work = join(base, `repo-${task}`), misplaced = join(base, 'wrong-location');
+    const taskRoot = join(base, 'Projects', project, 'tasks', task);
+    mkdirSync(repo);
+    const git = (...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args], { cwd: repo, stdio: 'pipe' });
+    git('init', '-q');
+    git('-c', 'user.name=Baseline Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture');
+    git('worktree', 'add', '-qb', `task/${project}/${task}`, work);
+    const decisionRef = `specs/${task}/decision-log.md`;
+    const checklistRef = 'quality/evidence/decision-log-refs/convergence-checklist.md';
+    const cardRef = 'quality/evidence/decision-maker/p04/card.md';
+    const card = '## 工作包 4\n\n独立卡正文原句，保留  双空格。\n\n### 验收信号\n删除卡不得静默退回空摘要。';
+    const digest = createHash('sha256').update(card).digest('hex');
+    const binding = `任务=${task}；包=4；批次=demo-01；卡节sha256=${digest}`;
+    const checklist = `# 收敛清单\n\n## 工作包 4\n\n### 包 4 五件同包原件\n- 当前方案卡：\`${cardRef}#工作包-4\`；${binding}\n`
+      + ['质询', '冷读', '对抗', '真实答复'].map((kind, i) => `- 当前${kind}：\`quality/evidence/companion-${i}.md\`；${binding}\n`).join('');
+    const log = decisionLog + `\n## 包目录\n- 收敛清单：\`${checklistRef}\`\n### 工作包 4：真实原包号\n\n## 每包设计\n待第 9 步逐包收敛后填写。\n\n## 证据索引\n基准目录：\`${taskRoot}/\`\n| 旧清单哈希 | \`${checklistRef}\` | ${'0'.repeat(64)} |\n`;
+    const put = (path, bytes) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes); };
+    const manifest = { schema_version: '1.0.0', activation_cohort: 'post', project_name: project, task_id: task, target_repo_root: repo };
+    put(join(taskRoot, 'task.json'), JSON.stringify(manifest));
+    put(join(work, decisionRef), log);
+    put(join(taskRoot, checklistRef), checklist);
+    put(join(taskRoot, cardRef), `# 卡\n\n${card}\n\n## 工作包 5\n未绑定的旁包不进入基线。\n`);
+    put(join(taskRoot, 'quality/evidence/unreferenced.md'), '不扫描目录找正文。');
+    const approvalRef = 'quality/evidence/approved-outline.md';
+    const approval = '# 原件\n\n用户真实选择：「先分开交付」。\n\n只确认拆分，不授权实施。\n';
+    const approvalDigest = createHash('sha256').update(approval).digest('hex');
+    const spec = `# 计划\n### 怎样回到原话？\n| 原件与真实位置 | 追踪用途 |\n| --- | --- |\n| \`T/${approvalRef}:3–5\` | 修订大纲真实答复；SHA256 \`${approvalDigest}\` |\n`;
+    const specRef = `specs/${task}/spec.md`;
+    put(join(work, specRef), spec);
+    put(join(taskRoot, approvalRef), approval);
+    const cli = join(process.cwd(), 'skills/spec-plan/scripts/build-decision-baseline.mjs');
+    const invoke = (args, env = base, cwd = work) => spawnSync(process.execPath, [cli, ...args], { cwd, env: { ...process.env, WORKFLOWHUB_TASK_DIR: env }, encoding: 'utf8' });
+    const run = (ref = decisionRef, env = base) => invoke(['--decision-log', ref, '--spec', specRef], env);
+    const fails = (result, message) => { expect(result.status, result.stderr).toBe(1); expect(result.stdout).toBe(''); expect(result.stderr).toMatch(message); };
+    const ok = run();
+    expect(ok.status, ok.stderr).toBe(0);
+    expect(ok.stdout).toContain(card);
+    expect(ok.stdout).toContain('包 4：收敛清单未声明「当前卡节」表行');
+    // The fixture's last card line is line 8; line 10 starts the unbound neighbor.
+    expect(ok.stdout).toContain(`来源：${cardRef}#L3-L8`);
+    expect(ok.stdout).not.toMatch(/待第 9 步|未绑定的旁包|不扫描目录找正文|^# 原件$/m);
+    expect(ok.stdout).toContain('用户真实选择：「先分开交付」。\n\n只确认拆分，不授权实施。');
+    put(join(taskRoot, approvalRef), approval.replace('先分开交付', '错版本'));
+    const staleApproval = run();
+    expect(staleApproval.status).toBe(0);
+    expect(staleApproval.stdout).toMatch(/approved-outline\.md.*SHA-256 不符/);
+    expect(staleApproval.stdout).not.toContain('错版本');
+    put(join(taskRoot, approvalRef), approval);
+    for (const [bad, message] of [
+      [checklist.replace('；包=4；', '；包=5；'), /包 4.*包号不符/],
+      [checklist.replace(digest, '1'.repeat(64)), /包 4.*卡节.*sha256.*不符/i],
+      [checklist.replace(cardRef, 'quality/evidence/../outside.md'), /包 4.*越界/],
+      [checklist.replace(cardRef, 'quality/evidence/convergence/absent/card.md'), /包 4.*不可读.*ENOENT/],
+      [checklist.replace(/^- 当前方案卡.*$/m, ''), /包 4.*当前方案卡.*缺/],
+      [checklist.replace('#工作包-4', '#工作包-5'), /包 4.*锚点.*不符/],
+    ]) { put(join(taskRoot, checklistRef), bad); fails(run(), message); }
+    for (const [prior, stale, message] of [
+      [`任务=${task}`, '任务=异任务', /真实答复.*任务不符/],
+      ['包=4', '包=5', /真实答复.*包号不符/],
+      ['批次=demo-01', '批次=旧批次', /真实答复.*批次.*不一致/],
+      [digest, '1'.repeat(64), /真实答复.*sha256.*不一致/],
+    ]) {
+      const bad = checklist.replace(/^- 当前真实答复.*$/m, line => line.replace(prior, stale));
+      put(join(taskRoot, checklistRef), bad);
+      fails(run(), message);
+    }
+    put(join(taskRoot, checklistRef), checklist);
+    const outside = join(base, 'outside.md');
+    put(outside, card); symlinkSync(outside, join(taskRoot, 'quality/evidence/convergence-cards.md'));
+    put(join(taskRoot, checklistRef), checklist.replace(cardRef, 'quality/evidence/convergence-cards.md'));
+    fails(run(), /包 4.*不可读.*(?:(?:symbolic link)|single-link)/i);
+    put(join(taskRoot, checklistRef), checklist);
+    put(join(work, decisionRef), log.replace('## 包目录\n', '## 包目录\n- 收敛清单：`quality/evidence/another-checklist.md`\n'));
+    fails(run(), /收敛清单.*唯一/);
+    put(join(work, decisionRef), log);
+    fails(run(decisionRef, join(base, 'untrusted')), /收敛清单.*任务根.*不符/);
+    expect(run().stdout).toBe(ok.stdout);
+    const withHeader = (ref, sha) => `| 当前卡节 | \`${ref}\` sha256 ${sha} |\n| --- | --- |\n`;
+    const addHeader = (text, row) => text.replace('### 包 4 五件同包原件', `${row}\n### 包 4 五件同包原件`);
+    const header = withHeader(`${cardRef}#工作包-4`, digest);
+    put(join(taskRoot, checklistRef), addHeader(checklist, header));
+    const bound = run();
+    expect(bound.status, bound.stderr).toBe(0);
+    expect(bound.stdout).toContain(card);
+    expect(bound.stdout).not.toContain('未声明「当前卡节」表行');
+    const revisedCard = card.replace('独立卡正文原句', '整组一致的新卡正文');
+    const revisedDigest = createHash('sha256').update(revisedCard).digest('hex');
+    put(join(taskRoot, cardRef), revisedCard);
+    put(join(taskRoot, checklistRef), addHeader(checklist.replaceAll(digest, revisedDigest), header));
+    fails(run(), /包 4.*当前卡节.*SHA-256.*不一致/);
+    put(join(taskRoot, cardRef), `# 卡\n\n${card}\n\n## 工作包 5\n未绑定的旁包不进入基线。\n`);
+    for (const [newRef, reason] of [
+      [`${cardRef}#工作包-5`, /包 4.*当前卡节.*锚点.*不一致/],
+      ['quality/evidence/convergence-cards.md#工作包-4', /包 4.*当前卡节.*ref.*不一致/],
+    ]) {
+      put(join(taskRoot, checklistRef), addHeader(checklist, withHeader(newRef, digest)));
+      fails(run(), reason);
+    }
+    put(join(taskRoot, checklistRef), checklist);
+    put(join(work, `specs/${task}/phases/index.md`), '');
+    const projected = invoke(['--task', task]);
+    expect(projected.status, projected.stderr).toBe(0);
+    expect(projected.stdout.startsWith(ok.stdout)).toBe(true);
+    expect(projected.stdout).toContain('包 4：外置卡到独立 Phase/AC 的承接未核');
+    expect(projected.stdout).toContain('外置方案卡的内容到 spec/Phase 落点未核');
+    put(join(work, `specs/${task}/phases/index.md`), '| P88 | phases/P88.md |\n');
+    expect(invoke(['--task', task]).stdout).toContain('Phase 索引有 P88，但没有对应 Phase 文件');
+    put(join(work, decisionRef), log.replace('待第 9 步逐包收敛后填写。', '### 包 4：混写\n**原始需求**：不能让一个标题盖过外置原件。'));
+    fails(run(), /收敛清单.*内联.*冲突/);
+    const items = ['原始需求', '最初方案', '发散与被否', '调研', '最终决定', '完整方案', '验收', '风险/回退', '未决/消费者/证据', '配套与影响'];
+    const inline = '### 包 4：同一个原包\n\n' + items.map((label, i) => `#### ${i + 1}. ${label}\n\n当前决策正文记录${label}。`).join('\n\n');
+    const mixed = log.replace('待第 9 步逐包收敛后填写。', inline);
+    put(join(work, decisionRef), mixed);
+    const combined = run();
+    expect(combined.status, combined.stderr).toBe(0);
+    expect(combined.stdout).toContain(inline);
+    expect(combined.stdout).not.toContain('独立卡正文原句');
+    expect(combined.stdout).toContain(`${cardRef}#工作包-4`);
+    expect(combined.stdout).toContain('不证明逐项内容承接');
+    const trace = '\n## 需求到任务追踪\n| Source | FR | AC | Phase/Task |\n| --- | --- | --- | --- |\n| 包 4 | FR-FIX-001 | AC-FIX-001 | P4/T004 |\n| 包 4 | FR-FIX-002 | AC-FIX-002 | P5/T005 |\n';
+    put(join(work, specRef), spec + trace);
+    put(join(work, `specs/${task}/phases/P4.md`), '# Phase P4\n- **任务编号**：T004\n- **覆盖 AC**：AC-FIX-001\n');
+    put(join(work, `specs/${task}/phases/P5.md`), '# Phase P5\n- **任务编号**：T005\n- **覆盖 AC**：AC-FIX-002\n');
+    const validTrace = invoke(['--task', task]);
+    expect(validTrace.status, validTrace.stderr).toBe(0);
+    expect(validTrace.stdout).toContain('旧 B 表的单包单 Phase 规则不适用');
+    expect(validTrace.stdout).toContain('内联十项实质承接到 spec/Phase 未逐项核对');
+    expect(validTrace.stdout).toContain('Phase 索引有 P88，但没有对应 Phase 文件');
+    expect(validTrace.stdout).not.toContain('AC-FIX-002 未在 P5 覆盖 AC 内');
+    put(join(work, `specs/${task}/phases/P5.md`), '# Phase P5\n- **任务编号**：T009\n- **覆盖 AC**：AC-FIX-001\n');
+    const badTrace = invoke(['--task', task]);
+    expect(badTrace.stdout).toContain('P5/T005 与 Phase 实际任务 T009 不符');
+    expect(badTrace.stdout).toContain('AC-FIX-002 未在 P5 覆盖 AC 内');
+    put(join(work, specRef), spec);
+    put(join(taskRoot, checklistRef), checklist.replaceAll(digest, '1'.repeat(64)));
+    fails(run(), /包 4.*卡节.*sha256.*不符/i);
+    put(join(taskRoot, checklistRef), checklist);
+    put(join(work, decisionRef), mixed.replace('包 4：同一个原包', '包 9：不同原包'));
+    fails(run(), /内联.*缺包 4.*多出包 9/);
+    for (const placeholder of ['', '待补。', '无。', '`<本条实际验法>`。']) {
+      put(join(work, decisionRef), mixed.replace('当前决策正文记录验收。', placeholder));
+      fails(run(), /内联.*包 4.*验收/);
+    }
+    put(join(work, decisionRef), mixed.replace(inline, `${inline}\n\n${inline}`));
+    fails(run(), /内联.*重复包 4/);
+    put(join(work, decisionRef), log);
+    git('worktree', 'move', work, misplaced);
+    const args = ['--decision-log', decisionRef, '--spec', specRef];
+    fails(invoke(args, base, misplaced), /收敛清单.*工作树/);
+    const existing = join(base, 'existing-workspace');
+    git('worktree', 'add', '-qb', 'topic/already-registered', existing);
+    put(join(existing, decisionRef), log);
+    put(join(existing, specRef), spec);
+    put(join(taskRoot, 'task.json'), JSON.stringify({ ...manifest, workspace_mode: 'existing', workspace_root: existing }));
+    const existingResult = invoke(args, base, existing);
+    expect(existingResult.status, existingResult.stderr).toBe(0);
+    expect(existingResult.stdout).toBe(ok.stdout);
+    fails(invoke(args, base, misplaced), /收敛清单.*工作树/);
+  });
+
+  it('reads space-delimited D decisions without changing the legacy boundary', () => {
+    const source = decisionLog + '\n### D-101 修订后的真实决定\n保留用户明确批准的条件。\n\n### 不是决定\n旁注不进入决定正文。\n';
+    const result = buildDecisionBaseline({ decisionLog: source });
+    expect(result).toContain('#### 决定 1 — 保留草稿直到确认删除');
+    expect(result).toMatch(/### D-101 修订后的真实决定\n保留用户明确批准的条件。\n来源：decision-log\.md#L\d+-L\d+/);
+    expect(result).not.toContain('旁注不进入决定正文');
+    expect(() => buildDecisionBaseline({ decisionLog: source.replace('保留用户明确批准的条件。', '') })).toThrow(/empty decision D-101/);
+    const nested = source.replace('### 不是决定', '#### D-101 同号正文');
+    expect(() => buildDecisionBaseline({ decisionLog: nested })).toThrow(/duplicate decision D-101/);
+    const distinct = nested.replace('#### D-101 同号正文', '#### D-102 独立决定');
+    expect(buildDecisionBaseline({ decisionLog: distinct })).toMatch(/D-102 独立决定\n旁注不进入决定正文。\n来源：decision-log\.md#L\d+-L\d+/);
+  });
+
   it('derives requirements, grouped replies and decisions from supplied source bytes', () => {
     const result = buildDecisionBaseline({ decisionLog, spec: grouping, decisionRef: 'specs/fixture/decision-log.md', specRef: 'specs/fixture/spec.md' });
     expect(result).toContain('需求 1：取消后保留草稿');
