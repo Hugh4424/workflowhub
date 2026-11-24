@@ -8,7 +8,7 @@
 - 独立验收：AC-014 已由独立执行者判 pass（附两条登记指针已修）；AC-024 已由同一独立执行者终判 pass（`quality/tests/p12-independent-readback.md:162-169`）；AC-001 由本报告按当前字节独立重判改 pass（依据见逐条表与文末「收口时的缺口处置决定」）。
 - 任务库根：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/delivery-quality-plan-20261123`。
 - 下表 `quality/...` 均相对任务库根；`phases/...`、`skills/...` 均相对认证工作树根。
-- 本文件只写收口事实；未提交 Git，未改产品代码、测试、决策日志或既有原始捕获。第 1 轮（P12 收口）只改本报告与 P12 阶段卡；第 2 轮（2026-11-25 收口材料更新）只改本报告、`phases/P1-共用规则.md:221` 的 Done 行与任务库 `quality/tests/p09-independent-readback.md` 的追加节，未改 CI 配置。
+- 本文件只写收口事实；材料与代码均已按阶段提交（最终 HEAD 见文末补记），未改产品代码、测试、决策日志或既有原始捕获。第 1 轮（P12 收口）只改本报告与 P12 阶段卡；第 2 轮（2026-11-25 收口材料更新）只改本报告、`phases/P1-共用规则.md:221` 的 Done 行与任务库 `quality/tests/p09-independent-readback.md` 的追加节，未改 CI 配置。
 
 ## 这份报告回答什么问题？
 
@@ -238,7 +238,7 @@ AC-014、AC-024 已判 pass；AC-001 由本报告按当前字节重判（`qualit
 关闭分三步（第 1 步已兑现）：
 
 1. 独立验收者已读本报告与 `phases/P12-末验与技能去向.md`，复验 AC-014、AC-024 并写 `quality/tests/p12-independent-readback.md`；两项均判 pass。
-2. 材料侧待办：`check-delivery-claims` 的 implemented/verified 仍以旧门禁原件绑定（当前工作树有 3 个未提交路径，字节与门禁捕获不同），accepted 缺 `quality/evidence/verdict.json`；须由主会话按标准方法重跑 `verify --action=execute` 取新门禁原件、补 verdict、再提交本报告收口。
+2. 材料侧已处置：主会话已在最终 HEAD 上重取门禁原件（`quality/evidence/gate-results/2026-11-24-033-build-code-p12.json`）并由独立签字人 `final-signoff` 写 `quality/evidence/verdict.json`；`implemented`、`verified` 已 pass，`accepted` 待 close 阶段写读到 claims 回执。
 3. 物理清理、`wh-review` 同步和九项未完成材料的真实补件，另按各自 owner 与恢复条件处理；本轮不删任何技能。
 
 ## 收口时的缺口处置决定
@@ -276,3 +276,10 @@ AC-014、AC-024 已判 pass；AC-001 由本报告按当前字节重判（`qualit
 - 原件：`quality/tests/p12-gate-readback.json`；`p12-gate-manifest.output`；`p12-gate-consistency.output`；`p12-adjacent-eleven-frozen.output`；`p12-scoped-original.json`。
 - 待独立：无。AC-014、AC-024 判词已出（`quality/tests/p12-independent-readback.md`）。材料侧待办：`check-delivery-claims` 仍 fail——implemented/verified 以旧门禁原件绑定（未提交字节与门禁捕获不同），accepted 缺 `quality/evidence/verdict.json`；由主会话重跑门禁取新原件、补 verdict 后收口。
 - 限制：未跑全量回归；未提交 Git；未跑浏览器；未取真实下游材料。
+
+## 收口补记（2026-11-25）
+
+- 本文件、P1/P12 阶段卡与代码图更新均已提交；最终交付 HEAD 与合并/归档/推送事实见 stage-close 输出与 `quality/evidence/close/` 下的回执。
+- AC 最终计数：**pass 13 / incomplete 9 / inconclusive 1 / deferred 2 / fail 0**（AC-001 经当前字节独立重判改 pass；AC-024 经独立终判 pass）。
+- 代码图已增量更新（`graphify update`，节点 31188→31858、边 51271→52348，回执 `quality/evidence/graph-close.json`）；文档语义图 `not_updated`（需按批准范围付费抽取）。
+- 未闭环 9 条、deferred 2 条、inconclusive 1 条的缺口、owner 与恢复条件见「收口时的缺口处置决定」一节，收口不改其档位。
