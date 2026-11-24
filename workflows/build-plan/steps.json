@@ -70,11 +70,15 @@
     {
       "step_id": 6,
       "step_slug": "spec-plan",
-      "observable_result": "分组：拆Phase与全局设计；同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。 判定消费：SKILL.md#方法 第6步；原件：spec全局设计、独立Phase、纯指针index。 Phase九组人读内容、逐文件责任、共享先后/回滚与index独立人读导航可读。 成本证据：spec验收七字段及资源来源、Phase活动总账/phase_budget、已确认形状预检与验收→独立测试代理/判定器/数据层级映射；缺项回原owner。",
+      "observable_result": "分组：拆Phase与全局设计；同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。 判定消费：SKILL.md#方法 第6步；原件：spec全局设计、独立Phase、纯指针index。 Phase九组人读内容、逐文件责任、共享先后/回滚与index独立人读导航可读。 成本证据：spec验收七字段及资源来源、Phase活动总账/phase_budget、已确认形状预检与验收→独立测试代理/判定器/数据层级映射；缺项回原owner。 试跑：条件试跑只在会改变方案时发生，记录在读源后、大纲前；不触发写不触发理由。 首卡：未参与写卡的人按 skills/phase-maker/SKILL.md#八步 从公开入口读回首个读取指针与真实步骤名称；缺当次读取回执不记本步完成。 试跑证据：触发时落到 quality/tests 的实际捕获，不触发时以理由原件为证据。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/2026-11-24-130-p04-first-card-skill-read.json"
         }
       ],
       "method_anchor": "step-spec-plan",

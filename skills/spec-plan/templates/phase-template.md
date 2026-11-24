@@ -221,6 +221,12 @@ runtime 不解析它们，但审查会按「列进来的锚点是否真的打开
 | `git rev-parse --show-toplevel` | 0 | quality/tests/readiness-git.output | 机器 | 计划负责人 |
 | `node --version` | 0 | quality/tests/readiness-node.output | 机器 | 计划负责人 |
 | 人工核对数据样本代表本 Phase 输入 | 样本与当前版本一致 | quality/evidence/data-sample.md | 人 | 数据负责人 |
+| 首卡公开入口：`node tools/cli/check-stage-steps.mjs --stage=<阶段> --step=<本卡步骤> --card --task-path=<任务根> --material-root=<材料根> --commit=<真实 HEAD>` | 读到 skill 指针与 step_slug；五列由读者在卡上复读 | quality/tests/readiness-first-card-readback.md | 人 | 计划负责人 |
+
+首卡公开入口与读回：入口是上一行这条只读命令，读取位置是投影里的 `skill.file#skill.anchor`，不是去执行 Markdown 正文。
+读者从同一条命令读回 skill 指针、step_slug 和本节五列，再在卡上复读。
+读回只证入口能走，不证执行完成，缺件按本表具名退回负责人。
+五列顺序与含义不变；新增这条只读入口与读回，不倒换成第二套开工项。
 
 ## 这一 Phase 怎么验收？
 

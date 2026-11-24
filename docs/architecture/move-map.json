@@ -1652,9 +1652,9 @@
       "destination": "tools/cli/check-stage-steps.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P1 只读五阶段 observable_result 映射并投影 runFinalChainCheck 的既有证据判定；报告模块八项结构、状态、原ref，不新增步骤判定生产者或持久状态。",
+      "responsibility": "P1 只读五阶段 observable_result 映射并投影 runFinalChainCheck 的既有证据判定；报告模块八项结构、状态、原ref，不新增步骤判定生产者或持久状态。 P4 起同时是计划首卡的唯一公开读口：`--stage=build-plan --step=6 --card` 给出首个读取指针 `skills/phase-maker/SKILL.md#八步` 与真实步骤名称 spec-plan；缺入口或缺当次供件证据在计划步骤投影具名失败，不另建第二探针。 P4 修复轮按真实捕获窄修两处：允许捕获 output_ref 使用任务根内绝对路径，允许从 argv 取 commit 身份；不新增公共入口，不改六字段顺序。",
       "owner": "C09 P1 唯一实施 writer；后续归 CLI owner",
-      "consumer": "四份 workflow SKILL 收口命令与 tests/contract/check-stage-steps.test.mjs 的公开入口/真实CLI场景",
+      "consumer": "四份 workflow SKILL 收口命令与 tests/contract/check-stage-steps.test.mjs 的公开入口/真实CLI场景。 首个真实消费者是 build-plan 第 6 步的计划作者与未参与写卡的读者，方法正本是 skills/phase-maker/SKILL.md，从同一公开读口读回首卡。",
       "module_consumers": [
         "tests/contract/check-stage-steps.test.mjs"
       ],
@@ -1664,7 +1664,7 @@
         "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "五阶段主会话不再消费，或 final-chain 直接提供同等清单并改接全部消费者时删除。",
-      "retention_basis": "spec FR-REPAIR-002/004 与 P1/T002；承接缺失只读报告，不替代 runtime 判定。实际新增后补登记，未倒称创建前登记。"
+      "retention_basis": "spec FR-REPAIR-002/004 与 P1/T002；承接缺失只读报告，不替代 runtime 判定。实际新增后补登记，未倒称创建前登记。 P4 复用同一公开读口读首卡，不建立第二个检查入口。"
     },
     {
       "source": "tests/contract/check-stage-steps.test.mjs",

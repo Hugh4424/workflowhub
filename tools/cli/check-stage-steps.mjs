@@ -147,7 +147,10 @@ function commandReceiptGap(body, { taskPath, taskId, source, stepSlug } = {}) {
   // The captured output original must be readable, inside the task root, non-empty.
   if (typeof taskPath !== 'string' || !taskPath) return fail('缺任务根，无法回读 output_ref');
   const outRef = record.output_ref.trim();
-  if (isAbsolute(outRef) || outRef.split('/').some(part => !part || part === '..' || part === '.')) return fail('output_ref 越界或为空');
+  // The capture wrapper keeps `output_ref` absolute inside the task root; both
+  // forms are read as the same in-root original, and traversal stays rejected.
+  const outParts = outRef.split('/').slice(isAbsolute(outRef) ? 1 : 0);
+  if (!outRef || outParts.some(part => !part || part === '..' || part === '.')) return fail('output_ref 越界或为空');
   try {
     const root = realpathSync(taskPath), outPath = realpathSync(resolve(taskPath, outRef)), rel = relative(root, outPath);
     if (rel === '..' || rel.startsWith('../') || isAbsolute(rel)) return fail('output_ref 越出任务根');
@@ -293,6 +296,15 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, i
       let original;
       try { original = executionOriginalFields(body, ref); }
       catch (error) { return { kind, ref: raw, present: false, reason: error.message }; }
+      // A command capture carries its commit identity in argv; the capture wrapper
+      // records no separate `commit` field. Use that argv value only for capture
+      // kinds, so prose originals still have to state their identity themselves.
+      if ((kind === 'test' || kind === 'command_receipt') && original.commit === undefined) {
+        const flag = (Array.isArray(original.argv) ? original.argv : [])
+          .find(value => typeof value === 'string' && value.startsWith('--commit='));
+        const commit = flag ? flag.slice('--commit='.length) : null;
+        if (commit && /^[a-f0-9]{40,64}$/.test(commit)) original.commit = commit;
+      }
       if (original.task_id !== undefined && original.task_id !== taskId) return { kind, ref: raw, present: false, reason: '原件属于另一任务' };
       if (original.source !== undefined && source && original.source !== source || original.step_slug !== undefined && stepSlug && original.step_slug !== stepSlug) return { kind, ref: raw, present: false, reason: '原件属于另一步骤' };
       for (const [key, expected] of Object.entries(identity)) {
