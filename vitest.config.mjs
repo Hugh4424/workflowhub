@@ -46,6 +46,9 @@ export default defineConfig({
       // P10 的 node:test 契约文件（证据命令用 node --test 直接调用），同样排除，
       // 避免整树 vitest 把它当空套件收集而报 No test suite found。
       "tests/contract/direction-handoff-source.test.mjs",
+      // P11 的 node:test 契约文件（证据命令用 node --test 直接调用），同样排除，
+      // 避免整树 vitest 把它当空套件收集而报 No test suite found。
+      "tests/contract/direction-package-review-scope.test.mjs",
       // stylelint-fixtures 用 node:test 且要求 PAPERBUILDER_FRONTEND；Vitest 收集期
       // 会把它当空套件并 throw，故排除；其证据命令仍由 node --test 直接调用。
       "skills/frontend-component-quality/tests/stylelint-fixtures.test.mjs",
