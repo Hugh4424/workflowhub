@@ -1,0 +1,499 @@
+{
+  "schema": "workflowhub-unit-fields.v1",
+  "owner": "unit-kernel 字段作者（skills/unit-kernel/SKILL.md 维护者）",
+  "revision": "1.0.0",
+  "description": "同源字段字典：方向卡、任务卡、阶段卡共用同一组字段语义与三档精度；三张模板只留形状，三个既有检查入口按单元读取本文件分派精度。本文件自称字段机器形状的唯一权威，来源记录见 source_record，不另立第二权威。",
+  "authority": "本文件是字段名、三卡精度矩阵、旧别名与真实读者的唯一机器可读权威；字段的人读目的见 skills/unit-kernel/SKILL.md 的「字段与字段精度」节。",
+  "source_record": "字段与精度映射的来源记录：specs/delivery-quality-plan-20261123/decision-log.md:260-265；它只是历史来源，不是本文件的第二权威。",
+  "retirement_policy": "三张模板与三个既有检查入口的真实读者全部改读另一份经独立验证的同源字典后，才由字段作者删除本文件；不得以内联字段表、模板副本或第二份精度映射替代。",
+  "legacy_aliases_note": "旧别名只供迁移对照与人工改名参考；当前三个既有入口不读取 legacy_aliases。",
+  "tiers": {
+    "判据": "能据此判：写明对象、条件、通过信号、失败信号与证据落点，独立读者不靠猜测、不翻卡外就能判真假。",
+    "复算": "能按步骤复算：写明输入、步骤、命令与结果，另一个执行单元照同一格可重复得到同一结论。",
+    "指向": "分指到来源：只给可回读的来源指针（路径:行号、原件、卡或决定编号），正文不复制，读者沿指针回到唯一来源。"
+  },
+  "task_card_carrying": {
+    "六字段": [
+      "为什么做",
+      "交付什么",
+      "不做什么",
+      "前置／依赖",
+      "怎么验收",
+      "风险与没定"
+    ],
+    "UI 三段": [
+      "接线",
+      "视觉",
+      "组件"
+    ],
+    "指向档": {
+      "来源": "为什么做里的来源/FR/AC 指针",
+      "方案与取舍": "怎么做的方案来源指针",
+      "配套与写集": "接线与组件的配套/写集来源指针"
+    },
+    "说明": "任务卡只写九行；来源、方案与取舍、配套与写集只给指向，不扩成十一格。"
+  },
+  "card_gaps": {
+    "任务卡": {
+      "fields": [
+        "来源",
+        "方案与取舍",
+        "配套与写集"
+      ],
+      "status": "no_reader",
+      "owner": "P3/P4",
+      "note": "三格为指向档；当前三个既有入口只读方向卡/阶段卡，任务卡这三格尚无读取入口；不在 P2 造第四校验器。"
+    }
+  },
+  "dependency_gaps": {
+    "decision-maker → unit-kernel": {
+      "missing": "skills/catalog.yaml 的 decision-maker 条目未登记 dependency_closure 指向 skills/unit-kernel/references/unit-fields.json",
+      "owner": "P3/P4",
+      "note": "skills/catalog.yaml 不在 P2 写集；单搬 decision-maker 目前得到具名错误并以 2 退出，不裸栈。"
+    }
+  },
+  "command_receipt_fields": {
+    "source": "runtime/interface/run-command.mjs:306-312",
+    "note": "执行结果单复用 captureCommand 的现有回执，不新增结果单对象或 schema；下列名称都是回执已有字段。",
+    "mapping": {
+      "改动": {
+        "fields": [
+          "argv",
+          "cwd",
+          "output_ref"
+        ],
+        "read": "从 argv 看执行了什么、cwd 看在哪做、output_ref 回读命令输出；回执不另列 changed_paths。"
+      },
+      "固定判定器的结果": {
+        "fields": [
+          "exit_code",
+          "signal",
+          "timed_out",
+          "truncated",
+          "output_ref"
+        ],
+        "read": "判定器编号在 argv；结果看 exit_code，异常看 signal/timed_out/truncated，原始输出在 output_ref。"
+      },
+      "未做项": {
+        "fields": [
+          "argv",
+          "output_ref"
+        ],
+        "read": "回执只证明跑过的 argv；对照同批必做项，argv 中未出现的项即未做，不新造字段。"
+      },
+      "失败": {
+        "fields": [
+          "exit_code",
+          "error.code",
+          "signal",
+          "timed_out",
+          "output_ref"
+        ],
+        "read": "非零 exit_code、error.code、signal 或 timed_out 任一成立即失败；原始失败在 output_ref。"
+      },
+      "返工半径": {
+        "fields": [
+          "argv",
+          "cwd",
+          "output_ref"
+        ],
+        "read": "按 argv/cwd 圈定命令作用域，失败点回 output_ref 定位；不推广到未跑命令。"
+      },
+      "下一步": {
+        "fields": [
+          "exit_code",
+          "error",
+          "output_ref"
+        ],
+        "read": "回执只给结果，不给建议；下一步由同批执行说明按 exit_code 与 output_ref 写，不新增字段。"
+      }
+    }
+  },
+  "fields": [
+    {
+      "name": "结果",
+      "direction_label": "一句话结果",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "复算"
+      },
+      "legacy_aliases": [
+        "一句话结果",
+        "交付什么"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「一句话结果」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查版本化收敛包与轻档包时读方案卡十一格，只核「一句话结果」格是否在场"
+        },
+        {
+          "path": "tools/cli/check-stage-quality.mjs",
+          "action": "以 --report 读阶段卡复算档：查命令/退出码/证据路径与首改文件/符号，缺则点名"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "来源",
+      "direction_label": "对应需求",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "指向",
+        "阶段卡": "判据"
+      },
+      "legacy_aliases": [
+        "对应需求",
+        "来源 / FR / AC"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「对应需求」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查版本化收敛包时读方案卡十一格，只核「对应需求」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "为什么现在做",
+      "direction_label": "现状缺口",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "判据"
+      },
+      "legacy_aliases": [
+        "现状缺口",
+        "为什么做"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「现状缺口」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查方案卡十一格时只核「现状缺口」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "方案与取舍",
+      "direction_label": "方案与取舍",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "指向",
+        "阶段卡": "复算"
+      },
+      "legacy_aliases": [
+        "怎么做"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「方案与取舍」格，判存在、非空，并按判据档拒整句空话；不判方案好坏"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查版本化收敛包时读方案卡十一格，只核「方案与取舍」格是否在场"
+        },
+        {
+          "path": "tools/cli/check-stage-quality.mjs",
+          "action": "以 --report 读阶段卡复算档：查命令/退出码/证据路径与首改文件/符号，缺则点名"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "边界",
+      "direction_label": "边界",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "判据"
+      },
+      "legacy_aliases": [
+        "不做什么",
+        "边界 / 禁止改动"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「边界」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查版本化收敛包时读方案卡十一格，只核「边界」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "依赖与供件",
+      "direction_label": "数据与状态",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "复算"
+      },
+      "legacy_aliases": [
+        "数据与状态",
+        "前置／依赖",
+        "前置",
+        "输入"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「数据与状态」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-quality.mjs",
+          "action": "以 --report 读阶段卡复算档：查命令/退出码/证据路径与首改文件/符号，缺则点名"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查方案卡十一格时只核「数据与状态」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "验收",
+      "direction_label": "验收",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "复算"
+      },
+      "legacy_aliases": [
+        "怎么验收",
+        "验收条件"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「验收」格，逐项核通过条件、失败条件、反例、证据四个标签是否有内容，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查版本化收敛包与轻档包时读方案卡验收格，核通过、失败、反例、证据四件是否在场"
+        },
+        {
+          "path": "tools/cli/check-stage-quality.mjs",
+          "action": "以 --report 读阶段卡复算档：查命令/退出码/证据路径与首改文件/符号，缺则点名"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "风险与回退",
+      "direction_label": "风险与回退",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "判据"
+      },
+      "legacy_aliases": [
+        "风险与没定",
+        "风险"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「风险与回退」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查方案卡十一格时只核「风险与回退」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "未决与返工半径",
+      "direction_label": "未决",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "判据"
+      },
+      "legacy_aliases": [
+        "未决"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「未决」格，判存在、非空，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查方案卡十一格时只核「未决」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "配套与写集",
+      "direction_label": "配套与影响",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "指向",
+        "阶段卡": "复算"
+      },
+      "legacy_aliases": [
+        "配套与影响",
+        "文件 / 符号",
+        "写入集"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「配套与影响」格，逐项核配套调整、配套迁移、配套移除、影响范围四个标签是否在场，并按判据档拒整句空话"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查版本化收敛包时读方案卡配套与影响格，核调整、迁移、移除、影响范围四项是否在场"
+        },
+        {
+          "path": "tools/cli/check-stage-quality.mjs",
+          "action": "以 --report 读阶段卡复算档：查命令/退出码/证据路径与首改文件/符号，缺则点名"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-prd/templates/prd-template.md",
+          "action": "PRD 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        },
+        {
+          "path": "skills/spec-plan/templates/phase-template.md",
+          "action": "Phase 作者照模板写任务卡该行时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    },
+    {
+      "name": "人话复述",
+      "direction_label": "白话复述",
+      "cards": {
+        "方向卡": "判据",
+        "任务卡": "判据",
+        "阶段卡": "判据"
+      },
+      "legacy_aliases": [
+        "白话复述"
+      ],
+      "readers": [
+        {
+          "path": "skills/decision-maker/scripts/validate-card.mjs",
+          "action": "校验方向卡正文时读「白话复述」格，判存在、非空，并按判据档拒整句空话，且拒绝未解释的内部编号"
+        },
+        {
+          "path": "tools/cli/check-stage-steps.mjs",
+          "action": "检查方案卡十一格时只核「白话复述」格是否在场"
+        },
+        {
+          "path": "skills/decision-maker/templates/card.md",
+          "action": "方向卡作者照模板填该格时只读到占位与字典指针；字段语义与精度回字典"
+        }
+      ]
+    }
+  ]
+}

@@ -328,6 +328,31 @@ function isSharedGovernancePath(path) { return SHARED_GOVERNANCE_PATH.test(path)
 
 const EXPLICIT_EMPTY_WRITE_SET = /^none(?:\s*[（(][^`()（）\r\n]*[）)])?$/i;
 const EMPTY_WRITE_SET_PREFIX = /^none(?=$|[\s（(;；])/i;
+// New same-repo Phase cards point at one Execution Index row and pin its exact
+// write set with a sha256 digest. The pointer is a reference, never a second
+// path list: only the index column contributes executable paths.
+const WRITE_SET_INDEX_POINTER = /`phases\/index\.md#execution-index`/;
+
+function sortedPathBytes(paths) {
+  return [...paths].sort((left, right) => Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")));
+}
+
+// Card 185: sort valid relative paths by UTF-8 bytes, one per line (LF, no
+// trailing newline) and hash; a legal `none` hashes the literal string `none`.
+function writeSetDigest(paths, explicitNone = false) {
+  const body = explicitNone && paths.length === 0 ? "none" : sortedPathBytes(paths).join("\n");
+  return createHash("sha256").update(body, "utf8").digest("hex");
+}
+
+function parseWriteSetPointer(declaration) {
+  const text = String(declaration ?? "");
+  if (!WRITE_SET_INDEX_POINTER.test(text)) return null;
+  const tokens = inlinePaths(text);
+  const digests = [...text.matchAll(/sha256\s*=\s*([0-9a-fA-F]{64})\b/g)].map((match) => match[1].toLowerCase());
+  const extraTokens = tokens.filter((token) => !/^phases\/index\.md#execution-index$/.test(token)
+    && !/^sha256\s*=\s*[0-9a-fA-F]{64}$/.test(token));
+  return Object.freeze({ digests, extraTokens });
+}
 
 function executionIndexRows(document, errors, reviewReadScope, invalidDependency = () => {}) {
   const lines = document.split(/\r?\n/);
@@ -378,6 +403,7 @@ function executionIndexRows(document, errors, reviewReadScope, invalidDependency
       authority_ref: plain(cells[1]),
       semantic_anchor: plain(cells[2]),
       write_set: Object.freeze(paths),
+      explicit_none: explicitNone,
       dependency: plain(ownership[0]),
       consumer: plain(ownership[1]),
     }));
@@ -936,7 +962,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     for (const heading of ["L0", "L1", "L2"]) {
       if (machineFieldsSection(body) === null && !new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
     }
-    const declaredWriteSet = phaseWriteSet(body);
+    const declaredWriteSet = [];
     const machineBlock = machineFieldsBlock(body);
     if (machineBlock && body.split(/\r?\n/).slice(machineBlock.start + 1)
       .some((line) => /^###\s+(?:T\d{3,}\b|任务\s*\d+\s*[:：])/.test(line))) {
@@ -950,10 +976,35 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     // supplies a Phase-level value.
     const phaseField = (name) => fieldValue(machineBody, name) ?? fieldValue(authorityFields, name);
     const declaration = phaseField("Write set");
-    const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
-    if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
-      errors.push(`${expectedPath} Write set none declaration is invalid`);
-      scopeValid = false;
+    const pointer = parseWriteSetPointer(declaration);
+    let explicitNone;
+    if (pointer) {
+      // Single source: the index row's write set is the executable set. A
+      // pointer with a stray second list, a missing/bad digest, or a digest that
+      // no longer matches the row fails by name and yields no usable set.
+      explicitNone = false;
+      if (pointer.extraTokens.length > 0 || pointer.digests.length !== 1) {
+        const observed = pointer.digests.length ? `sha256=${pointer.digests.join(",")}` : "sha256 is missing";
+        errors.push(`${expectedPath} Write set pointer declaration is invalid: ${observed}; only \`phases/index.md#execution-index\` and one sha256=<64 lowercase hex> are allowed`);
+        scopeValid = false;
+      } else {
+        const rowExplicitNone = row.explicit_none === true;
+        const expectedDigest = writeSetDigest(row.write_set, rowExplicitNone);
+        if (expectedDigest !== pointer.digests[0]) {
+          errors.push(`${expectedPath} Write set pointer sha256=${pointer.digests[0]} does not match phases/index.md ${expectedId} row sha256=${expectedDigest}`);
+          scopeValid = false;
+        } else {
+          declaredWriteSet.push(...row.write_set);
+          explicitNone = rowExplicitNone && row.write_set.length === 0;
+        }
+      }
+    } else {
+      declaredWriteSet.push(...phaseWriteSet(body));
+      explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
+      if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
+        errors.push(`${expectedPath} Write set none declaration is invalid`);
+        scopeValid = false;
+      }
     }
     if (declaredWriteSet.length === 0 && !(explicitNone && row.write_set.length === 0)) {
       errors.push(`${expectedPath} Write set is missing`);

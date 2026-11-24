@@ -12,6 +12,9 @@ files:
   - flows/planning/SKILL.md
   - flows/planning/steps.json
 skills:
+  - name: unit-kernel
+    path: skills/unit-kernel/SKILL.md
+    trigger: shared_rules_kernel_version_and_clause_reference
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: stage_opening_and_research_and_diverge_internal_knowledge
@@ -20,7 +23,7 @@ skills:
     trigger: dynamic_oi_driven_talk_batches_and_outline_confirmation_and_per_package_five_segments
   - name: decision-maker
     path: skills/decision-maker/SKILL.md
-    trigger: per_package_eleven_cell_card_cold_read_six_and_adversarial_nine_same_reviewer_two_rounds
+    trigger: step9_package_convergence_and_per_package_eleven_cell_card_cold_read_six_and_adversarial_nine_same_reviewer_two_rounds
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     trigger: after_detail_advice_full_owner_method_or_resolved_domain_term_change_during_decision

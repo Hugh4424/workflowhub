@@ -221,6 +221,12 @@ runtime 不解析它们，但审查会按「列进来的锚点是否真的打开
 | `git rev-parse --show-toplevel` | 0 | quality/tests/readiness-git.output | 机器 | 计划负责人 |
 | `node --version` | 0 | quality/tests/readiness-node.output | 机器 | 计划负责人 |
 | 人工核对数据样本代表本 Phase 输入 | 样本与当前版本一致 | quality/evidence/data-sample.md | 人 | 数据负责人 |
+| 首卡公开入口：`node tools/cli/check-stage-steps.mjs --stage=<阶段> --step=<本卡步骤> --card --task-path=<任务根> --material-root=<材料根> --commit=<真实 HEAD>` | 读到 skill 指针与 step_slug；五列由读者在卡上复读 | quality/tests/readiness-first-card-readback.md | 人 | 计划负责人 |
+
+首卡公开入口与读回：入口是上一行这条只读命令，读取位置是投影里的 `skill.file#skill.anchor`，不是去执行 Markdown 正文。
+读者从同一条命令读回 skill 指针、step_slug 和本节五列，再在卡上复读。
+读回只证入口能走，不证执行完成，缺件按本表具名退回负责人。
+五列顺序与含义不变；新增这条只读入口与读回，不倒换成第二套开工项。
 
 ## 这一 Phase 怎么验收？
 
@@ -673,6 +679,8 @@ build-code 结束统一提醒逐条列
 | 证据 | 证据、覆盖上限 |
 | 下游（含何时停） | 停止 / 恢复、完成 |
 
+字段名、三卡精度映射与旧别名见 `skills/unit-kernel/references/unit-fields.json`；逐格判据正文见内核「字段与字段精度」节与 R6；本模板只留形状与占位。
+
 本节的放置位置按选节表里本节的放置规则，两种位置都合法。
 机器字段从「任务编号」开始，集中在卡末，标「校验器用，人可跳过」。
 任务卡必须放在文件末 `## 机器字段（校验器用，人可跳过）` 之前。
@@ -858,6 +866,7 @@ SIGKILL 不可捕获：下一次只对本任务记录的前缀调用 `cleanupSta
 位置在文件末是这份文件的形状要求：任务卡放在它之前，附录与示例放在它之后。
 本块只给机器读；人读正文已经回答同一件事，不复述。
 写入集与依赖必须与 `phases/index.md` 逐条一致。
+新同仓卡按同一字段改写成行内代码指针 `phases/index.md#execution-index` 加同源 `sha256=<64 位小写十六进制>`：完整路径集只由该索引行的写入集列声明，卡内不再复制第二份清单；旧字面写集卡保持只读兼容。
 标签保持英文，值必须可执行或可回读。
 写得出的值就写实；写不出按机器字段自己的说明记缺口，不写占位。
 

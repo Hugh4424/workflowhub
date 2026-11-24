@@ -38,6 +38,55 @@ const here = dirname(fileURLToPath(import.meta.url));
 // tools/cli/ -> repository root after the CLI relocation.
 const repoRoot = resolve(here, "..", "..");
 
+// Field semantics and the per-card precision matrix have one source: the unit
+// kernel dictionary. This summary entry reads it only to report shape facts; it
+// never gates on a field's prose and it keeps no second field table.
+const UNIT_FIELDS_PATH = join(repoRoot, "skills/unit-kernel/references/unit-fields.json");
+const UNIT_CARD_TYPE = "阶段卡";
+
+function phaseCardFields() {
+  const document = JSON.parse(readFileSync(UNIT_FIELDS_PATH, "utf8"));
+  return (document.fields ?? []).filter((field) => field?.cards?.[UNIT_CARD_TYPE]);
+}
+
+// One named narrow content check for the stage card: the 复算-tier 方案与取舍
+// cannot be a whole-sentence platitude, and a task card still needs a first
+// file/symbol. It is report-only; it never changes the report's stdout fact or
+// the exit code, and it does not grow into a fourth checker.
+const STAGE_SMALLTALK = /^(?:按计划(?:实现|执行|落地)?|照计划(?:实现|执行)?|按方案(?:实现|执行)?|按原计划(?:实现|执行)?|按既定(?:方案|计划)(?:实现|执行)?|应(?:该)?通过|按验收(?:执行)?|按需(?:实现|处理)?|正常(?:实现|处理)|按预期(?:实现|通过)?|同上|见上|照此(?:实现|执行)?|待定)$/u;
+
+function stageSmalltalk(value) {
+  return STAGE_SMALLTALK.test(String(value ?? "").replace(/[\s。．.；;，,、]/gu, ""));
+}
+
+function phaseCardContentGaps(input) {
+  const gaps = [];
+  const phases = input && typeof input === "object" && !Array.isArray(input) ? input.phases ?? {} : {};
+  for (const [path, body] of Object.entries(phases)) {
+    if (typeof body !== "string") continue;
+    let fence = false;
+    let action = null;
+    let symbols = null;
+    for (const line of body.split(/\r?\n/)) {
+      if (/^\s*```/.test(line)) { fence = !fence; continue; }
+      if (fence) continue;
+      const match = /^\s*-\s*\*\*(动作|Action|文件 \/ 符号|Files \/ symbols)\*\*\s*[：:]\s*(.*)$/.exec(line);
+      if (!match) continue;
+      if ((match[1] === "动作" || match[1] === "Action") && action === null) action = match[2].trim();
+      if ((match[1] === "文件 / 符号" || match[1] === "Files / symbols") && symbols === null) symbols = match[2].trim();
+    }
+    if (action === null) continue;
+    if (stageSmalltalk(action)) {
+      gaps.push(`${path}: 字段「方案与取舍」在阶段卡是「复算」档，只写「${action}」；复算档要写首改文件或符号、输入、步骤、命令与结果。`);
+    }
+    const emptySymbols = symbols === null || !symbols || /^(?:TODO|TBD|待补|待定|无|none|N\/A)$/i.test(symbols.replace(/[。；;]/g, ""));
+    if (emptySymbols) {
+      gaps.push(`${path}: 字段「配套与写集」在阶段卡是「复算」档，缺首改文件或符号。`);
+    }
+  }
+  return gaps;
+}
+
 // The scanner's own basename — excluded from scan to prevent false-flagging its
 // own pattern strings.
 const SELF_BASENAME = "check-stage-quality.mjs";
@@ -349,6 +398,15 @@ if (isMain) {
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("report input must be a materials object");
       const result = validatePostPhaseContract(input);
       if (!result.facts) throw new TypeError(`report materials unavailable: ${result.errors.join("; ")}`);
+      const fields = phaseCardFields();
+      const recompute = fields
+        .filter((field) => field.cards[UNIT_CARD_TYPE] === "复算")
+        .map((field) => field.name);
+      process.stderr.write(
+        `[check-stage-quality] report: ${UNIT_CARD_TYPE}按 unit-fields.json 分派精度；` +
+          `复算档字段=${recompute.join("、") || "（无）"}；共 ${fields.length} 字段\n`,
+      );
+      for (const gap of phaseCardContentGaps(input)) process.stderr.write(`[check-stage-quality] report 字段精度：${gap}\n`);
       console.log(JSON.stringify(result.facts.write_set_reconciliation));
     } catch (error) {
       console.error(`[check-stage-quality] report ERROR: ${error.message}`);

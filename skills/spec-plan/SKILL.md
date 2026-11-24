@@ -96,11 +96,13 @@ The same Node process creates, consumes and reaps scratch; `templates/phase-temp
 
 SIGINT/SIGTERM keep the process signal and exit semantics; the existing owner defers cleanup until an application-owned drain ends. SIGKILL cannot be trapped: a later run may only call `cleanupStaleTempDirs` with this task's recorded exact prefix, and reaps only a directory whose marker owner, prefix, UID, dev/ino identity, age and dead-PID probe all match. A live PID, EPERM/unknown PID, symbolic link, replaced inode or mismatched marker stays retained. Never sweep another task, a generic `wh-` prefix or an unknown directory. Do not create a second cleanup mechanism, control plane or lock ledger; `runtime/interface/temp-dir.mjs` stays the only lifetime owner.
 
-## Pure pointer index
+## 纯指针索引（Pure pointer index）
 
 独立 Phase 写完后，读取当前 decision-log、spec 与每个实际具名 `phases/P<n>-<结果短名>.md` 的契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；附件不满足条件时如实报告具体缺口。所需附件不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
 
-每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1-配置错误定位.md`，指向实际文件；旧裸 P 路径只作兼容读入。每行只从契约头取 stable authority path、semantic anchor、exact write set、Phase dependency 与真实 downstream consumer，并与物理 Phase 对齐。它是可再生导航，不承载人读正文、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
+每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1-配置错误定位.md`，指向实际文件；旧裸 P 路径只作兼容读入。每行的 stable authority path、semantic anchor、Phase dependency 与真实 downstream consumer 从契约头取；写入集列保留已有权威路径声明，不从卡头或局部 Task 列表反推整集，也不在重生成时覆盖写集列。它是可再生导航，不承载人读正文、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
+
+新同仓卡不再重复整份路径清单：Phase 契约的「写入集」字段只写 `phases/index.md#execution-index` 指针与同源 `sha256=<64 位小写十六进制>` 摘要，指向该任务/Phase 的有效索引行；解析时按原字段词位识别，摘要按第 185 行字节序规则重算。重生成导航时只更新导航字段并保留已有权威路径列（写入集列），不得覆盖写集列本身，也不得从卡头或局部 Task 列表反推整集；生成只发生一次，之后只回核指针可解析、摘要匹配与依赖无环。指针错、摘要不符或索引列破损时具名失败且不留可用写集，不拿旧卡、空集或整仓临时充当，交原索引作者修同一对象；合法 `none` 只读段仍解析为可区分的只读空集。
 
 完成时核 index 与独立 Phase 一一对应、连续顺序、依赖可解析无环、各写集与其头一致，并返回行数和缺权威清单。可执行产物的末行指向「Test design and quality」所定唯一全 AC 验收 Phase；缺失时如实说明，纯文档按该节具名豁免。索引只引用实际 Phase，不承载验收正文，不把此义务写入校验器。缺失或歧义报 unavailable 与原 Phase owner，保现历史 pre/tasks 只读；不生成 fallback 正文或双写 tasks.md。
 

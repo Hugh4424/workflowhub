@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "skill": "unit-kernel",
+  "files": [
+    "SKILL.md",
+    "references/unit-fields.json",
+    "references/review-protocol.md"
+  ]
+}
