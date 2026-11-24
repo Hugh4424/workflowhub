@@ -32,7 +32,7 @@ export default defineConfig({
       "tests/contract/ui-skill-contract.test.mjs",
       "tests/contract/frontend-component-quality-static.test.mjs",
       "tests/contract/c09-owned-ego-page-audit.test.mjs",
-      // P3/P4/P5/P6/P8 的 node:test 契约文件（证据命令用 node --test 直接调用），
+      // P3/P4/P5/P6/P7/P8 的 node:test 契约文件（证据命令用 node --test 直接调用），
       // 一并排除，避免整树 vitest 把它们当空套件收集而报 No test suite found。
       "tests/contract/unit-kernel-wiring.test.mjs",
       "tests/contract/unit-card-field-consumption.test.mjs",
@@ -40,6 +40,7 @@ export default defineConfig({
       "tests/contract/phase-author-first-card.test.mjs",
       "tests/contract/phase-index-write-authority.test.mjs",
       "tests/contract/prd-task-section-consumption.test.mjs",
+      "tests/contract/prd-sectional-review.test.mjs",
       "tests/contract/phase-public-demo.test.mjs",
       // stylelint-fixtures 用 node:test 且要求 PAPERBUILDER_FRONTEND；Vitest 收集期
       // 会把它当空套件并 throw，故排除；其证据命令仍由 node --test 直接调用。
