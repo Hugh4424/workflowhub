@@ -10,8 +10,8 @@ version: 3.3.0
 
 本阶段按 `skills/unit-kernel/SKILL.md` 同一版本引用共用规则，条文只在核心里改。
 
-- 入口版本：v1.0.0（与 `skills/unit-kernel/SKILL.md` 同版）
-- 消费条款：R1、R3、R5、R6 与决策流水线；R1 用于第 7 步方向审与第 9 步 `module-convergence` 冷读、对抗的轮次上限，R3 用于第 9 步逐包提问门槛，R5 用于第 8 步发现处置与第 14 步展示，R6 用于第 9 步十一格卡与五段表
+- 入口版本：v1.1.0（与 `skills/unit-kernel/SKILL.md` 同版）
+- 消费条款：R1、R3、R5、R6、R8 与决策流水线；R1 用于第 7 步方向审与第 9 步 `module-convergence` 冷读、对抗的轮次上限，R3 用于第 9 步逐包提问门槛，R5 用于第 8 步发现处置与第 14 步展示，R6 用于第 9 步十一格卡与五段表，R8 用于第 9 步逐包角色的独立输入与同根归并
 - 阶段输出：用户确认的方向材料：`decision-log.md`、逐包十一格卡与五段表、冷读与对抗原件、finding 处置表
 - 冲突回报：与本内核冲突时以内核为准；内核缺条或条号对不上记具名缺口，回报内核 owner（`skills/unit-kernel/SKILL.md` 的维护者），不就地改写正文
 - 升版顺序：先改内核正文并升版本，再同批改四处接线指针，最后逐处核四处同版与条号
@@ -274,7 +274,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 
    本步每包除台账行与五类分析外，另写一张十一格方案卡；卡写在该包收敛原件行下，不另建文件。
    十一格是结果、对应需求、现状缺口、方案与取舍、边界、数据与状态、验收、风险与回退、未决、白话复述、配套与影响。
-   五段与十一格的逐字定义见内核 v1.0.0 第 R6 条（`skills/unit-kernel/SKILL.md`），字段语义正文由内核 `references/unit-fields.json` 承接（P2 交付），`steps.json` 第9步只留机器可读的检查形状；本节只给动作与下面这一句格名名单，逐格定义不再重复。
+   五段与十一格的逐字定义见内核 v1.1.0 第 R6 条（`skills/unit-kernel/SKILL.md`），字段语义正文由内核 `references/unit-fields.json` 承接（P2 交付），`steps.json` 第9步只留机器可读的检查形状；本节只给动作与下面这一句格名名单，逐格定义不再重复。
    需要三角色分开做时走 `skills/decision-maker/SKILL.md`：调研、设计、审查三份真实回传，卡用同一张十一格，
    冷读六问、对抗九问，同一审查者首审加复读最多两轮（周期与轮次上限归 `skills/unit-kernel/SKILL.md` R1）；主持人仍是唯一 writer，脚本只做机械检查，不代替角色判断。小改动保留一张十一格卡和一次冷读，不强制完整三角色或九问，不报缺独立审查。
    完整台账（≥3 包）逐包核聊天/批次/先设计；1–2 包受控小样只核批次与括号。
@@ -484,7 +484,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 
 `node tools/cli/check-stage-steps.mjs --stage=make-decision --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
 
-本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/make-decision/SKILL.md#<本步 method_anchor>","--stage=make-decision","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=make-decision --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
+本步首次实际取技能正文前，指定步骤先取 `--card` 返回的 `skill.file#skill.anchor`，非指定步骤才用 `workflows/make-decision/SKILL.md#<method_anchor>`；再按该实值把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=<按上一句取得的技能位置>","--stage=make-decision","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=make-decision --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
 
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。

@@ -3,6 +3,7 @@
   "skill": "unit-kernel",
   "files": [
     "SKILL.md",
-    "references/unit-fields.json"
+    "references/unit-fields.json",
+    "references/review-protocol.md"
   ]
 }

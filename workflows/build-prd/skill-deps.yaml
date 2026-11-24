@@ -3,6 +3,9 @@ skills:
   - name: unit-kernel
     path: skills/unit-kernel/SKILL.md
     trigger: shared_rules_kernel_version_and_clause_reference
+  - name: task-maker
+    path: skills/task-maker/SKILL.md
+    trigger: step4_same_author_task_section_after_real_map_reply
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: stage_opening_and_existing_source_research

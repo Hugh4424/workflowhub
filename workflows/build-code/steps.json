@@ -42,6 +42,7 @@
         }
       ],
       "method_anchor": "step-write-red-tests",
+      "skill": "skills/run-phase/SKILL.md#step-write-red-tests",
       "requires_user_reply": false
     },
     {
@@ -59,6 +60,7 @@
         }
       ],
       "method_anchor": "step-implement-change",
+      "skill": "skills/run-phase/SKILL.md#step-implement-change",
       "requires_user_reply": false
     },
     {
@@ -76,6 +78,7 @@
         }
       ],
       "method_anchor": "step-inspect-and-route-actual-tests",
+      "skill": "skills/run-phase/SKILL.md#step-inspect-and-route-actual-tests",
       "requires_user_reply": false
     },
     {
@@ -93,6 +96,7 @@
         }
       ],
       "method_anchor": "step-run-tests",
+      "skill": "skills/run-phase/SKILL.md#step-run-tests",
       "requires_user_reply": false
     },
     {
@@ -110,6 +114,7 @@
         }
       ],
       "method_anchor": "step-inspect-acceptance-and-ui",
+      "skill": "skills/run-phase/SKILL.md#step-inspect-acceptance-and-ui",
       "requires_user_reply": false
     },
     {
@@ -127,6 +132,7 @@
         }
       ],
       "method_anchor": "step-scan-diff",
+      "skill": "skills/run-phase/SKILL.md#step-scan-diff",
       "requires_user_reply": false
     },
     {
@@ -144,6 +150,7 @@
         }
       ],
       "method_anchor": "step-review-change",
+      "skill": "skills/run-phase/SKILL.md#step-review-change",
       "requires_user_reply": false
     },
     {
@@ -161,6 +168,7 @@
         }
       ],
       "method_anchor": "step-analyze-review-findings",
+      "skill": "skills/run-phase/SKILL.md#step-analyze-review-findings",
       "requires_user_reply": false
     },
     {

@@ -10,8 +10,8 @@ version: 2.3.0
 
 本阶段按 `skills/unit-kernel/SKILL.md` 同一版本引用共用规则，条文只在核心里改。
 
-- 入口版本：v1.0.0（与 `skills/unit-kernel/SKILL.md` 同版）
-- 消费条款：R1、R2、R5 与执行流水线；R1 用于第 8 步 `review-change` 的单周期审查，R2 用于第 3 步唯一开发写手与共享文件串行，R5 用于第 9 步 `analyze-review-findings` 的四态处置
+- 入口版本：v1.1.0（与 `skills/unit-kernel/SKILL.md` 同版）
+- 消费条款：R1、R2、R5、R8 与执行流水线；R1 用于第 8 步 `review-change` 的单周期审查，R2 用于第 3 步唯一开发写手与共享文件串行，R5 用于第 9 步 `analyze-review-findings` 的四态处置，R8 用于第 8 步末段外部单路与代码四职责分界
 - 阶段输出：当前 Phase 的最小正确改动、目标测试与验证原件、finding 处置表、终末承接报告
 - 冲突回报：与本内核冲突时以内核为准；内核缺条或条号对不上记具名缺口，回报内核 owner（`skills/unit-kernel/SKILL.md` 的维护者），不就地改写正文
 - 升版顺序：先改内核正文并升版本，再同批改四处接线指针，最后逐处核四处同版与条号
@@ -395,7 +395,7 @@ BOUND001 首判可在报告前形成，不要求它回填未来 final-report has
 
 `node tools/cli/check-stage-steps.mjs --stage=build-code --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
 
-本步首次实际取技能正文前，把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=workflows/build-code/SKILL.md#<本步 method_anchor>","--stage=build-code","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-code --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；超过 512KB 的捕获按块扫描读取标记，命中即记无法核对（unresolved→unknown），不当作「没有更晚读取」；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
+本步首次实际取技能正文前，指定步骤先取 `--card` 返回的 `skill.file#skill.anchor`，非指定步骤才用 `workflows/build-code/SKILL.md#<method_anchor>`；再按该实值把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=<按上一句取得的技能位置>","--stage=build-code","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-code --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；检查器只认该引用，不把自己回读的字节当当前会话读取。步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；超过 512KB 的捕获按块扫描读取标记，命中即记无法核对（unresolved→unknown），不当作「没有更晚读取」；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
 
 卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
 步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。

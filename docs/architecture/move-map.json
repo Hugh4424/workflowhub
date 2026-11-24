@@ -10688,7 +10688,126 @@
       ],
       "replacement": "替代三张模板与三个既有入口里各自散落的字段名、旧别名与精度副本；字段语义与三卡精度此后只由本文件承接，模板与入口只留指针。",
       "delete_condition": "三张模板与三个既有检查入口的真实读者全部改读另一份经独立验证的同源字典后，才由字段作者删除本文件；不得以内联字段表、模板副本或第二份精度映射替代。",
-      "retention_basis": "delivery-quality-plan-20261123 包 2 与 AC-QUAL-002；只证同源字典与形状检查，不证独立读者能据字段完成下一步。任务卡的来源/方案与取舍/配套与写集三处指向档暂无读取入口，具名缺口 owner=P3/P4；skills/catalog.yaml 的 decision-maker 条目也未登记指向本字典的 dependency_closure，owner=P3/P4。"
+      "retention_basis": "delivery-quality-plan-20261123 包 2 与 AC-QUAL-002；只证同源字典与形状检查，不证独立读者能据字段完成下一步。任务卡的来源/方案与取舍/配套与写集三处指向档暂无读取入口，具名缺口 owner=P3/P4；P3 已把 decision-maker 的 dependency_closure 登记到本字典。"
+    },
+    {
+      "source": "skills/phase-maker/SKILL.md",
+      "destination": "skills/phase-maker/SKILL.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "build-plan 第 6 步的拆卡与回读契约：拆 Phase 边界、每卡首读符号与首改路径、目标失败、写集前后写者与失败恢复；完整写作方法仍归 spec-plan。",
+      "owner": "phase-maker 方法维护者（P3 唯一实施者）",
+      "consumer": "workflows/build-plan/steps.json 第 6 步的 skill 声明与 tools/cli/check-stage-steps.mjs 的锚/读取校验；下游独立实施读者按卡复读。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "workflows/build-plan/steps.json",
+        "tools/cli/check-stage-steps.mjs"
+      ],
+      "delete_condition": "build-plan 第 6 步不再消费该入口，且经独立验证的替代完整承接其拆卡与回读契约后，由方法维护者删除。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3 / AC-QUAL-003；只证真实技能入口、锚与读取回执，不证拆卡语义或下游实施效果。"
+    },
+    {
+      "source": "skills/phase-maker/skill-bundle.json",
+      "destination": "skills/phase-maker/skill-bundle.json",
+      "status": "add",
+      "role": "production",
+      "responsibility": "phase-maker 的便携包清单，列全本技能目录下随包运行的文件。",
+      "owner": "phase-maker 方法维护者（P3 唯一实施者）",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 的 validateSkillBundle 与实际调用者；只列本技能文件。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "phase-maker 退役或不再随包分发时，与 SKILL.md 同批删除。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3；便携包只证明文件闭包，不证方法质量。"
+    },
+    {
+      "source": "skills/task-maker/SKILL.md",
+      "destination": "skills/task-maker/SKILL.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "build-prd 第 4 步的同作者任务分节与地图供件契约：接手前核同一作者、真实地图答复与可定位分节，展开 6 字段加四行验收与覆盖表。",
+      "owner": "task-maker 方法维护者（P3 唯一实施者）",
+      "consumer": "workflows/build-prd/steps.json 第 4 步的 skill 声明与 tools/cli/check-stage-steps.mjs；沿 PRD 任务分节接手的下游读者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "workflows/build-prd/steps.json",
+        "tools/cli/check-stage-steps.mjs"
+      ],
+      "delete_condition": "build-prd 第 4 步不再消费该入口，且经独立验证的替代完整承接同作者分节与供件契约后，由方法维护者删除。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3 / AC-QUAL-003；只证真实技能入口、锚与读取回执，不证 PRD 语义。"
+    },
+    {
+      "source": "skills/task-maker/skill-bundle.json",
+      "destination": "skills/task-maker/skill-bundle.json",
+      "status": "add",
+      "role": "production",
+      "responsibility": "task-maker 的便携包清单，列全本技能目录下随包运行的文件。",
+      "owner": "task-maker 方法维护者（P3 唯一实施者）",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 的 validateSkillBundle 与实际调用者；只列本技能文件。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "task-maker 退役或不再随包分发时，与 SKILL.md 同批删除。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3；便携包只证明文件闭包，不证方法质量。"
+    },
+    {
+      "source": "skills/run-phase/SKILL.md",
+      "destination": "skills/run-phase/SKILL.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "build-code 第 2–9 步的窄执行契约：逐步输入、首动作、交付与拒认；第 7 步仍由原 diff 所有人执行，完整方法与写权留 build-code 正文。",
+      "owner": "run-phase 方法维护者（P3 唯一实施者）",
+      "consumer": "workflows/build-code/steps.json 第 2–9 步的 skill 声明与 tools/cli/check-stage-steps.mjs；Phase 执行者、独立审查者与只读测试者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "workflows/build-code/steps.json",
+        "tools/cli/check-stage-steps.mjs"
+      ],
+      "delete_condition": "build-code 第 2–9 步不再消费该入口，且经独立验证的替代完整承接其操作契约后，由方法维护者删除；不因步骤正文仍在而提前删。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3 / AC-QUAL-003；只证真实技能入口、锚与读取回执，不证执行质量或写权转移。"
+    },
+    {
+      "source": "skills/run-phase/skill-bundle.json",
+      "destination": "skills/run-phase/skill-bundle.json",
+      "status": "add",
+      "role": "production",
+      "responsibility": "run-phase 的便携包清单，列全本技能目录下随包运行的文件。",
+      "owner": "run-phase 方法维护者（P3 唯一实施者）",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 的 validateSkillBundle 与实际调用者；只列本技能文件。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "run-phase 退役或不再随包分发时，与 SKILL.md 同批删除。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3；便携包只证明文件闭包，不证方法质量。"
+    },
+    {
+      "source": "skills/unit-kernel/references/review-protocol.md",
+      "destination": "skills/unit-kernel/references/review-protocol.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "承接内核 R8 的审查角色、独立输入、上下文包、同根归并与四个全文范围；供四个阶段读者按需读取。",
+      "owner": "unit-kernel 审查协议维护者（P3 唯一实施者）",
+      "consumer": "skills/unit-kernel/SKILL.md 的审查角色节与 skills/unit-kernel/skill-bundle.json；四个阶段中实际执行两路审查或全文审查的读者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "skills/unit-kernel/SKILL.md",
+        "skills/unit-kernel/skill-bundle.json"
+      ],
+      "delete_condition": "R8 的角色与归并说明由经独立验证的替代正文完整承接，且四个阶段的真实读者改接后，由内核 owner 删除。",
+      "retention_basis": "delivery-quality-plan-20261123 包 3 / AC-QUAL-016、AC-QUAL-017；只证协议正文与真实文件存在，审查独立性仍由实际执行原件与人读判断。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

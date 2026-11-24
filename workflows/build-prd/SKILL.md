@@ -10,8 +10,8 @@ version: 1.1.0
 
 本阶段按 `skills/unit-kernel/SKILL.md` 同一版本引用共用规则，条文只在核心里改。
 
-- 入口版本：v1.0.0（与 `skills/unit-kernel/SKILL.md` 同版）
-- 消费条款：R1（一次审查周期）、R3（提问门槛）、R5（发现四态）与决策流水线；分别用于第 3 步确认任务地图前的提问与第 5 步的一次文档审查与发现处置。第 3、5 步正文被 `tests/contract/ui-stage-build-prd.test.mjs` 锁定为基线逐字，故指针只在本节、正文不改；核条号时以本节为准。
+- 入口版本：v1.1.0（与 `skills/unit-kernel/SKILL.md` 同版）
+- 消费条款：R1（一次审查周期）、R3（提问门槛）、R5（发现四态）、R8（PRD 单路终审）与决策流水线；分别用于第 3 步确认任务地图前的提问与第 5 步的一次文档审查与发现处置。第 3、5 步正文被 `tests/contract/ui-stage-build-prd.test.mjs` 锁定为基线逐字，故指针只在本节、正文不改；核条号时以本节为准。
 - 阶段输出：同一 `prd.md` 的规划稿、两次内容调用产物、决策覆盖表与任务地图
 - 冲突回报：与本内核冲突时以内核为准；内核缺条或条号对不上记具名缺口，回报内核 owner（`skills/unit-kernel/SKILL.md` 的维护者），不就地改写正文
 - 升版顺序：先改内核正文并升版本，再同批改四处接线指针，最后逐处核四处同版与条号
@@ -37,6 +37,22 @@ version: 1.1.0
 6. 分开报告来源、实际问答、文档审查、未知项、验收范围和交付事实。主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接，列材料现状、已做与未做、证据、风险及子任务下一步；没有执行过的 host/provider/发布/物理交付不能填成完成。 `report-facts-and-handoff` 的人读交接仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts 六类信息：material_refs 列当前决策/PRD/附件的具名引用，reply_text 保留实际用户答复，step_results 与 reflection_facts 只列真实步骤结果与其引用。将普通 raw 原字节按任务指定具名路径保存并回读，写入或读回失败如实 unavailable；使用现有安全写入/记录窄工具，不另造 writer。旧契约职责标记 `reportFactsAndHandoff` 表示保存并交接、`readReflectionForReport` 表示读取实际复盘事实、`publishCanonicalRecord` 表示保存原件职责；这些名字不是当前可调用的 TaskKernel 函数，不恢复旧 kernel 或 fixture，不使用 SHA 内容寻址、材料质量绑定或相等门。本次 reflection 不是正式stage 复盘，不产生 close approval 或操作确认。阶段末沿 measure-main-agent-cost 真实session/start-ref续窗执行 --stage=build-prd --record，成本标签。材料未供unavailable，无审查事实no_stage_fact；读回27列、旧前缀/until，缺报行exit1与无记录分列，未齐incomplete。
 
 第 1–6 步全程适用：地图覆盖完整用户旅程和每条需求。子任务只接最小读取集及自身材料，父任务和兄弟材料只读；不能由子任务触发父 close、移动或删除父/兄弟材料。边界偏离记录原范围、实际偏离与原因，交原 owner 处理，不造第二套进度或许可对象。
+
+## 当前步怎么执行？
+
+主会话从本阶段步骤表投影当前卡，只读本步和必要前置。
+调用检查器时显式给任务根、材料根、阶段和当前步；跳过使用可核当前 Phase 或真实 HEAD。
+
+`node tools/cli/check-stage-steps.mjs --stage=build-prd --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
+
+指定步骤（第 4 步）先取 `--card` 返回的 `skill.file#skill.anchor`；非指定步骤才用 `workflows/build-prd/SKILL.md#<method_anchor>`。本步首次实际取技能正文前，按该实值把读取 argv 写成输入文件（JSON：`{"slug":"p1-skill-read","argv":["<node>","tools/cli/check-stage-steps.mjs","--read-step-skill=<按上一句取得的技能位置>","--stage=build-prd","--step=N","--task-path=<任务根>","--material-root=<材料根>","--commit=<真实 HEAD>"]}`），再交现有 `verify --action=execute`：`node tools/cli/stage-runtime.mjs verify --action=execute --stage=build-prd --project=<项目> --task=<任务> --task-path=<任务根> --input=<输入文件>`。同次返回的 `receipt_ref` 是本次读取唯一身份，正文取同次返回的原输出；步骤检查追加 `--current-read-receipt=<receipt_ref>`；缺当次回执、路径或提交不符时本步记未判定，不报完成。旧回执只在存在更晚同步骤的成功捕获时才被拒；没有更晚件时会话不可区分，按报告 limits 记为能力边界。
+
+卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
+步骤表的稳定锚直达本步正文；指定步骤的读取位置以卡上的 `skill` 对象为准，非指定步骤才用本阶段 `SKILL.md#<method_anchor>`；前置原件可读只表示留痕，完成仍按本步原判据。
+检查器经现有任务句柄保存普通原件；缺字段或当前身份不可读时不记录、不前进。
+Phase 沿现有当前游标、索引、物理任务和材料提交核对；提交必须等于真实工作区 HEAD。
+当前原件沿 facts 的本阶段 source、step_slug、实际 ref 逐件读回；目录只作导航。
+收口读同一报告的 `closeout.gaps`，逐项披露未清缺口和恢复条件，记未完成。
 
 ## 使用技能与人为门、审查点
 

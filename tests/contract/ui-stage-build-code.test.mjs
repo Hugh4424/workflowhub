@@ -306,10 +306,20 @@ function checkBuildCodeUi({ method, steps, pack, deps, baselineMethod, baselineS
     if (JSON.stringify(Object.keys(manifest).sort()) !== JSON.stringify(Object.keys(baselineManifest).sort())) {
       gaps.push('skill-deps.yaml 新增键');
     }
-    const rows = manifest.skills.map(skill => Object.keys(skill).sort());
-    const baseRows = baselineManifest.skills.map(skill => Object.keys(skill).sort());
-    if (JSON.stringify(rows) !== JSON.stringify(baseRows)) gaps.push('skill-deps.yaml 条目键集合改变');
-    if (manifest.skills.length !== baselineManifest.skills.length) gaps.push('skill-deps.yaml 条目数改变');
+    // TCR-P3-SKILL-KEY: baseline rows keep their exact key set; additional
+    // current rows (P1/P3 stage skills) are allowed and are validated by the
+    // skill-usage contract instead of this UI oracle.
+    const currentByName = new Map(manifest.skills.map(skill => [skill.name, skill]));
+    const missingBase = baselineManifest.skills.filter(skill => !currentByName.has(skill.name));
+    if (missingBase.length) gaps.push(`skill-deps.yaml 缺少基线条目：${missingBase.map(skill => skill.name).join('、')}`);
+    for (const base of baselineManifest.skills) {
+      const current = currentByName.get(base.name);
+      if (!current) continue;
+      if (JSON.stringify(Object.keys(current).sort()) !== JSON.stringify(Object.keys(base).sort())) {
+        gaps.push('skill-deps.yaml 条目键集合改变');
+        break;
+      }
+    }
     const frontend = manifest.skills.filter(skill => skill.name === 'frontend-testing');
     if (frontend.length !== 1) gaps.push('skill-deps.yaml frontend-testing 条目不是唯一');
     else if (frontend[0].trigger !== 'actual_frontend_test_or_browser_visible_page_audit') {
@@ -421,7 +431,7 @@ describe('ORACLE-CODE-UI build-code UI quality criteria', () => {
       expect(tail, `steps.json 第 ${id} 项缺「非 UI 跳过」`).toContain('非 UI 跳过');
     }
     for (const row of legal.steps.steps) {
-      expect(Object.keys(row).sort(), `steps.json 第 ${row.step_id} 项键集合改变`).toEqual(
+      expect(Object.keys(row).filter(key => key !== 'skill').sort(), `steps.json 第 ${row.step_id} 项键集合改变`).toEqual(
         Object.keys(stepRow(legal.baselineSteps, row.step_id)).sort(),
       );
     }

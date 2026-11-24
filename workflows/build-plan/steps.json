@@ -78,6 +78,7 @@
         }
       ],
       "method_anchor": "step-spec-plan",
+      "skill": "skills/phase-maker/SKILL.md#八步",
       "requires_user_reply": false
     },
     {

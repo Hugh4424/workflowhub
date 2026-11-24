@@ -1366,21 +1366,135 @@ function skillRefParts(value) {
   const separator = raw.indexOf('#');
   return separator < 0 ? { file: raw, anchor: null } : { file: raw.slice(0, separator), anchor: raw.slice(separator + 1) || null };
 }
-// The step table's own method file: a flow table resolves to that flow's SKILL,
-// never to the complex root method.
-function skillFileFor(source, name) {
+// P3 designated steps: the step table's own method file is a real skill file
+// with a jumpable anchor, not the stage's default method. The map is the one
+// machine-readable copy of the P3 card table; a missing declaration must fail
+// here by name instead of silently falling back to workflows/<stage>/SKILL.md.
+const DESIGNATED_STEP_SKILLS = new Map([
+  ['make-decision:9', { file: 'skills/decision-maker/SKILL.md', anchor: 'package-convergence' }],
+  ['build-prd:4', { file: 'skills/task-maker/SKILL.md', anchor: 'expand-task-section' }],
+  ['build-plan:6', { file: 'skills/phase-maker/SKILL.md', anchor: '八步' }],
+  ['build-code:2', { file: 'skills/run-phase/SKILL.md', anchor: 'step-write-red-tests' }],
+  ['build-code:3', { file: 'skills/run-phase/SKILL.md', anchor: 'step-implement-change' }],
+  ['build-code:4', { file: 'skills/run-phase/SKILL.md', anchor: 'step-inspect-and-route-actual-tests' }],
+  ['build-code:5', { file: 'skills/run-phase/SKILL.md', anchor: 'step-run-tests' }],
+  ['build-code:6', { file: 'skills/run-phase/SKILL.md', anchor: 'step-inspect-acceptance-and-ui' }],
+  ['build-code:7', { file: 'skills/run-phase/SKILL.md', anchor: 'step-scan-diff' }],
+  ['build-code:8', { file: 'skills/run-phase/SKILL.md', anchor: 'step-review-change' }],
+  ['build-code:9', { file: 'skills/run-phase/SKILL.md', anchor: 'step-analyze-review-findings' }],
+]);
+// The P3 table applies to the canonical stage table only. A light-route flow
+// (workflows/<stage>/flows/<level>/steps.json) keeps its own step 9 and must not
+// inherit the canonical declaration by stage/step number alone.
+function designatedSkillFor(name, stepId, source) {
+  if (source !== `workflows/${name}/steps.json`) return null;
+  return DESIGNATED_STEP_SKILLS.get(`${name}:${stepId}`) ?? null;
+}
+// The step table's own method file: an explicit `skill` declaration wins; a
+// flow table resolves to that flow's SKILL, never to the complex root method.
+function skillFileFor(source, name, step) {
+  const explicit = parseDeclaredSkill(step?.skill);
+  if (explicit?.file) return explicit.file;
   const flow = /^workflows\/[^/]+\/flows\/([^/]+)\/steps\.json$/.exec(String(source ?? ''));
   return flow ? `workflows/${name}/flows/${flow[1]}/SKILL.md` : `workflows/${name}/SKILL.md`;
 }
-function declaredSkillRef(skillFile, step) {
-  return { file: skillFile, anchor: step?.method_anchor };
+// The frozen contract accepts a string (`file#anchor`) or an object with
+// `file`/`path` plus `anchor`/`section`; an empty declaration is no declaration.
+function parseDeclaredSkill(value) {
+  if (typeof value === 'string') return skillRefParts(value);
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const file = [value.file, value.path, value.skill_file, value.skill]
+      .find(item => typeof item === 'string' && item.trim())?.trim() ?? '';
+    const anchor = [value.anchor, value.section]
+      .find(item => typeof item === 'string' && item.trim())?.trim() ?? '';
+    return file ? { file, anchor: anchor || null } : null;
+  }
+  return null;
+}
+function declaredSkillRef(source, name, step) {
+  const explicit = parseDeclaredSkill(step?.skill);
+  return { file: skillFileFor(source, name, step), anchor: explicit?.anchor ?? step?.method_anchor ?? null };
+}
+// Same anchor semantics as the frozen contract: an explicit <a id/name>, a
+// `{#id}` suffix, or a heading whose slug matches. Failure names the file and
+// anchor at the caller; this helper only answers whether it can jump.
+function headingSlugs(heading) {
+  const cleaned = heading
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s*\{#[^}]*\}\s*$/, '')
+    .replace(/[*_~]/g, '')
+    .trim()
+    .toLowerCase();
+  const slug = cleaned.replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '');
+  return [...new Set([slug, slug.replace(/-+/g, '-').replace(/^-|-$/g, '')])];
+}
+function anchorJumpProblem(text, anchor) {
+  const escaped = String(anchor).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`<a\\s[^>]*\\b(?:id|name)\\s*=\\s*["']${escaped}["']`, 'i').test(text)) return null;
+  if (new RegExp(`\\{#${escaped}\\}`, 'i').test(text)) return null;
+  for (const line of text.split(/\r?\n/)) {
+    const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (heading && headingSlugs(heading[1]).includes(String(anchor).toLowerCase())) return null;
+  }
+  return `锚 #${anchor} 在该文件里没有可跳转目标（既无 <a id="${anchor}">，也无匹配标题或 {#id}）`;
+}
+// Validate the declarations of the selected stage/step projection. Only the
+// card and per-step exits enforce this: a whole-stage report keeps its existing
+// report-only semantics. A designated step with no declaration is a named
+// failure, never a fallback to the stage's default method.
+function skillDeclarationGaps({ definitions, name, source, repoRoot }) {
+  const gaps = [];
+  for (const step of definitions) {
+    const designated = designatedSkillFor(name, step.step_id, source);
+    const explicit = parseDeclaredSkill(step.skill);
+    const fail = message => gaps.push(message);
+    if (!explicit || !explicit.file) {
+      if (!designated) continue;
+      fail(`指定步骤缺少 skill 声明：${name} 第 ${step.step_id} 步（${step.step_slug}）的 steps.json 没有可读 skill 字段；期望 ${designated.file}#${designated.anchor}，不能回退阶段默认 ${skillFileFor(source, name)}#${step.method_anchor}`);
+      continue;
+    }
+    if (!explicit.anchor) {
+      fail(`指定步骤技能声明缺锚：${name} 第 ${step.step_id} 步（${step.step_slug}）声明了 ${explicit.file} 但没有 anchor；技能必须指向真实可跳转的章节`);
+      continue;
+    }
+    if (isAbsolute(explicit.file) || explicit.file.split(/[\\/]/).includes('..')) {
+      fail(`技能文件路径越界：${explicit.file}（${name} 第 ${step.step_id} 步 ${step.step_slug}）`);
+      continue;
+    }
+    let stat = null;
+    try { stat = lstatSync(resolve(repoRoot, explicit.file)); } catch { stat = null; }
+    if (!stat || !stat.isFile() || stat.isSymbolicLink()) {
+      fail(`技能文件不存在：${explicit.file}（${name} 第 ${step.step_id} 步 ${step.step_slug} 声明 ${explicit.file}#${explicit.anchor}）`);
+      if (designated) fail(`指定步骤技能声明与 P3 卡不符：${name} 第 ${step.step_id} 步期望 ${designated.file}#${designated.anchor}，实际 ${explicit.file}#${explicit.anchor}`);
+      continue;
+    }
+    let body;
+    try { body = readFileSync(resolve(repoRoot, explicit.file), 'utf8'); }
+    catch (error) {
+      fail(`技能文件不可读：${explicit.file}（${name} 第 ${step.step_id} 步 ${step.step_slug}：${error.code ?? error.message}）`);
+      continue;
+    }
+    const problem = anchorJumpProblem(body, explicit.anchor);
+    if (problem) {
+      fail(`技能锚不可跳转：${explicit.file}#${explicit.anchor}（${problem}；${name} 第 ${step.step_id} 步 ${step.step_slug}）`);
+      if (designated) fail(`指定步骤技能声明与 P3 卡不符：${name} 第 ${step.step_id} 步期望 ${designated.file}#${designated.anchor}，实际 ${explicit.file}#${explicit.anchor}`);
+      continue;
+    }
+    if (designated && (explicit.file !== designated.file || explicit.anchor !== designated.anchor)) {
+      fail(`指定步骤技能声明与 P3 卡不符：${name} 第 ${step.step_id} 步期望 ${designated.file}#${designated.anchor}，实际 ${explicit.file}#${explicit.anchor}`);
+    }
+  }
+  return { gaps };
 }
 function cardSkillRef({ taskPath, materialRoot, repoRoot, name, stepId, commit }) {
   const report = runStageStepsCheck({ taskPath, materialRoot, repoRoot, stage: name, step: stepId, card: true, commit });
   const row = report.stages?.find(item => item.stage === name)?.steps?.find(item => item.step_id === stepId);
-  const skillFile = skillFileFor(row?.source, name);
-  const path = report.card?.paths?.find(value => typeof value === 'string' && value.startsWith(`${skillFile}#`));
-  if (!path) throw Error(`当前卡未给出 ${name} 第 ${stepId} 步声明的技能位置`);
+  const skill = row?.skill;
+  if (!skill?.file) throw Error(`当前卡未给出 ${name} 第 ${stepId} 步声明的技能位置`);
+  const path = report.card?.paths?.find(value => typeof value === 'string' && value.startsWith(`${skill.file}#`));
+  if (!path) throw Error(`当前卡未给出 ${name} 第 ${stepId} 步声明的技能位置：${skill.file}#${skill.anchor ?? ''}`);
   return skillRefParts(path);
 }
 // A passed receipt is stale when a later capture for the same stage/step exists.
@@ -1670,7 +1784,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   // Every completed step needs this call's own read receipt. A task with no
   // loading record is unknown, not a legacy completion: the explicit binding is
   // the only identity, and history is never selected as the current read.
-  const skillLoadFor = (name, step, skillFile) => {
+  const skillLoadFor = (name, step, source) => {
     const binding = typeof currentReadReceipt === 'string' && currentReadReceipt.trim() ? currentReadReceipt.trim() : null;
     if (!binding) return skillLoadFailure('本次调用缺 --current-read-receipt；缺当次技能读取不能支持本步完成');
     const key = `${name}#${step.step_id}`;
@@ -1681,9 +1795,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       // The live HEAD is only read to locate the worktree the capture ran in;
       // it is no longer compared with the captured commit (see the limits).
       result = validateSkillReadReceipt({ taskPath, receiptRef: binding, stage: name, step: step.step_id,
-        declared: declaredSkillRef(skillFile, step), materialRoot, workspace });
+        declared: declaredSkillRef(source, name, step), materialRoot, workspace });
       if (result.ok) {
-        const declared = declaredSkillRef(skillFile, step);
+        const declared = declaredSkillRef(source, name, step);
         const later = laterSkillReadReceipt(taskPath, result.ref, name, step.step_id,
           declared.file, declared.anchor, result.ended);
         if (later) result = skillLoadFailure(later);
@@ -1693,6 +1807,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     return result;
   };
   const reports = [];
+  const skillBindingErrors = [];
   for (const name of stages.filter(name => !stage || name === stage)) {
     if (name === 'make-decision' && levelUnjudged) {
       errors.push(`读不到步骤定义：make-decision（${levelUnjudged}）；步骤是否完成未判定，不按「未留痕」报告`);
@@ -1715,6 +1830,29 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       errors.push(`读不到步骤定义：${source}（${detail}）；步骤是否完成未判定，不按「未留痕」报告`);
       reports.push({ stage: name, source, definition: 'unavailable', definition_error: detail, mapping: '未配置', steps: [] });
       continue;
+    }
+    // Card and per-step exits enforce the P3 declarations. With --step only
+    // the selected step is judged: earlier designated steps stay outside this
+    // projection, so a valid step 7 card is not failed by step 6. A whole-stage
+    // report keeps its existing report-only semantics.
+    const enforceSkillBinding = Boolean(card || selectedStep !== undefined) && stage === name;
+    const scopedDefinitions = selectedStep !== undefined
+      ? definitions.filter(step => step.step_id === selectedStep)
+      : definitions;
+    const skillBinding = enforceSkillBinding
+      ? skillDeclarationGaps({ definitions: scopedDefinitions, name, source, repoRoot })
+      : { gaps: [] };
+    for (const gap of skillBinding.gaps) { errors.push(gap); skillBindingErrors.push(gap); }
+    if (enforceSkillBinding && selectedStep !== undefined && !card) {
+      const selected = definitions.find(step => step.step_id === selectedStep);
+      if (selected && designatedSkillFor(name, selected.step_id, source)) {
+        const load = skillLoadFor(name, selected, source);
+        if (!load.ok) {
+          const message = `指定步骤 ${name} 第 ${selected.step_id} 步（${selected.step_slug}）当前读取回执无效：${load.reason}`;
+          errors.push(message);
+          skillBindingErrors.push(message);
+        }
+      }
     }
     const applicableInvalidations = invalidated.filter(record => record.scope === name);
     for (const record of applicableInvalidations) {
@@ -1799,7 +1937,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
           ? (uiSlotDeclared ? uiSourceGap({ taskPath, materialRoot }) : 'UI设计源首问：槽未声明（ui_source_reply）')
           : null))
         : null;
+      const stepSkill = declaredSkillRef(source, name, step);
       const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
+        skill: { file: stepSkill.file, anchor: stepSkill.anchor },
         evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
         evidence: checks, result: step.observable_result, method_anchor: step.method_anchor, requires_user_reply: step.requires_user_reply };
       const definitionGap = definitionFieldGaps.get(step.step_slug);
@@ -1838,7 +1978,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const declarationUnsupported = missingDeclaredPhysical.length > 0
         || (checks.length > 0 && !checks.some(check => check.present === true));
       if (producerState === 'completed' && producerCurrent) {
-        const skillLoad = skillLoadFor(name, step, skillFileFor(source, name));
+        const skillLoad = skillLoadFor(name, step, source);
         if (!skillLoad.ok) return { ...identity, judgment: '未判定', state: 'unavailable', basis: row?.basis ?? [],
           gap: `当前步骤只接受当次技能读取：${skillLoad.reason}；旧加载或旧完成原件不能支持本次完成` };
         // One missing declared peer (or only navigation) is enough: the producer's
@@ -2453,8 +2593,9 @@ function prdTaskSectionFact({ stage: cardStage, stepId, materialRoot: root }) {
     ? currentStage?.steps.find(row => row.step_id === selectedStep)
     : currentStage?.steps.find(row => !['completed', 'not_applicable'].includes(row.state));
   const prdTask = card && current ? prdTaskSectionFact({ stage, stepId: current.step_id, materialRoot }) : null;
-  const currentCard = card && current ? {
+  const currentCard = card && current && !skillBindingErrors.length ? {
     stage, step_id: current.step_id, step_slug: current.step_slug,
+    skill: current.skill,
     result: current.result ?? '按本步方法留下具名原件；未取得不能冒完成。',
     entry: `先读本步方法；核对前置步骤具名原件与当前 ${runId ? `run ${runId}` : phase ? `Phase ${phase}` : commit ? `commit ${commit}` : '身份（尚未提供）'}，缺项如实记录。`,
     stop: `${current.requires_user_reply
@@ -2462,7 +2603,7 @@ function prdTaskSectionFact({ stage: cardStage, stepId, materialRoot: root }) {
         ? 'UI 任务需要真实用户答复；未答停在本步。非 UI 任务在本步写不适用＋理由后继续。'
         : '需要真实用户答复；未答停在本步。'
       : '缺少本步必需输入时停止该路径，保留原因、负责人和恢复条件。'}可读或 exit 0 不代表完成；按本步判据独立核对。`,
-    paths: [...new Set([`${skillFileFor(current.source, stage)}#${current.method_anchor}`, current.source,
+    paths: [...new Set([`${current.skill.file}#${current.skill.anchor}`, current.source,
       ...(prdTask?.present ? [prdTask.path] : []),
       (current.evidence.find(item => item.present === true) ?? current.evidence.find(item => item.ref && !item.ref.endsWith('/') && item.kind !== 'task_original_ref'))?.ref].filter(Boolean))],
     evidence: [
@@ -2481,7 +2622,7 @@ function prdTaskSectionFact({ stage: cardStage, stepId, materialRoot: root }) {
   if (currentCard) {
     const readings = currentCard.paths.map(ref => {
       const [file, anchor] = ref.split('#');
-      const root = file.startsWith('workflows/') ? repoRoot : evidenceRootFor(file, taskPath, materialRoot).root;
+      const root = file.startsWith('workflows/') || file.startsWith('skills/') ? repoRoot : evidenceRootFor(file, taskPath, materialRoot).root;
       const checked = readDeclaredEvidence({ kind: 'reading_input', uri_or_path: file }, { taskPath, materialRoot: root, namedOnly: true });
       if (!checked.present) return { ref, observed: false, bytes: null, sha256: null, reason: checked.reason };
       try {
@@ -2511,6 +2652,7 @@ function prdTaskSectionFact({ stage: cardStage, stepId, materialRoot: root }) {
   }
   if (card && current && selectedStep === undefined) currentStage.steps = currentStage.steps.filter(row => row.step_id <= current.step_id);
   return { stages: reports, ...(card ? { card: currentCard } : {}), skip_gap: skipGap,
+    ...(card || selectedStep !== undefined ? { skill_binding: { ok: skillBindingErrors.length === 0, errors: skillBindingErrors } } : {}),
     closeout: { state: skipGaps.length || errors.some(error => error.startsWith('跳过缺口不可读')) ? 'incomplete' : 'unavailable', gaps: skipGaps,
       reason: '收口必须逐项消费未清缺口；无跳过缺口也不证明步骤或阶段完成。' },
     modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList, records: invalidatedRecords, gaps: invalidationGaps }, errors,
@@ -2623,6 +2765,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (options.skipNext) report.skip_next = options.skipNext;
   // A named unconverged package is a real gap, not a format note: surface it
   // through the exit code so a skipped convergence cannot pass as clean.
+  if (report.skill_binding && report.skill_binding.ok === false) process.exitCode = 1;
   if (report.convergence.gaps.some(gap => String(gap).startsWith('未收敛：'))) process.exitCode = 1;
   // ORACLE-MD-007: evidence-class gaps fail the exit; naming/format notes stay
   // report-only. The list is the single source shared with SKILL:382/462.
