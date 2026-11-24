@@ -18,7 +18,7 @@
     {
       "step_id": 2,
       "step_slug": "conditional-light-research",
-      "observable_result": "分组：读懂需求；影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。 deep-research 轻研究分支返回真实内存结果，不冒深正式报告；spec-plan 生成唯一纯指针索引并按真实附件与 bundle 登记取模板。 判定消费：SKILL.md#方法 第2/7步；原件：轻研究内存结果或唯一研究ref、origin、phases/index.md、skills/spec-plan/skill-bundle.json现有附件登记。",
+      "observable_result": "分组：读懂需求；影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。 deep-research 轻研究分支返回真实内存结果，不冒深正式报告；spec-plan 按真实附件与 bundle 登记取模板，索引唯一生成点只在第六步一次，本步不再生成。 判定消费：SKILL.md#方法 第2/7步；原件：轻研究内存结果或唯一研究ref、origin、phases/index.md、skills/spec-plan/skill-bundle.json现有附件登记。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

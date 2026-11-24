@@ -2661,9 +2661,9 @@
       "destination": "runtime/stage/stage-content-contracts.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "现行合同面（本文件，拆分后保留 post phase/decision/交互 IO 合同文本）",
+      "responsibility": "现行合同面（本文件，拆分后保留 post phase/decision/交互 IO 合同文本）；P5：同仓索引写集唯一解析入口——解析 `phases/index.md#execution-index` 指针与同源 sha256 为写集声明，保留旧字面写集只读兼容，合法 `none` 记只读空集；对漏声明只报 out_of_scope 不改执行许可，错摘要/索引破损/重渲染冲掉路径具名失败且不留缩短写集。",
       "owner": "B4/P5 / MT-1-063",
-      "consumer": "当前直接模块消费者：skills/answer-as-page/scripts/build-page-data.mjs, tests/acceptance/card-02-current.mjs, tests/contract/cockpit-autogen.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：skills/answer-as-page/scripts/build-page-data.mjs, tests/acceptance/card-02-current.mjs, tests/contract/cockpit-autogen.test.mjs, tools/cli/stage-runtime.mjs；P5：本文件是合同/CLI 的同仓索引写集唯一解析入口，结果经 `validatePostPhaseContract` 的 `phase_rows` 被终链合同原件与逐段审查间接消费；环 6 只读同一 `phases/index.md` 写集列，不 import 本文件，也不另建解析权威。",
       "module_consumers": [
         "skills/answer-as-page/scripts/build-page-data.mjs",
         "tests/acceptance/card-02-current.mjs",
@@ -2671,7 +2671,7 @@
         "tools/cli/stage-runtime.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "revert only when authenticated requirement messages carry their own class from the host；退役登记（ADR-016）：readUiApplicabilityFromDecisionLog、validateUiApplicability 及其 4 个测试已删，零生产调用方；退役登记（ADR-037）：analyzeDecisionConvergence、analyzeDecisionOutline、meaningfulSectionBody、structuredConvergenceFacts 已于 a74a9f2d 删除，残留引用只在只读历史区，不改写",
+      "delete_condition": "revert only when authenticated requirement messages carry their own class from the host；退役登记（ADR-016）：readUiApplicabilityFromDecisionLog、validateUiApplicability 及其 4 个测试已删，零生产调用方；退役登记（ADR-037）：analyzeDecisionConvergence、analyzeDecisionOutline、meaningfulSectionBody、structuredConvergenceFacts 已于 a74a9f2d 删除，残留引用只在只读历史区，不改写；P5 退出双写条件：当该解析经 CLI 合同结果被合同原件与逐段审查消费、环 6 只读同一索引列、且不再有第二份卡头/局部 Task 反推写集时，旧卡头回退与索引/正文双写路径退出；不标跨仓已迁，旧字面卡只读兼容保留。",
       "retention_basis": "MT-1-063 / NARROW"
     },
     {
@@ -7166,9 +7166,9 @@
       "destination": "runtime/task/final-chain-runner.mjs",
       "status": "add",
       "role": "production",
-      "responsibility": "指定任务根的只读材料与执行原件回读，复用portable manifest/chain state与P1纯判据，在同一报告输出十环及实际选中步骤/独立分母；不运行专业技能、不写任务库。",
+      "responsibility": "指定任务根的只读材料与执行原件回读，复用portable manifest/chain state与P1纯判据，在同一报告输出十环及实际选中步骤/独立分母；不运行专业技能、不写任务库；P5：环 6 从 `phases/index.md` 写集列读同一集合，Phase 指针不进入路径集、不再当第二份清单；本文件不 import 合同解析器，合同原件与逐段审查经 CLI `validatePostPhaseContract` 的 `phase_rows` 间接对齐；删除了本文件按卡头猜整集的分叉，指针卡无索引时记 unknown 而非空集。",
       "owner": "N9 build-code P2/T004；P2实施者唯一writer",
-      "consumer": "tools/cli/run-checks.mjs 的 --task-path 分支在受控动态import后调用runFinalChainCheck取得纯JSON报告；独立tests/contract/final-chain-runner.test.mjs调用同一API。",
+      "consumer": "tools/cli/run-checks.mjs 的 --task-path 分支在受控动态import后调用runFinalChainCheck取得纯JSON报告；独立tests/contract/final-chain-runner.test.mjs调用同一API；P5 合同原件与逐段审查经 CLI 合同结果对齐；环 6 只读同一索引写集列，不把指针当第二列表。",
       "module_consumers": [
         "tools/cli/run-checks.mjs",
         "tests/contract/final-chain-runner.test.mjs"

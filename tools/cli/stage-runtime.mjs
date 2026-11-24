@@ -600,7 +600,10 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
     const phase=parsed.facts?.phase_rows?.find(row=>row.id===request.phase_id);
     if(parsed.errors.some(error=>(phase&&error.startsWith(`${phase.path} unsafe Write set path:`))||(error.startsWith('phases/index.md:')&&error.includes(` ${request.phase_id} (`)&&error.includes('unsafe write set path:'))))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
     selected=phase?.write_set;
-    if(!Array.isArray(selected))throw new Error('MATERIAL_INCOMPLETE: current Phase write set is unavailable');
+    // A pointer card that fails by digest or a broken index row must not become
+    // an empty read scope. A legal `none` read-only Phase carries no such error.
+    const invalidEmpty=(phase?.write_set?.length??0)===0&&parsed.errors.some(error=>error.startsWith(`${phase?.path??''} `)&&/Write set pointer|Write set is missing|Write set none declaration is invalid|write set differs from Phase index/.test(error));
+    if(!Array.isArray(selected)||invalidEmpty)throw new Error('MATERIAL_INCOMPLETE: current Phase write set is unavailable');
   }
   // Validate declarations before projecting or starting any repository capture.
   // Task-owned facts retain their existing exact material-reference reader.
