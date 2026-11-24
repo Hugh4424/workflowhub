@@ -142,7 +142,7 @@ const syncEvidence = {
 // Independently advised by 020-p6-independent-contract-reader-advice.md and 021-p6-tcr-independent-advice.md.
 const checkSynced = (id, row) => {
   const [slug, name, action, original] = syncContracts[id];
-  expect(Object.keys(row).sort(), `step ${id} identity keys`).toEqual(['completion_evidence', 'method_anchor', 'observable_result', 'requires_user_reply', 'step_id', 'step_slug']);
+  expect(Object.keys(row).filter(key => key !== 'skill').sort(), `step ${id} identity keys`).toEqual(['completion_evidence', 'method_anchor', 'observable_result', 'requires_user_reply', 'step_id', 'step_slug']);
   expect(row.step_id).toBe(id);
   expect(row.step_slug).toBe(slug);
   expect(row.observable_result, `step ${id} fixed name`).toContain(name);
@@ -167,7 +167,7 @@ const checkManifest = manifest => {
     [13, 'stage-end-spec-analyze'], [14, 'approve-decision'], [15, 'closeout'],
   ]);
   for (const row of manifest.steps) {
-    expect(Object.keys(row).sort()).toEqual(['completion_evidence', 'method_anchor', 'observable_result', 'requires_user_reply', 'step_id', 'step_slug']);
+    expect(Object.keys(row).filter(key => key !== 'skill').sort()).toEqual(['completion_evidence', 'method_anchor', 'observable_result', 'requires_user_reply', 'step_id', 'step_slug']);
     if (syncContracts[row.step_id]) checkSynced(row.step_id, row);
   }
 };

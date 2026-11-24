@@ -338,31 +338,56 @@ function writeSets(spec, phases, missingPhases, phaseIndex = null) {
   const specLines = design.split("\n").filter(line => /(?:新增|修改)/.test(line));
   const declared = specLines.length ? [...new Set(specLines.flatMap(line => [...line.matchAll(/`([^`]+)`/g)].map(match=>match[1])))] : null;
   const values = phases.map(({raw}) => raw.match(/\*\*Write set\*\*\s*[:：]\s*([^\n]+)/)?.[1]);
-  const bodyWriteSet = !missingPhases.length && values.length && values.every(text) ? [...new Set(values.flatMap(value=>[...value.matchAll(/`([^`]+)`/g)].map(match=>match[1])))] : null;
+  // New same-repo cards declare only a pointer to the index row plus a sha256;
+  // that pointer is a reference, never a second path list, so it contributes
+  // no body paths and the index column stays the single source.
+  const pointsToIndex = value => /`phases\/index\.md#execution-index`/.test(String(value ?? ""));
+  const usesPointer = values.some(pointsToIndex);
+  const literalValues = values.filter(value => !pointsToIndex(value));
+  const bodyWriteSet = !missingPhases.length && values.length && values.every(text) ? [...new Set(literalValues.flatMap(value=>[...value.matchAll(/`([^`]+)`/g)].map(match=>match[1])))] : null;
   // 环6 authority is the phases/index.md write-set column when that column
   // exists; the Phase body is the cross-check and the fallback for older
   // two/three-column indexes. Header controls the column, never row order.
   const indexLines = (phaseIndex ?? "").split("\n").filter(line => /^\s*\|/.test(line));
   const header = indexLines.find(line => /\bwrite\s*set\b|写入集/i.test(line)) ?? null;
   const writeColumn = header ? header.split("|").map(cell => cell.trim()).findIndex(cell => /^(?:write\s*set|写入集)$/i.test(cell)) : -1;
-  const indexWrites = writeColumn > 0 ? [...new Set(indexLines
-    .filter(line => /\bP[1-9][0-9]*\b/.test(line) && line.split("|").length > writeColumn)
-    .flatMap(line => {
-      const scope = line.split("|")[writeColumn] ?? "";
-      return [...scope.matchAll(/`([^`]+)`/g)].map(match => match[1]);
-    }))] : null;
-  const phaseWriteSet = indexWrites?.length ? indexWrites : bodyWriteSet;
+  const indexRows = writeColumn > 0 ? indexLines.filter(line => /\bP[1-9][0-9]*\b/.test(line) && line.split("|").length > writeColumn) : [];
+  const indexWrites = writeColumn > 0 ? [...new Set(indexRows.flatMap(line => {
+    const scope = line.split("|")[writeColumn] ?? "";
+    return [...scope.matchAll(/`([^`]+)`/g)].map(match => match[1]);
+  }))] : null;
+  // One index row per Phase, so a literal body is compared only with its own
+  // row; a pointer card is compared by the contract parser, never here.
+  const plainCell = value => String(value ?? "").trim().replace(/^`|`$/g, "").trim();
+  const indexByPhase = new Map();
+  if (writeColumn > 0) for (const line of indexRows) {
+    const cells = line.split("|");
+    const scope = cells[writeColumn] ?? "";
+    indexByPhase.set(plainCell(cells[1]), [...scope.matchAll(/`([^`]+)`/g)].map(match => match[1]));
+  }
+  // A pointer card with no readable index column is unknown, not a legal empty
+  // set: ring 6 must stay unavailable rather than assert an empty write scope.
+  const pointerWithoutIndex = usesPointer && !(indexWrites?.length);
+  const phaseWriteSet = pointerWithoutIndex ? null : (indexWrites?.length ? indexWrites : bodyWriteSet);
   let conflict = null;
-  if (indexWrites?.length && bodyWriteSet) {
-    const onlyIndex = indexWrites.filter(path => !bodyWriteSet.includes(path));
-    const onlyBody = bodyWriteSet.filter(path => !indexWrites.includes(path));
-    if (onlyIndex.length || onlyBody.length) conflict = `phases/index.md 写集与 Phase 正文不一致：索引多=${onlyIndex.join(",") || "无"}；正文多=${onlyBody.join(",") || "无"}`;
+  if (indexWrites?.length) {
+    const mismatches = [];
+    for (const [position, value] of values.entries()) {
+      if (!text(value) || pointsToIndex(value)) continue;
+      const id = (phases[position]?.ref ?? "").match(/\/P([1-9][0-9]*)/)?.[1];
+      const indexed = id ? indexByPhase.get(`P${id}`) : null;
+      if (!indexed) continue;
+      const onlyIndex = indexed.filter(path => ![...value.matchAll(/`([^`]+)`/g)].some(match => match[1] === path));
+      const onlyBody = [...value.matchAll(/`([^`]+)`/g)].map(match => match[1]).filter(path => !indexed.includes(path));
+      if (onlyIndex.length || onlyBody.length) mismatches.push(`P${id} 索引多=${onlyIndex.join(",") || "无"}；正文多=${onlyBody.join(",") || "无"}`);
+    }
+    if (mismatches.length) conflict = `phases/index.md 写集与 Phase 正文不一致：${mismatches.join("；")}`;
   }
   // Expand only paths proved covered by a real trailing /** declaration; never union unknown Phase paths into spec authority.
   const covered = Array.isArray(declared) && Array.isArray(phaseWriteSet) ? phaseWriteSet.filter(path=>declared.some(pattern=>scopeContains(pattern,path))) : [];
   // The index column is the authority; the spec declaration is only a
   // coverage/cross-check input. Without an index the body remains the fallback.
-  return {specWriteSet:indexWrites?.length ? indexWrites : (declared ? [...new Set([...declared,...covered])] : phaseWriteSet),phaseWriteSet,writeSetConflict:conflict};
+  return {specWriteSet:indexWrites?.length ? indexWrites : (declared ? [...new Set([...declared,...covered])] : phaseWriteSet),phaseWriteSet,writeSetConflict:conflict,writeSetUnknown:pointerWithoutIndex ? "Phase 指针写集缺少可读的 Execution Index 写集列；不返回空集" : null};
 }
 function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, limits, commands) {
   const field = (raw,name) => raw.match(new RegExp(`^\\s*-\\s+\\*\\*${name}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,"m"))?.[1]?.trim() ?? null;
@@ -394,7 +419,11 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
       const current=phases.find(phase=>phase.ref === record.path);
       if (!current) {applicable=false;continue;}
       const raw=current.raw,dependencyValue=field(raw,"Dependency"),dependency=dependencyValue?.match(/`([^`]+)`/)?.[1] ?? dependencyValue;
-      const writes=[...String(field(raw,"Write set")??"").matchAll(/`([^`]+)`/g)].map(match=>match[1]);
+      const writeValue=field(raw,"Write set");
+      // A pointer card names the index row, not a second list; read the same
+      // single-source set the checker resolved instead of counting tokens.
+      const writes=/`phases\/index\.md#execution-index`/.test(writeValue??"")
+        ? [...(record.write_set??[])] : [...String(writeValue??"").matchAll(/`([^`]+)`/g)].map(match=>match[1]);
       const taskIds=[...raw.matchAll(/^###\s+(T\d{3,})\b/gm)].map(match=>match[1]);
       if (dependency !== record.dependency || !same(writes,record.write_set) || field(raw,"gate_cmd") !== record.command || field(raw,"oracle") !== record.oracle || !same(taskIds,record.task_ids)) applicable=false;
       if ([...String(dependency??"").matchAll(/\bP\d+\b/g)].some(match=>!phases.some(phase=>phase.ref.match(/\/P\d+/)?.[0].slice(1) === match[0]))) applicable=false;
@@ -1005,6 +1034,7 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const phases = phaseRefs.map(ref=>({ref,raw:optional(materialRoot,ref,limits)})).filter(item=>item.raw !== null);
   const missingPhases = phaseRefs.filter(ref=>!phases.some(phase=>phase.ref === ref));
   const sets = writeSets(spec ?? "",phases,missingPhases,phaseIndex);
+  if (sets.writeSetUnknown) limits.push(`环 6 ${sets.writeSetUnknown}`);
   if (diff) {
     diff.phase_write_set = sets.phaseWriteSet;
     diff.spec_write_set = sets.specWriteSet;
@@ -1040,7 +1070,7 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
     3:research,
     4:spec === null ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),rows:table,rows_readable:true},
     5:spec === null || !ordinaryContract || ordinaryContract.unavailable ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),nonempty:spec.trim().length>0,scan_count:ordinaryContract.scan_count,required_sections_present:requiredHeadingsPresent(spec,SPEC_REQUIRED_HEADINGS),contract_ok:ordinaryContract.contract_ok,basis:[fileEvidence("spec.md",spec),ordinaryContract]},
-    6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs,nonempty:Boolean((sets.phaseWriteSet??[]).length),write_set:sets.phaseWriteSet,spec_write_set:sets.specWriteSet,write_set_conflict:sets.writeSetConflict ?? null,...(sets.writeSetConflict ? {verified:false,conflict:sets.writeSetConflict} : {})},
+    6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs,nonempty:Boolean((sets.phaseWriteSet??[]).length),write_set:sets.phaseWriteSet,spec_write_set:sets.specWriteSet,write_set_conflict:sets.writeSetConflict ?? null,write_set_unknown:sets.writeSetUnknown ?? null,...(sets.writeSetConflict ? {verified:false,conflict:sets.writeSetConflict} : {})},
     7:diff ?? {readable:false,unavailable:true},8:test ?? {readable:false,unavailable:true},9:review,
   };
   if (delivery.conflict && delivery.pr?.verified) rings[10]={...delivery.pr,conflict:delivery.conflict};

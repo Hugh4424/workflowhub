@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, relative, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -271,9 +272,178 @@ function readExternalReplies(decisionLog, { path, bytes }) {
   return { ref, records, invalid, taskRoot: authenticatedTaskRoot(declaredTaskBase(decisionLog), selectedRoot) };
 }
 
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+const evidenceMarkdown = ref => /^quality\/evidence\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.md$/.test(ref ?? '')
+  && !ref.split('/').some(part => part === '.' || part === '..');
+
+// Portable inline callers need no host imports. Only the external read path uses
+// the installed WorkflowHub owners, resolved from this producer, not from input.
+async function openConvergenceTask(decisionLog, decisionRef, checklistRef) {
+  const fail = reason => new Error(`BASELINE_SOURCE_INVALID: 收敛清单 ${checklistRef}：${reason}`);
+  const id = /^specs\/([A-Za-z0-9][A-Za-z0-9._-]*)\/decision-log\.md$/.exec(decisionRef)?.[1];
+  if (!id) throw fail('需要当前工作树的 specs/<task-id>/decision-log.md');
+  try {
+    const cwd = realpathSync(process.cwd());
+    if (realpathSync(join(cwd, decisionRef)) !== join(cwd, decisionRef)) throw new Error('决策日志路径越界或经过链接');
+    const require = createRequire(import.meta.url);
+    const { resolveStorageRoot } = require('../../../runtime/evidence/storage-root.mjs');
+    const { resolveCanonicalTaskPath } = require('../../../runtime/task/load-config.mjs');
+    const { openTask } = require('../../../runtime/task/task-handle.mjs');
+    const { openCurrentTaskWorkspace } = require('../../../runtime/task/workspace.mjs');
+    // The declaration selects an identity only beneath the configured storage
+    // root. I/O uses the canonical resolver, never a path supplied by Markdown.
+    const declared = declaredTaskBase(decisionLog);
+    const candidate = declared && /^Projects\/([A-Za-z0-9][A-Za-z0-9._-]*)\/tasks\/([A-Za-z0-9][A-Za-z0-9._-]*)$/.exec(relative(resolveStorageRoot(), declared).split('\\').join('/'));
+    if (!candidate || candidate[2] !== id) throw new Error('日志声明的任务根与唯一规范任务根不符');
+    const project = candidate[1];
+    const { taskPath } = resolveCanonicalTaskPath({ project, task: id });
+    if (resolve(declared) !== taskPath) throw new Error('日志声明的任务根与唯一规范任务根不符');
+    const task = openTask(taskPath, { projectName: project, taskId: id });
+    if (task.manifest.activation_cohort !== 'post') throw new Error('不属于当前 post 任务');
+    // The owner enforces the default branch and path, or the registered
+    // existing-mode workspace and its actual branch, without guessing names.
+    const workspace = await openCurrentTaskWorkspace(task);
+    if (workspace.worktreeRoot !== cwd) throw new Error('cwd 与任务登记工作树不符');
+    return task;
+  } catch (error) { throw fail(`无法认证任务工作树：${error.message}`); }
+}
+
+const decodeEvidence = bytes => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+
+function readPlanReplies(spec, specRef, convergence) {
+  const expectedSpec = `specs/${convergence.task.identity.taskId}/spec.md`;
+  if (specRef !== expectedSpec || realpathSync(specRef) !== resolve(specRef)) return [];
+  const result = [];
+  for (const { cells, line } of sectionRows(spec, /^怎样回到原话[？?]?$/)) {
+    const [location, purpose] = cells;
+    if (!/^修订大纲真实答复(?:[；;]|$)/.test(purpose ?? '')) continue;
+    const label = `${specRef}#L${line} 修订大纲真实答复`;
+    const match = /^`T\/([^`:]+):(\d+)[–-](\d+)`$/.exec(location ?? '');
+    const digest = /\bSHA256\s+`([a-f0-9]{64})`/i.exec(purpose)?.[1];
+    if (!match || !evidenceMarkdown(match[1]) || !digest) { result.push(`- ${label}：原件位置越界、缺行位或缺 SHA-256；未取得，不作批准依据。`); continue; }
+    const [, ref, first, last] = match;
+    try {
+      const bytes = convergence.task.readRecordBytes(ref);
+      if (sha256(bytes) !== digest.toLowerCase()) throw new Error('SHA-256 不符');
+      const lines = decodeEvidence(bytes).split(/\r?\n/);
+      const body = +first >= 1 && +last >= +first && +last <= lines.length ? lines.slice(+first - 1, +last).join('\n').trimEnd() : '';
+      if (!body.trim()) throw new Error('所声明行位越界或无正文');
+      result.push(body, `来源：${ref}#L${first}-L${last}（SHA-256：${digest}；引自 ${specRef}#L${line}）`, '');
+    } catch (error) { result.push(`- ${label}：${ref} ${error.message}；未取得，不作批准依据。`); }
+  }
+  return result;
+}
+
+// Section extent and normalization follow check-stage-steps' anchoredSection:
+// the matching heading through the next same/outer-level heading, LF, trim,
+// with/without one final LF. Fenced and quoted headings cannot be anchors.
+function markdownSections(text, title) {
+  const source = sourceLines(text);
+  const headings = source.flatMap(({ text, visible, index }) => {
+    const heading = visible && /^(#{1,6})\s+(.+)$/.exec(text);
+    return heading ? [{ index, depth: heading[1].length, title: heading[2].trim() }] : [];
+  });
+  return headings.flatMap((heading, i) => {
+    const match = title.exec(heading.title);
+    if (!match) return [];
+    const end = headings.slice(i + 1).find(next => next.depth <= heading.depth)?.index ?? source.length;
+    const body = source.slice(heading.index, end).map(line => line.text).join('\n').trimEnd();
+    return [{ id: Number(match[1]), name: match[2], line: heading.index + 1, text: body }];
+  });
+}
+
+function convergenceRefs(text) {
+  return sourceLines(text).flatMap(({ text, visible }) => {
+    const match = visible && /^\s*[-*+]\s+收敛清单\s*[：:]\s*(.*)$/.exec(text);
+    return match ? [/^`([^`]+)`/.exec(match[1])?.[1] ?? ''] : [];
+  });
+}
+
+const WORK_PACKAGE = /^工作包\s*(\d+)(?=$|[\s：:—–-])(?:\s*[：:—–-]?\s*(.*))?$/;
+async function readConvergenceCards(decisionLog, decisionRef, refs) {
+  const packages = markdownSections(decisionLog, WORK_PACKAGE);
+  if (refs.length !== 1 || !refs[0]) throw new Error('BASELINE_SOURCE_INVALID: 收敛清单需要唯一当前指针');
+  const [checklistRef] = refs;
+  if (!evidenceMarkdown(checklistRef)) throw new Error(`BASELINE_SOURCE_INVALID: 收敛清单越界：${checklistRef}`);
+  const task = await openConvergenceTask(decisionLog, decisionRef, checklistRef);
+  const { directionMaterialApi } = await import('../../../tools/cli/check-stage-steps.mjs');
+  const { fiveMaterialDeclarationGaps } = directionMaterialApi();
+  const read = (ref, fail) => {
+    try { return decodeEvidence(task.readRecordBytes(ref)); } catch (error) { throw fail(`不可读：${ref}（${error.message}）`); }
+  };
+  const checklist = read(checklistRef, problem => new Error(`BASELINE_SOURCE_INVALID: 收敛清单 ${problem}`));
+  // Use the current pointer, not any historical evidence-index file digest. A
+  // checklist that itself binds a decision version must match this very log.
+  for (const { text, visible } of sourceLines(checklist)) {
+    if (!visible || !/^派生来源[：:]/.test(text)) continue;
+    const source = /`([^`]+\/decision-log\.md|decision-log\.md)`(?:\s*[（(]\s*sha256\s*`?([0-9a-f]{64})`?\s*[）)])?/i.exec(text);
+    if (source && ((source[1] !== decisionRef && source[1] !== 'decision-log.md') || (source[2] && source[2].toLowerCase() !== sha256(decisionLog)))) {
+      throw new Error(`BASELINE_SOURCE_INVALID: 收敛清单 ${checklistRef} 引用旧清单或异任务决策日志`);
+    }
+  }
+  const blocks = markdownSections(checklist, WORK_PACKAGE);
+  if (!packages.length) throw new Error(`BASELINE_SOURCE_INVALID: 收敛清单 ${checklistRef} 缺当前日志具名工作包`);
+  for (const { id } of blocks) if (!packages.some(pkg => pkg.id === id)) throw new Error(`BASELINE_SOURCE_INVALID: 收敛清单 ${checklistRef} 含未声明的包 ${id}`);
+  const cards = packages.map(({ id, name }) => {
+    const fail = reason => new Error(`BASELINE_SOURCE_INVALID: 包 ${id}（${checklistRef}）：${reason}`);
+    const block = blocks.filter(pkg => pkg.id === id);
+    if (packages.filter(pkg => pkg.id === id).length !== 1 || block.length > 1) throw fail('重复工作包');
+    if (!block.length) throw fail('缺工作包');
+    const bindings = markdownSections(block[0].text, /^包\s*(\d+)(?:\s*五件同包原件)?$/);
+    if (bindings.length !== 1 || bindings[0].id !== id) throw fail('缺唯一同包原件节，或同包原件节包号不符');
+    const declarations = sourceLines(bindings[0].text).flatMap(({ text, visible }) => {
+      const match = visible && /^-\s*(?:当前)?方案卡\s*[：:]\s*(.*)$/.exec(text);
+      return match ? [match[1]] : [];
+    });
+    if (declarations.length !== 1) throw fail('当前方案卡缺件或重复');
+    const declaration = declarations[0];
+    const field = key => {
+      const matches = [...declaration.matchAll(new RegExp(`(?:^|[；;])\\s*${key}\\s*[=:：]\\s*([^；;\\s]+)`, 'g'))];
+      return matches.length === 1 ? matches[0][1] : null;
+    };
+    if (field('任务') !== task.identity.taskId || !field('批次')) throw fail('当前方案卡任务不符或缺批次');
+    const packageId = field('包');
+    if (!/^\d+$/.test(packageId ?? '') || Number(packageId) !== id) throw fail(`当前方案卡包号不符：${packageId ?? '未取得'}`);
+    const digest = field('卡节\\s*sha256');
+    if (!/^[0-9a-f]{64}$/i.test(digest ?? '')) throw fail('当前方案卡缺卡节 sha256');
+    const [ref, anchor, extra] = (/^`([^`]+)`/.exec(declaration)?.[1] ?? '').split('#');
+    if (!evidenceMarkdown(ref)) throw fail(`当前方案卡越界或缺路径：${ref}`);
+    // Same controlled card-original shapes as the convergence checker.
+    const packagePath = /^quality\/evidence\/decision-maker\/p(\d+)\/card\.md$/.exec(ref);
+    if (packagePath && Number(packagePath[1]) !== id) throw fail(`当前方案卡路径包号不符：${ref}`);
+    if (!packagePath && !/^quality\/evidence\/(?:convergence-cards\.md|decision-log-refs\/(?:[^/]*-)?cards(?:-\d+)?\.md|convergence\/(?:[^/]+\/)*(?:card|(?:[^/]*-)?cards(?:-\d+)?)\.md)$/.test(ref)) throw fail(`不是方案卡原件：${ref}`);
+    const anchorId = /^工作包[\s\-—–:：]*(\d+)$/.exec(anchor ?? '')?.[1];
+    if (extra !== undefined || !anchorId || Number(anchorId) !== id) throw fail(`当前方案卡锚点与本包不符：${ref}#${anchor ?? ''}`);
+    const section = markdownSections(read(ref, fail), WORK_PACKAGE).filter(pkg => pkg.id === id);
+    if (section.length !== 1 || !section[0].text.includes('\n') || /^#\s/.test(section[0].text)) throw fail(`缺唯一可读本包卡节：${ref}#${anchor}`);
+    const { text, line } = section[0];
+    if (![sha256(text), sha256(`${text}\n`)].includes(digest.toLowerCase())) throw fail(`当前方案卡卡节 sha256 不符：${ref}#${anchor}`);
+    const headers = sourceLines(block[0].text).flatMap(({ text, visible }) => {
+      if (!visible || !/^\s*\|/.test(text)) return [];
+      const [label, value] = tableCells(text);
+      return label === '当前卡节' ? [value ?? ''] : [];
+    });
+    if (headers.length > 1) throw fail('当前卡节表行重复');
+    if (headers.length) {
+      const declared = /^`([^`#]+)#([^`#]+)`\s+sha256\s+(?:`([0-9a-f]{64})`|([0-9a-f]{64}))\s*$/i.exec(headers[0]);
+      if (!declared) throw fail('当前卡节表行缺 ref、锚点或 SHA-256');
+      if (declared[1] !== ref) throw fail('当前卡节表行的 ref 与当前方案卡不一致');
+      if (declared[2] !== anchor) throw fail('当前卡节表行的锚点与当前方案卡不一致');
+      if ((declared[3] ?? declared[4]).toLowerCase() !== digest.toLowerCase()) throw fail('当前卡节表行的 SHA-256 与当前方案卡不一致');
+    }
+    // Reuse the direction producer's declaration comparison, not its file I/O.
+    // This baseline reads the protected card, not the other four originals.
+    const bindingText = sourceLines(bindings[0].text).filter(line => line.visible).map(line => line.text).join('\n');
+    const comparison = fiveMaterialDeclarationGaps({ id, body: bindingText, taskId: task.identity.taskId });
+    if (comparison.gaps.length) throw fail(comparison.gaps.join('；'));
+    return { id, name, ref, anchor, text, line, digest: digest.toLowerCase(), headerBound: headers.length === 1 };
+  });
+  return { task, checklistRef, cards };
+}
+
 /** A provider excerpt, not a second decision authority. Nothing is persisted. */
 export function buildDecisionBaseline(options = {}) { return renderBaseline(options, null); }
-function renderBaseline({ decisionLog, spec = '', decisionRef = 'decision-log.md', specRef = 'spec.md' }, external) {
+function renderBaseline({ decisionLog, spec = '', decisionRef = 'decision-log.md', specRef = 'spec.md' }, external, convergence = null) {
   if (typeof decisionLog !== 'string' || !decisionLog.trim() || typeof spec !== 'string') throw new Error('BASELINE_SOURCE_INVALID: expected decision-log text and optional spec text');
   for (const ref of [decisionRef, specRef]) if (typeof ref !== 'string' || !ref || isAbsolute(ref) || ref.includes('\\') || ref.split('/').includes('..')) throw new Error('BASELINE_SOURCE_INVALID: source refs must be relative');
   const requirementSource = rows(decisionLog, '需求'), replySource = rows(decisionLog, '答复', Boolean(external));
@@ -290,6 +460,12 @@ function renderBaseline({ decisionLog, spec = '', decisionRef = 'decision-log.md
     lines.push(`### ${group.title}`, '', ...group.ids.map(id => render('答复', replyById.get(id), external?.ref)), '');
   }
   if (external?.invalid.length) lines.push('### 无效行（不作依据，缺什么照实写）', '', ...external.invalid.map(row => `- ${row.id}（${external.ref}#L${row.line}）：${row.reason}`), '');
+  if (convergence) {
+    const gaps = replies.filter(row => /^见/.test(row.text)).map(row => `- ${row.displayId}（${decisionRef}#L${row.line}）：答复栏仅为指针；未取得同版原话，不作独立批准依据。`);
+    const planReplies = spec.trim() ? readPlanReplies(spec, specRef, convergence) : [];
+    if (planReplies.length) lines.push('### 计划阶段来源表声明的真实答复', '', ...planReplies, '');
+    if (gaps.length) lines.push('### 原话未取得', '', ...gaps, '');
+  }
   const context = sourceContext(decisionLog, new Set([...requirementSource.excluded, ...replySource.excluded]), decisionRef);
   if (context.length) lines.push('## 需求与答复的附带原文', '', ...context);
   lines.push('## 已记录决定', '');
@@ -316,25 +492,35 @@ function renderBaseline({ decisionLog, spec = '', decisionRef = 'decision-log.md
     lines.push(`- ${id} — ${body}`, `来源：${decisionRef}#L${index + 1}`, '');
     decisionCount++;
   }
-  for (let index = 0; index < source.length; index++) {
-    if (!source[index].visible) continue;
-    const heading = /^(#{3,6})\s+((?:决定\s+\d+|(?:ADR|D|N|M)-?\d[A-Za-z0-9-]*)\s*[—–-].+)$/.exec(source[index].text);
-    const appended = /^-\s+\*\*(追加决定\s+\d+[^*]*)\*\*[:：]\s*(.*)$/.exec(source[index].text);
-    if (!heading && !appended) continue;
+  const indexedIds = new Set(ids), proseIds = new Set();
+  const prose = source.flatMap(({ visible, index, text }) => {
+    if (!visible) return [];
+    const spaced = /^(#{3,6})\s+(D-\d+)[ \t]+([^—–\s-].*)$/.exec(text);
+    const legacyHeading = /^(#{3,6})\s+((?:决定\s+\d+|(?:ADR|D|N|M)-?\d[A-Za-z0-9-]*)\s*[—–-].+)$/.exec(text);
+    const heading = legacyHeading ?? spaced;
+    const appended = /^-\s+\*\*(追加决定\s+\d+[^*]*)\*\*[:：]\s*(.*)$/.exec(text);
+    if (!heading && !appended) return [];
     const id = (heading?.[2] ?? appended[1]).match(/^(?:决定\s+\d+|追加决定\s+\d+|(?:ADR|D|N|M)-?\d[A-Za-z0-9-]*)/)[0];
-    if (ids.has(id)) throw new Error(`BASELINE_SOURCE_INVALID: duplicate decision ${id}`);
-    ids.add(id);
+    // An existing v2 index row can navigate to one space-delimited body of the
+    // same ID. Two bodies (or two index rows) still make the source ambiguous.
+    if (proseIds.has(id) || (indexedIds.has(id) && (legacyHeading || !spaced))) {
+      throw new Error(`BASELINE_SOURCE_INVALID: duplicate decision ${id}`);
+    }
+    proseIds.add(id);
+    return [{ id, index, heading, appended }];
+  });
+  const boundaries = new Set(prose.map(item => item.index));
+  for (const { id, index, heading, appended } of prose) {
     let end = index + 1;
     while (end < source.length) {
       const next = source[end];
-      if (next.visible && (new RegExp(`^#{1,${heading ? heading[1].length : 6}}\\s`).test(next.text) || /^-\s+\*\*追加决定/.test(next.text))) break;
+      if (boundaries.has(end) || (next.visible && (new RegExp(`^#{1,${heading ? heading[1].length : 6}}\\s`).test(next.text) || /^-\s+\*\*追加决定/.test(next.text)))) break;
       end++;
     }
     const body = source.slice(index + 1, end).map(line => line.text).join('\n').trim();
     if (!(body || appended?.[2]?.trim())) throw new Error(`BASELINE_SOURCE_INVALID: empty decision ${id}`);
     lines.push(source.slice(index, end).map(line => line.text).join('\n').trimEnd(), `来源：${decisionRef}#L${index + 1}-L${end}`, '');
     decisionCount++;
-    index = end - 1;
   }
   if (!decisionCount) throw new Error('BASELINE_SOURCE_INVALID: no decision bodies found');
   // build-plan consumes the per-package design, so the baseline carries it as a
@@ -342,7 +528,14 @@ function renderBaseline({ decisionLog, spec = '', decisionRef = 'decision-log.md
   // definition of a package record, not a new gate.
   const designHeading = /^(?:每包设计)$/;
   let designed = 0;
-  for (let index = 0; index < source.length; index++) {
+  if (convergence && !convergence.inlineDesign) {
+    lines.push('## 每包设计（外置方案卡原文）', '', `当前收敛清单：${convergence.checklistRef}。仅收录已核卡节 SHA-256 的正文；同包其他原件只核声明一致性，未复读，不证明用户批准本版卡。`, '');
+    for (const card of convergence.cards) {
+      if (!card.headerBound) lines.push(`- 包 ${card.id}：收敛清单未声明「当前卡节」表行，仅核当前方案卡声明与原卡正文。`, '');
+      lines.push(card.text, `来源：${card.ref}#L${card.line}-L${card.line + card.text.split('\n').length - 1}（${card.anchor}；卡节 SHA-256：${card.digest}）`, '');
+    }
+  }
+  for (let index = 0; (!convergence || convergence.inlineDesign) && index < source.length; index++) {
     if (!source[index].visible) continue;
     const heading = /^(#{1,6})\s+(.+)$/.exec(source[index].text);
     if (!heading || !designHeading.test(headingTitle(heading[2]))) continue;
@@ -356,6 +549,13 @@ function renderBaseline({ decisionLog, spec = '', decisionRef = 'decision-log.md
     lines.push(source.slice(index + 1, end).map(line => line.text).join('\n').trimEnd(), `来源：${decisionRef}#L${index + 1}-L${end}`, '');
     designed++;
     index = end - 1;
+  }
+  if (convergence?.inlineDesign) {
+    lines.push('## 每包设计的原卡证据', '', `当前收敛清单：${convergence.checklistRef}。内联日志是设计正文；外置卡仅核包号集合、当前卡节和同包声明，不证明逐项内容承接或用户批准本版卡。`, '');
+    for (const card of convergence.cards) {
+      lines.push(`- 包 ${card.id}：${card.ref}#${card.anchor}（L${card.line} 起；卡节 SHA-256：${card.digest}${card.headerBound ? '' : '；未声明「当前卡节」表行'}）`);
+    }
+    lines.push('');
   }
   const result = lines.join('\n') + '\n';
   return result;
@@ -380,6 +580,21 @@ function requirementId(ac) {
 function acKey(ac) {
   const match = /^AC-P(\d+)-(\d+)$/.exec(ac);
   return match ? `AC-P${Number(match[1])}-${Number(match[2])}` : ac;
+}
+function checkInlineDesign(packages, cards) {
+  const fail = problem => new Error(`BASELINE_SOURCE_INVALID: 当前收敛清单与内联每包设计冲突：${problem}`);
+  const ids = packages.map(pkg => pkg.id);
+  const missing = cards.filter(card => !ids.includes(card.id)).map(card => `缺包 ${card.id}`);
+  const extra = packages.filter(pkg => !cards.some(card => card.id === pkg.id)).map(pkg => `多出包 ${pkg.id}`);
+  const duplicates = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))].map(id => `重复包 ${id}`);
+  if (missing.length || extra.length || duplicates.length) throw fail([...missing, ...extra, ...duplicates].join('；'));
+  for (const pkg of packages) {
+    const empty = TEMPLATE_DESIGN_ITEMS.filter(name => {
+      const body = (pkg.items.get(name)?.lines ?? []).map(line => line.trim().replace(/^\*\*[^*]+\*\*\s*[：:]?\s*/, '')).join('\n').trim();
+      return !body || PLACEHOLDER.test(body) || /^待第\s*\d+\s*步/.test(body) || /^`?<[^<>\n]+>`?[。.]?$/.test(body);
+    });
+    if (empty.length) throw fail(`包 ${pkg.id} 缺实质条目：${empty.join('、')}`);
+  }
 }
 export function readDesignPackages(markdown) {
   if (typeof markdown !== 'string') throw new TypeError('design source must be text');
@@ -460,6 +675,51 @@ function phaseIndexRows(markdown) {
   }
   return rows;
 }
+function phaseIndexGaps(index, records, { exact = false } = {}) {
+  return index.flatMap(({ id, target }) => {
+    const matches = records.filter(record => record.id === id);
+    if (!matches.length) return [`Phase 索引有 ${id}，但没有对应 Phase 文件；owner=规划作者`];
+    if (exact && (matches.length !== 1 || matches[0].path !== target || !new RegExp(`^#\\s*Phase\\s+${id}\\b`, 'm').test(matches[0].text))) {
+      return [`Phase 索引 ${id} 的 ${target || '(缺路径)'} 未指向唯一同名 Phase 正文；owner=规划作者`];
+    }
+    return [];
+  });
+}
+// A current mixed source can cite several deliveries per package. The trace
+// proves only what the spec names; neither a shared source nor a terminal
+// aggregate supplies missing per-package ownership.
+function currentTraceGaps(spec, records) {
+  const trace = specTaskRows(spec), gaps = [];
+  if (!trace.length) return ['spec 未取得 Source → FR → AC → Phase/Task 追踪，不能核当前覆盖；owner=规划作者'];
+  for (const row of trace) {
+    const label = `spec.md#L${row.line}`;
+    if (!row.source || !row.hasFr || !row.acs.length || !row.phase) {
+      gaps.push(`${label} 缺 Source、FR、AC 或具名 Phase/Task；owner=规划作者`);
+      continue;
+    }
+    const parents = records.filter(record => record.id === row.phase);
+    if (parents.length !== 1) { gaps.push(`${label} 的 ${row.phase}/${row.task} 缺唯一 Phase 正文；owner=规划作者`); continue; }
+    const [parent] = parents;
+    if (parent.task !== row.task) gaps.push(`${label} 的 ${row.phase}/${row.task} 与 Phase 实际任务 ${parent.task || '未取得'} 不符；owner=规划作者`);
+    const coverage = new Set(parent.coverage.map(acKey));
+    for (const ac of row.acs) if (!coverage.has(acKey(ac))) gaps.push(`${label} 的 ${ac} 未在 ${row.phase} 覆盖 AC 内；owner=规划作者`);
+  }
+  return gaps;
+}
+function specTaskRows(spec) {
+  const rows = [];
+  let inTable = false;
+  for (const { text, index, visible } of sourceLines(spec)) {
+    if (!visible || !text.trim().startsWith('|')) { inTable = false; continue; }
+    const cells = tableCells(text);
+    if (cells.slice(0, 4).join('|') === 'Source|FR|AC|Phase/Task') { inTable = true; continue; }
+    if (!inTable || cells.every(cell => /^:?-+:?$/.test(cell))) continue;
+    const [source = '', fr = '', ac = '', target = ''] = cells;
+    const match = /^(P\d+)\/(T\d+)$/.exec(target);
+    rows.push({ source, acs: acceptanceIds(ac), hasFr: /\bFR-(?:[A-Z0-9]+-)*\d+\b/.test(fr), phase: match?.[1], task: match?.[2], line: index + 1 });
+  }
+  return rows;
+}
 // Resolve only a declared group, through its package's own decision-index rows
 // and the decision that spec's Source column actually cites. A package may own
 // several decisions; the cited one selects the row, not a "exactly one" count.
@@ -487,21 +747,13 @@ function packageGroupTraces(decisionLog, spec) {
     });
     return hits.length === 1 ? hits[0] : null;
   };
-  const trace = [];
-  let inTable = false;
-  for (const { text, index, visible } of sourceLines(spec)) {
-    if (!visible || !text.trim().startsWith('|')) { inTable = false; continue; }
-    const cells = tableCells(text);
-    if (cells.slice(0, 4).join('|') === 'Source|FR|AC|Phase/Task') { inTable = true; continue; }
-    if (!inTable || cells.every(cell => /^:?-+:?$/.test(cell))) continue;
-    const [source, fr, ac, task] = cells;
+  const trace = specTaskRows(spec).map(row => {
     // Source may cite the decision as D-<n> (machine) or 决定 <n> (human form
     // of the same crosswalk row); both are the template's own numbered ids.
-    const cited = [...(source ?? '').matchAll(/\bD-\d+\b/g)].map(match => match[0])
-      .concat([...(source ?? '').matchAll(/决定\s*\d+/g)].map(match => decisionId(match[0])).filter(Boolean));
-    trace.push({ decisions: [...new Set(cited)], acs: acceptanceIds(ac ?? ''),
-      hasFr: /\bFR-(?:[A-Z0-9]+-)*\d+\b/.test(fr ?? ''), phase: /^(P\d+)\/T\d+$/.exec(task ?? '')?.[1], line: index + 1 });
-  }
+    const cited = [...row.source.matchAll(/\bD-\d+\b/g)].map(match => match[0])
+      .concat([...row.source.matchAll(/决定\s*\d+/g)].map(match => decisionId(match[0])).filter(Boolean));
+    return { ...row, decisions: [...new Set(cited)] };
+  });
   return pkg => {
     const groups = groupRanges.filter(({ first, last }) => first <= pkg.id && pkg.id <= last);
     if (groups.length !== 1) return null;
@@ -562,7 +814,7 @@ export function reconcilePhaseCoverage({ decisionLog, spec = '', phaseIndex = ''
     const indexRow = phaseIndexRows(phaseIndex).find(row => row.id === owner?.id);
     rows.push({ package: pkg.id, name: pkg.name, phase: owner?.id ?? '无', acs: acs.join('、'), dependency: owner?.dependency || indexRow?.dependency || '未取得', task: owner?.task || '未取得', gap: owner ? '' : '缺独立 Phase' });
   }
-  for (const row of index) if (!records.some(record => record.id === row.id)) gaps.push(`Phase 索引有 ${row.id}，但没有对应 Phase 文件；owner=规划作者`);
+  gaps.push(...phaseIndexGaps(index, records));
   for (const record of records) for (const ac of record.coverage) {
     const id = requirementId(ac);
     if (id === null ? !tracedAcs.has(ac) : !packages.some(pkg => pkg.id === id)) gaps.push(`Phase ${record.id} 的 ${ac} 不属于任何包；owner=规划作者`);
@@ -763,7 +1015,7 @@ function readFixedEvidence(external, review, dispositionsFile, dispositions, fil
   }
 }
 
-export function runCli(argv) {
+export async function runCli(argv) {
   try {
     const options = {};
     for (let index = 0; index < argv.length; index += 2) {
@@ -773,6 +1025,17 @@ export function runCli(argv) {
     const ref = path => relative(process.cwd(), path).split('\\').join('/');
     const replyIndexPath = options['--reply-index'];
     const externalReplies = decisionLog => replyIndexPath ? readExternalReplies(decisionLog, { path: replyIndexPath, bytes: readFileSync(replyIndexPath) }) : null;
+    const convergenceFor = async (decisionLog, decisionRef) => {
+      const pointers = convergenceRefs(decisionLog);
+      if (!pointers.length) return null;
+      const convergence = await readConvergenceCards(decisionLog, decisionRef, pointers);
+      const packages = readDesignPackages(decisionLog);
+      if (packages.length) {
+        checkInlineDesign(packages, convergence.cards);
+        convergence.inlineDesign = packages;
+      }
+      return convergence;
+    };
     const files = new Map();
     const remember = (path, text) => { files.set(path, text); return text; };
     if (options['--task']) {
@@ -780,11 +1043,23 @@ export function runCli(argv) {
       const materials = readTaskMaterials(options['--task']);
       for (const phase of materials.phases) remember(phase.path, phase.text);
       remember('spec.md', materials.spec);
-      const coverage = reconcilePhaseCoverage(materials);
-      const landing = reconcileDesignLanding({ decisionLog: materials.decisionLog, spec: materials.spec, phaseIndex: materials.phaseIndex, phaseCoverage: coverage });
       const external = externalReplies(materials.decisionLog);
+      const decisionRef = ref(join(materials.base, 'decision-log.md'));
+      const convergence = await convergenceFor(materials.decisionLog, decisionRef);
+      let coverage, landing;
+      if (convergence) {
+        const records = materials.phases.map(({ path, text }) => phaseRecord(path, text));
+        const ownershipGaps = convergence.inlineDesign
+          ? ['旧 B 表的单包单 Phase 规则不适用；只核规格逐行声明的 Phase/Task 与 AC，不推断各包独立交付归属；owner=规划作者', ...currentTraceGaps(materials.spec, records)]
+          : convergence.cards.map(({ id }) => `包 ${id}：外置卡到独立 Phase/AC 的承接未核；owner=规划作者`);
+        coverage = { gaps: [...ownershipGaps, ...phaseIndexGaps(phaseIndexRows(materials.phaseIndex), records, { exact: true })] };
+        landing = { gaps: [convergence.inlineDesign ? '内联十项实质承接到 spec/Phase 未逐项核对；owner=规划作者' : '外置方案卡的内容到 spec/Phase 落点未核；owner=规划作者'] };
+      } else {
+        coverage = reconcilePhaseCoverage(materials);
+        landing = reconcileDesignLanding({ decisionLog: materials.decisionLog, spec: materials.spec, phaseIndex: materials.phaseIndex, phaseCoverage: coverage });
+      }
       const baseline = renderBaseline({ decisionLog: materials.decisionLog, spec: materials.spec,
-        decisionRef: ref(join(materials.base, 'decision-log.md')), specRef: ref(join(materials.base, 'spec.md')) }, external);
+        decisionRef, specRef: ref(join(materials.base, 'spec.md')) }, external, convergence);
       let findings = null;
       if (options['--review'] || options['--dispositions']) {
         if (!options['--review'] || !options['--dispositions']) throw new Error('--review and --dispositions must be supplied together');
@@ -798,9 +1073,12 @@ export function runCli(argv) {
     }
     if (!options['--decision-log']) throw new Error('--decision-log or --task is required');
     const decisionLog = readFileSync(options['--decision-log'], 'utf8');
+    const decisionRef = ref(options['--decision-log']);
     process.stdout.write(renderBaseline({ decisionLog, spec: options['--spec'] ? readFileSync(options['--spec'], 'utf8') : '',
-      decisionRef: ref(options['--decision-log']), specRef: options['--spec'] ? ref(options['--spec']) : 'spec.md' }, externalReplies(decisionLog)));
+      decisionRef, specRef: options['--spec'] ? ref(options['--spec']) : 'spec.md' }, externalReplies(decisionLog), await convergenceFor(decisionLog, decisionRef)));
     return 0;
   } catch (error) { console.error(error.message); return 1; }
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = runCli(process.argv.slice(2));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runCli(process.argv.slice(2)).then(code => { process.exitCode = code; });
+}

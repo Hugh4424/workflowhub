@@ -23,6 +23,8 @@
 | knowledge-graph | 开工与设计依据准备时以合法全文作采用判断；查询领域/历史经验、定位影响，或按许可更新图。 | [读取正文](knowledge-graph/SKILL.md)；[任务判断方法](knowledge-graph/references/knowledge-reuse.md) |
 | anysearch | 需要联网检索、核事实或读取外部页面。 | [读取正文](anysearch/SKILL.md) |
 | decision-log | 把已确认方向写为唯一决策与需求记录。 | [读取正文](decision-log/SKILL.md) |
+| decision-maker | make-decision 第 9 步逐包收敛：调研、设计、审查三角色，十一格卡，同源两路与独立异源审；主会话唯一写手。 | [读取正文](decision-maker/SKILL.md) |
+| unit-kernel | 四阶段共用的规则内核：审查周期、唯一写主、能定不问、升版核读者、发现四态、审查角色与终审分界，及设计与执行两条流水线；只按条号引用，不复制正文。 | [读取正文](unit-kernel/SKILL.md) |
 | deep-research | 方向仍有关键未知，需要深度调研与可回读来源。 | [读取正文](deep-research/SKILL.md) |
 | grill-with-docs | 通过追问检验方案，并维护术语与架构决定。 | [读取正文](grill-with-docs/SKILL.md) |
 | intake-decision-review | 只读审查问题界定、范围与可行性。 | [读取正文](intake-decision-review/SKILL.md) |
@@ -33,6 +35,9 @@
 | spec-specify | 从已确认决定起草规格与全局实现设计骨架，或查写作方法 Q01–Q13。 | [读取正文](spec-specify/SKILL.md) |
 | spec-clarify | 已有规格存在影响实施的歧义，需要澄清。 | [读取正文](spec-clarify/SKILL.md) |
 | spec-plan | 把实现设计写入规格，拆成各自可交付的Phase。 | [读取正文](spec-plan/SKILL.md) |
+| phase-maker | build-plan 第 6 步的拆卡与回读契约；完整写作方法复用 spec-plan。 | [读取正文](phase-maker/SKILL.md) |
+| task-maker | build-prd 第 4 步的同作者任务分节与地图供件契约；完整 PRD 方法复用 spec-prd。 | [读取正文](task-maker/SKILL.md) |
+| run-phase | build-code 第 2–9 步的窄执行契约；完整方法与写权仍在 build-code 正文。 | [读取正文](run-phase/SKILL.md) |
 | spec-analyze | 阶段结束核需求、材料、实现与证据是否一致。 | [读取正文](spec-analyze/SKILL.md) |
 | architect-code-review | 审查实现的正确性、生命周期、接口消费者与测试强度。 | [读取正文](architect-code-review/SKILL.md) |
 | workflowhub-host-protocol | 查当前会话如何执行三阶段、记录事实及说明完成边界。 | [读取正文](workflowhub-host-protocol/SKILL.md) |
