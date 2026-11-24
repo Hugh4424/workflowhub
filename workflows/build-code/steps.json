@@ -30,7 +30,7 @@
     {
       "step_id": 2,
       "step_slug": "write-red-tests",
-      "observable_result": "冻结目标测试/RED被实际读取；补行为测试先实跑目标断言失败，纯材料有G-2检查或明确不适用理由。 判定消费：SKILL.md#方法 第2步；原件：同命令RED原输出、预写测试/DO NOT TOUCH/TCR。",
+      "observable_result": "冻结目标测试/RED被实际读取；实跑冻结目标测试拿真 RED，保存命令、退出码与原始输出；导入/环境/配置失败另记、不算目标 RED，无真 RED 不进实现；补行为测试先实跑目标断言失败，纯材料有G-2检查或明确不适用理由。 判定消费：SKILL.md#方法 第2步；原件：同命令RED原输出、预写测试/DO NOT TOUCH/TCR。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -48,7 +48,7 @@
     {
       "step_id": 3,
       "step_slug": "implement-change",
-      "observable_result": "允许范围内最小实现存在，错误明确暴露；计划/方向缺口交owner，未擅改作者材料或越界。 判定消费：SKILL.md#方法 第3步；原件：真实diff、源码与目标行为原件。",
+      "observable_result": "允许范围内最小纵切存在并接公开入口，真实输入到真实输出；内部函数返回不算演示，错误明确暴露；计划/方向缺口交owner，未擅改作者材料或越界。 判定消费：SKILL.md#方法 第3步；原件：真实diff、源码与目标行为原件。",
       "completion_evidence": [
         {
           "kind": "task_original_ref",
@@ -66,7 +66,7 @@
     {
       "step_id": 4,
       "step_slug": "inspect-and-route-actual-tests",
-      "observable_result": "真实changed files与计划路线核对，选择适用concrete testing skill；变化和不适用的原因明确。 判定消费：SKILL.md#方法 第4步；原件：affected/origin、有源路由选择与风险场景。",
+      "observable_result": "消费本段真 RED 与公开演示原件；真实changed files与计划路线核对，选择适用concrete testing skill；变化和不适用的原因明确。 判定消费：SKILL.md#方法 第4步；原件：affected/origin、有源路由选择与风险场景。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -84,7 +84,7 @@
     {
       "step_id": 5,
       "step_slug": "run-tests",
-      "observable_result": "按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。 判定消费：SKILL.md#方法 第5/6步；原件：verify execute/run-command回执与原输出。 沿长任务怎么控制保存事件等待、停扩/复盘、真实124/130及子孙清理、S/M/L与最终完整覆盖；开发期定向测试完成并明确就绪后，审查与独立测试按唯一七步顺序派发，可并行。",
+      "observable_result": "在本段真 RED 与公开演示原件上按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。 判定消费：SKILL.md#方法 第5/6步；原件：verify execute/run-command回执与原输出。 沿长任务怎么控制保存事件等待、停扩/复盘、真实124/130及子孙清理、S/M/L与最终完整覆盖；开发期定向测试完成并明确就绪后，审查与独立测试按唯一七步顺序派发，可并行。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -102,7 +102,7 @@
     {
       "step_id": 6,
       "step_slug": "inspect-acceptance-and-ui",
-      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者核对；声明写集含浏览器可见面时实际执行 isolated-browser-qa，在唯一原ref留engine、route／场景、截图路径或真实not_observed及原因、命令／输出／exit；只有声明写集不含任何浏览器可见面才用 N/A 并具名判断依据，适用但缺工具记unavailable与恢复条件；模拟或缺失不冒充通过。 判定消费：SKILL.md#方法 第6/7步；原件：AC实际/反例原件、engine/route/截图或not_observed。 UI 任务时按 1440×900 与 390×844 两种视口、固定浏览器与系统默认字体、缩放 100%、固定数据截图并排看，逐项写通过、差异与用户接受的偏差，偏差由用户确认、不由实现者自签；前端质量最低判据照决策记录工作包 4「前端质量的最小判据」含两尺寸能打开、无控制台错误、无横向滚动、390 宽主操作不被裁切可到达、可键盘到达、焦点可见、可访问名非空、LCP 不超过 2.5 秒、CLS 不超过 0.1、INP 不超过 200 毫秒、200% 缩放主操作可达不裁切、读屏做不了记不可用与负责人和恢复条件；非 UI 跳过。",
+      "observable_result": "对照同一真 RED 与公开演示原件，每AC的实际效果/失败反例/未执行项可读；UI按真实消费者核对；声明写集含浏览器可见面时实际执行 isolated-browser-qa，在唯一原ref留engine、route／场景、截图路径或真实not_observed及原因、命令／输出／exit；只有声明写集不含任何浏览器可见面才用 N/A 并具名判断依据，适用但缺工具记unavailable与恢复条件；模拟或缺失不冒充通过。 判定消费：SKILL.md#方法 第6/7步；原件：AC实际/反例原件、engine/route/截图或not_observed。 UI 任务时按 1440×900 与 390×844 两种视口、固定浏览器与系统默认字体、缩放 100%、固定数据截图并排看，逐项写通过、差异与用户接受的偏差，偏差由用户确认、不由实现者自签；前端质量最低判据照决策记录工作包 4「前端质量的最小判据」含两尺寸能打开、无控制台错误、无横向滚动、390 宽主操作不被裁切可到达、可键盘到达、焦点可见、可访问名非空、LCP 不超过 2.5 秒、CLS 不超过 0.1、INP 不超过 200 毫秒、200% 缩放主操作可达不裁切、读屏做不了记不可用与负责人和恢复条件；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "task_original_ref",

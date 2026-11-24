@@ -146,7 +146,7 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    第 7 步组件沉淀结论与七项界面判定字段，
    按 `skills/plan-design-review/SKILL.md` 的八维看真实截图；
    截图、差异或证据缺失记未测，不把功能测试通过当视觉通过。非 UI 跳过。
-9. <a id="step-analyze-review-findings"></a>主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过（四态与接受风险判据归 `skills/unit-kernel/SKILL.md` R5）。
+9. <a id="step-analyze-review-findings"></a>主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过（四态与接受风险判据归 `skills/unit-kernel/SKILL.md` R5）。本步只消费本段真 RED、演示、写入与读回，不重复实现；后段消费本段原件，不重新证明一遍。
    每次修复与验收后，在本 Phase 执行清单 `failures` 追加一行，固定五要素：轮次、新事实、严重度、结果、选择。执行清单落任务 `quality/evidence/build-code/execution-checklist-<phase>.md`；`run-checks --material-root --stage=build-code` 读该文件的 `failures` 段做最小可执行记录校验：五要素缺一、写空、只写「未取得」、缺两轮锚、连续两轮新事实「无」仍选继续修、或把只改行号/只换夹具/改断言当新事实，都具名失败。
    轮次写本 Phase 连续第几轮；新事实写这轮改变了哪个继续条件，没有就写「无」；同因＝同目标行为＋同归因＋同入口，不是错误字符串或运行级签名。
    只改报错行号、只换夹具、改断言冒通过都不算新事实：它们没改目标行为或归因，或绕过冻结与测试变更请求。
