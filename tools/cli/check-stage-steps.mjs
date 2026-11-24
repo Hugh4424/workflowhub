@@ -961,7 +961,31 @@ function isDirectionMaterialFailure(gap) {
 // one same-reviewer re-read). A current package without 轮次 is a named gap, not
 // a skip. The legacy `### 包 N 五件同包原件` block without any 轮次 stays on the
 // P1 rules and its historical verdicts are not re-judged here.
-const ELEVEN_CARD_CELLS = Object.freeze(['一句话结果', '对应需求', '现状缺口', '方案与取舍', '边界', '数据与状态', '验收', '风险与回退', '未决', '白话复述', '配套与影响']);
+// The field names, direction-card labels and per-card precision tiers come from
+// the one unit-fields dictionary. This checker only dispatches by card type; it
+// never keeps a second field table or a hand-copied precision mapping.
+const UNIT_FIELDS_PATH = join(repository, 'skills/unit-kernel/references/unit-fields.json');
+const UNIT_CARD_TYPE = '方向卡';
+let directionFieldsCache = null;
+// Read lazily: the step/receipt checks do not need card fields, and a controlled
+// package that only carries this tool plus workflows must not fail at import.
+// When a card really is checked, the dictionary must exist and is read for real.
+function directionFields() {
+  if (directionFieldsCache) return directionFieldsCache;
+  const document = JSON.parse(readFileSync(UNIT_FIELDS_PATH, 'utf8'));
+  const tiers = new Set(Object.keys(document.tiers ?? {}));
+  // Dispatch by unit: only fields the dictionary gives a direction-card precision
+  // tier are required cells of the direction card.
+  directionFieldsCache = Object.freeze((document.fields ?? [])
+    .filter(field => tiers.has(field?.cards?.[UNIT_CARD_TYPE]))
+    .map(field => Object.freeze({
+      name: field.name,
+      label: field.direction_label ?? field.name,
+    })));
+  return directionFieldsCache;
+}
+const directionCardCells = () => directionFields().map(field => field.label);
+const directionRowLabel = name => directionFields().find(field => field.name === name)?.label ?? name;
 const VERSION_COLD_MARKS = Object.freeze(['①', '②', '③', '④', '⑤', '⑥']);
 const VERSION_ADVERSARIAL_MARKS = Object.freeze(['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨']);
 function declarationField(text, key) {
@@ -1008,7 +1032,7 @@ function cardTableCells(text) {
     const heading = /^#{2,4}\s*(?:格[：:]\s*)?(?:\d+\.\s*)?([^\s#：:]+)/.exec(line.trim());
     const numbered = /^(\d+)\.\s*([^\s：:]+)/.exec(line.trim());
     const name = heading ? heading[1] : (numbered ? numbered[2] : null);
-    if (name && ELEVEN_CARD_CELLS.includes(name)) cells.push(name);
+    if (name && directionCardCells().includes(name)) cells.push(name);
   }
   return cells.length ? cells : null;
 }
@@ -1091,11 +1115,11 @@ function versionedReviewGaps({ id, block, taskPath, taskName, cardText, cardDige
     if (!cells) {
       push('方案卡形状不可读：既无「| 格 |」表也无标题式格');
     } else {
-      const missingCells = ELEVEN_CARD_CELLS.filter(cell => !cells.includes(cell));
+      const missingCells = directionCardCells().filter(cell => !cells.includes(cell));
       if (missingCells.length) push(`方案卡十一格不全：缺 ${missingCells.join('、')}`);
-      const acceptance = String(cardText).split(/\r?\n/).find(line => /^\|\s*验收\s*\|/.test(line)) ?? '';
+      const acceptance = String(cardText).split(/\r?\n/).find(line => new RegExp(`^\\|\\s*${directionRowLabel('验收')}\\s*\\|`).test(line)) ?? '';
       if (acceptance) for (const item of ['通过', '失败', '反例', '证据']) if (!acceptance.includes(item)) push(`方案卡验收四件缺：${item}`);
-      const companion = String(cardText).split(/\r?\n/).find(line => /^\|\s*配套与影响\s*\|/.test(line)) ?? '';
+      const companion = String(cardText).split(/\r?\n/).find(line => new RegExp(`^\\|\\s*${directionRowLabel('配套与写集')}\\s*\\|`).test(line)) ?? '';
       if (companion) for (const item of ['调整', '迁移', '移除', '影响范围']) if (!companion.includes(item)) push(`方案卡配套与影响四项缺：${item}`);
     }
   }
@@ -1138,7 +1162,7 @@ function lightPackageGaps({ id, body, taskPath, taskName }) {
         const cells = cardTableCells(cardText);
         if (!cells) push('方案卡形状不可读：既无「| 格 |」表也无标题式格');
         else {
-          const missing = ELEVEN_CARD_CELLS.filter(cell => !cells.includes(cell));
+          const missing = directionCardCells().filter(cell => !cells.includes(cell));
           if (missing.length) push(`方案卡十一格不全：缺 ${missing.join('、')}`);
         }
       } catch (error) { push(`方案卡不可回读（${error.message}）`); }
@@ -2370,10 +2394,65 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       if (!resolved) skipGaps.push({ ...gap, evidence_ref: ref });
     }
   } catch (error) { errors.push(`跳过缺口不可读：${error.message}`); }
+// PRD step 4: locate the current PRD's actual task section and its provider
+// from the same doc. This is a narrow read of an existing material, not a new
+// checker; other stages/steps keep the old card output unchanged.
+function prdTaskSectionFact({ stage: cardStage, stepId, materialRoot: root }) {
+  if (cardStage !== 'build-prd' || stepId !== 4 || !root) return null;
+  const file = 'prd.md';
+  let text;
+  try { text = readFileSync(join(root, file), 'utf8'); }
+  catch (error) { return { present: false, path: file, reason: `${file} 不可读：${error.code ?? error.message}` }; }
+  const lines = text.split(/\r?\n/);
+  let fence = false;
+  let sectionAt = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^\s*```/.test(lines[index])) { fence = !fence; continue; }
+    if (!fence && /^##\s+任务卡\s*$/.test(lines[index])) { sectionAt = index; break; }
+  }
+  if (sectionAt < 0) return { present: false, path: file, reason: '缺「## 任务卡」节' };
+  let headingAt = -1, heading = null, taskId = null;
+  fence = false;
+  for (let index = sectionAt + 1; index < lines.length; index += 1) {
+    if (/^\s*```/.test(lines[index])) { fence = !fence; continue; }
+    if (fence) continue;
+    if (/^##\s+/.test(lines[index])) break;
+    const match = /^#{3,4}\s+(.+?)\s*$/.exec(lines[index]);
+    if (!match || /空卡模板|四行验收/.test(match[1])) continue;
+    const id = /(?:CARD-[A-Z0-9-]+|\bT\d{3,}\b|任务\s*\d+)/.exec(match[1])?.[0] ?? null;
+    if (id) { headingAt = index; heading = match[1]; taskId = id; break; }
+    if (headingAt < 0) { headingAt = index; heading = match[1]; }
+  }
+  if (headingAt < 0) return { present: false, path: file, reason: '「任务卡」节没有任务分节' };
+  if (!taskId) taskId = /(?:CARD-[A-Z0-9-]+|\bT\d{3,}\b|任务\s*\d+)/.exec(heading)?.[0] ?? null;
+  const coverageStart = lines.findIndex(line => /^##\s+.*(?:附录 B|决策覆盖表)/.test(line));
+  const findCoverage = start => {
+    if (!taskId) return -1;
+    for (let index = Math.max(start, 0); index < lines.length; index += 1) {
+      if (index === headingAt || !/^\s*\|/.test(lines[index])) continue;
+      if (lines[index].includes(taskId)) return index;
+    }
+    return -1;
+  };
+  let coverageAt = coverageStart >= 0 ? findCoverage(coverageStart) : -1;
+  if (coverageAt < 0) coverageAt = findCoverage(0);
+  const providerAt = lines.findIndex(line => /^>\s*写入者[：:]/.test(line));
+  const provider = providerAt >= 0
+    ? (/^>\s*写入者[：:]\s*([^|\n]+)/.exec(lines[providerAt])?.[1]?.trim().replace(/`/g, '') ?? null)
+    : null;
+  return {
+    present: true, path: file, line: headingAt + 1, heading, task_id: taskId,
+    provider, provider_ref: providerAt >= 0 ? `${file}:${providerAt + 1}` : null,
+    coverage_ref: coverageAt >= 0 ? `${file}:${coverageAt + 1}` : null,
+    reason: provider ? '同稿任务分节与提供者可读' : '同稿任务分节可读；PRD 头缺「> 写入者：」行，提供者未取得',
+  };
+}
+
   const currentStage = reports.find(row => row.stage === stage);
   const current = selectedStep !== undefined
     ? currentStage?.steps.find(row => row.step_id === selectedStep)
     : currentStage?.steps.find(row => !['completed', 'not_applicable'].includes(row.state));
+  const prdTask = card && current ? prdTaskSectionFact({ stage, stepId: current.step_id, materialRoot }) : null;
   const currentCard = card && current ? {
     stage, step_id: current.step_id, step_slug: current.step_slug,
     result: current.result ?? '按本步方法留下具名原件；未取得不能冒完成。',
@@ -2384,8 +2463,18 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         : '需要真实用户答复；未答停在本步。'
       : '缺少本步必需输入时停止该路径，保留原因、负责人和恢复条件。'}可读或 exit 0 不代表完成；按本步判据独立核对。`,
     paths: [...new Set([`${skillFileFor(current.source, stage)}#${current.method_anchor}`, current.source,
+      ...(prdTask?.present ? [prdTask.path] : []),
       (current.evidence.find(item => item.present === true) ?? current.evidence.find(item => item.ref && !item.ref.endsWith('/') && item.kind !== 'task_original_ref'))?.ref].filter(Boolean))],
-    evidence: current.evidence.length ? current.evidence : [{ ref: current.evidence_location, present: false, reason: '尚未取得具名原件' }],
+    evidence: [
+      ...(current.evidence.length ? current.evidence : [{ ref: current.evidence_location, present: false, reason: '尚未取得具名原件' }]),
+      ...(prdTask ? [{
+        kind: 'prd_task_section',
+        ref: prdTask.present ? `${prdTask.path}:${prdTask.line}` : prdTask.path,
+        present: prdTask.present === true,
+        reason: prdTask.reason,
+      }] : []),
+    ],
+    ...(prdTask ? { task_section: prdTask } : {}),
     self_check: `node tools/cli/check-stage-steps.mjs --stage=${stage} --step=${current.step_id} --card --task-path=${taskPath}${materialRoot ? ` --material-root=${materialRoot}` : ''}${runId ? ` --run-id=${runId}` : ''}${phase ? ` --phase=${phase}` : ''}${commit ? ` --commit=${commit}` : ''}`,
     requires_user_reply: current.requires_user_reply,
   } : null;

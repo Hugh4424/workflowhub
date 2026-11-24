@@ -1,25 +1,56 @@
 #!/usr/bin/env node
 // 机械检查一张十一格卡：先看结构（真表格行，而不是散落的关键词），
-// 再看卡末声明的角色原件与包级答复是否仍与当前卡版本对得上。
-// 机器只判形状与绑定：够不够轻、方案成不成立、审查者是否真的独立，归人读。
+// 再做一种具名窄内容检查（判据档整句空话），最后看卡末声明的角色原件与
+// 包级答复是否仍与当前卡版本对得上。
+// 机器只判形状、绑定与这一种窄内容项：够不够轻、方案成不成立、审查者是否
+// 真的独立，归人读。
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-export const CARD_ROWS = [
-  '一句话结果',
-  '对应需求',
-  '现状缺口',
-  '方案与取舍',
-  '边界',
-  '数据与状态',
-  '验收',
-  '风险与回退',
-  '未决',
-  '白话复述',
-  '配套与影响',
-];
+// 同源字段字典：字段语义、三卡精度与旧别名只在 references/unit-fields.json 一处。
+// 本入口只负责方向卡：字段名、格名与字段精度都从字典派生，不在这里另写字段表。
+// 读取是惰性的：单独搬运 decision-maker 时，CLI 会给出具名错误并以 2 退出，
+// 不抛顶层 ENOENT 栈；--version 不需要字典。
+const UNIT_FIELDS_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../unit-kernel/references/unit-fields.json',
+);
+export const CARD_TYPE = '方向卡';
+let unitFieldsCache = null;
+
+function dictionaryFailure(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function unitFields() {
+  if (unitFieldsCache) return unitFieldsCache;
+  let text;
+  try {
+    text = fs.readFileSync(UNIT_FIELDS_PATH, 'utf8');
+  } catch (error) {
+    throw dictionaryFailure(
+      'UNIT_FIELDS_UNAVAILABLE',
+      `字段字典不可读：${UNIT_FIELDS_PATH}（${error.code ?? error.message}）；` +
+        '请确认 skills/unit-kernel/references/unit-fields.json 随技能搬运',
+    );
+  }
+  try {
+    unitFieldsCache = JSON.parse(text);
+  } catch (error) {
+    throw dictionaryFailure('UNIT_FIELDS_INVALID', `字段字典不是合法 JSON：${UNIT_FIELDS_PATH}（${error.message}）`);
+  }
+  return unitFieldsCache;
+}
+
+function directionFields() {
+  return unitFields().fields.filter((field) => field && field.cards && field.cards[CARD_TYPE]);
+}
+
+const directionLabel = (field) => field.direction_label ?? field.name;
 export const SUPPORT_ITEMS = ['配套调整', '配套迁移', '配套移除', '影响范围'];
 // 验收四件：通过条件、失败条件、至少一个反例、证据。四项都要有真内容，写「无」不算。
 export const ACCEPTANCE_ITEMS = ['通过', '失败', '反例', '证据'];
@@ -57,13 +88,18 @@ export function cardVersion(text) {
   return sha256(`${splitCard(text).body.replace(/[ \t\r\n]+$/u, "")}\n`);
 }
 
-/** 取真实表格行：第一格必须就是格名，散落在正文里的同词不算。 */
+/** 取真实表格行：第一格必须就是该字段的方向卡格名或字典字段名，散落的同词不算。 */
 function rowValues(text) {
   const values = new Map();
-  for (const name of CARD_ROWS) {
-    const escaped = escapeRegExp(name);
-    const match = text.match(new RegExp(`^\\|\\s*${escaped}\\s*\\|(.*)\\|\\s*$`, 'm'));
-    if (match) values.set(name, match[1].trim());
+  for (const field of directionFields()) {
+    for (const label of [directionLabel(field), field.name]) {
+      const escaped = escapeRegExp(label);
+      const match = text.match(new RegExp(`^\\|\\s*${escaped}\\s*\\|(.*)\\|\\s*$`, 'm'));
+      if (match) {
+        values.set(field.name, match[1].trim());
+        break;
+      }
+    }
   }
   return values;
 }
@@ -105,6 +141,14 @@ function meaningful(text, min = 4) {
   if (EMPTY_VALUE.test(cleaned)) return false;
   if (PLACEHOLDER.test(cleaned)) return false;
   return true;
+}
+
+// 判据档空话：整格只写一句放之四海皆准的话，独立读者仍无法据此判真假。
+// 只命中明确的整句空话；有具体对象、条件、信号或证据的长句不按本条拒绝。
+const SMALLTALK_JUDGEMENT = /^(?:按计划(?:实现|执行|落地)?|照计划(?:实现|执行)?|按方案(?:实现|执行)?|按原计划(?:实现|执行)?|按既定(?:方案|计划)(?:实现|执行)?|应(?:该)?通过|按验收(?:执行)?|按需(?:实现|处理)?|正常(?:实现|处理)|按预期(?:实现|通过)?|同上|见上|照此(?:实现|执行)?|待定)$/u;
+
+function judgementSmalltalk(cell) {
+  return SMALLTALK_JUDGEMENT.test(String(cell ?? '').replace(/[\s。．.；;，,、]/gu, ''));
 }
 
 /**
@@ -219,20 +263,20 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   // 只把 mtime 当 advisory 提示，判定只用可解析、不是未来时间与卡末调用一致三项。
   const warnings = [];
 
-  const missing = CARD_ROWS.filter((name) => !values.has(name));
+  const missing = directionFields().filter((field) => !values.has(field.name));
   // 有这一行不等于填过：空、占位词、纯标点都按写空失败。验收格另有逐项判法，
   // 通用判据只负责确认整格不是空的，避免同一缺陷报两遍。
-  const empty = CARD_ROWS.filter((name) => values.has(name) && !meaningful(values.get(name), 4));
-  const fourMissing = SUPPORT_ITEMS.filter((item) => !(values.get('配套与影响') ?? '').includes(item));
+  const empty = directionFields().filter((field) => values.has(field.name) && !meaningful(values.get(field.name), 4));
+  const fourMissing = SUPPORT_ITEMS.filter((item) => !(values.get('配套与写集') ?? '').includes(item));
   const acceptanceCell = values.get('验收') ?? '';
   const problems = values.has('验收') ? acceptanceProblems(acceptanceCell) : [];
   const acceptMissing = values.has('验收') ? problems.filter((p) => p.kind === 'missing').map((p) => p.item) : [...ACCEPTANCE_ITEMS];
   const acceptEmpty = problems.filter((p) => p.kind === 'empty').map((p) => p.item);
 
-  for (const name of missing) reasons.push(`缺格：${name}`);
-  for (const name of empty) {
-    if (name === '验收' && (acceptMissing.length || acceptEmpty.length)) continue;
-    reasons.push(`格写空：${name}（空、占位词或纯标点不算填过）`);
+  for (const field of missing) reasons.push(`缺格：${directionLabel(field)}`);
+  for (const field of empty) {
+    if (field.name === '验收' && (acceptMissing.length || acceptEmpty.length)) continue;
+    reasons.push(`格写空：${directionLabel(field)}（空、占位词或纯标点不算填过）`);
   }
   for (const item of fourMissing) reasons.push(`配套与影响缺项：${item}`);
   for (const item of acceptMissing) reasons.push(`验收缺项：${item}`);
@@ -243,7 +287,18 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   if (values.has('验收') && acceptanceConflict(acceptanceCell)) {
     reasons.push('验收同一段并存通过与失败判词：把通过条件、失败条件和反例拆开写');
   }
-  const plain = values.get('白话复述');
+  // 具名窄内容检查（本文件唯一一处）：方向卡判据档字段必须是能据此判的实写；
+  // 只拒绝整句空话，不判方案好坏，也不替独立审查判质量。
+  for (const field of directionFields()) {
+    if (field.cards?.[CARD_TYPE] !== '判据' || !values.has(field.name)) continue;
+    const value = values.get(field.name);
+    if (!judgementSmalltalk(value)) continue;
+    reasons.push(
+      `精度不足：字段「${field.name}」在${CARD_TYPE}是「判据」档，现在只写「${value}」；` +
+        '判据档要写能据此判断的对象、条件、通过/失败信号与证据落点，空话不算达到精度。',
+    );
+  }
+  const plain = values.get('人话复述');
   if (plain !== undefined && INTERNAL_ID.test(plain)) {
     reasons.push('白话复述含未解释的内部编号：改成大白话，编号留在对应需求/验收格');
   }
@@ -367,7 +422,20 @@ export function validateCard({ cardPath, bind = false, packageDir = null } = {})
   }
 
   const ok = reasons.length === 0 && gaps.length === 0;
-  return { file, ok, missing, empty, fourMissing, acceptMissing, acceptEmpty, reasons, gaps, warnings, cardVersion: cardVersion(text), answer };
+  return {
+    file,
+    ok,
+    missing: missing.map(directionLabel),
+    empty: empty.map(directionLabel),
+    fourMissing,
+    acceptMissing,
+    acceptEmpty,
+    reasons,
+    gaps,
+    warnings,
+    cardVersion: cardVersion(text),
+    answer,
+  };
 }
 
 function main() {
