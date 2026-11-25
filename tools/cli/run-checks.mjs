@@ -372,7 +372,12 @@ export function readinessEvidenceStatus(evidence, { recordRoot = null, materialR
 
 function sectionBody(text, name) {
   const lines = String(text ?? "").split(/\r?\n/);
-  const start = lines.findIndex((line) => new RegExp(`^##\\s+${name}\\s*$`, "i").test(line));
+  // The real checklists use a numbered heading with a parenthetical, for
+  // example `## 6. failures（五要素：…）`. Accept that shape (optional numeric
+  // prefix and annotation) as well as the bare `## failures`; only the heading
+  // is widened, the five-element rule below is unchanged.
+  const heading = new RegExp(`^##\\s+(?:\\d+(?:\\.\\d+)*[.、]?\\s*)?${name}(?:\\s*[（(].*)?\\s*$`, "i");
+  const start = lines.findIndex((line) => heading.test(line));
   if (start < 0) return null;
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => /^##\s+/.test(line));

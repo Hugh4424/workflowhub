@@ -111,3 +111,12 @@ it("P6 failures：五要素、两轮锚齐才通过；未取得、伪新事实�
 
   expect(failureDispositionProblems("# checklist\n\n## diffs\n").join("\n")).toMatch(/缺 failures 段/);
 });
+
+it("P6 failures：编号式标题（## 6. failures…）被识别，五要素缺失仍具名失败", () => {
+  // The real P1/P2/P5 checklists use a numbered heading with a parenthetical.
+  // Widening the heading shape must not widen the five-element rule itself.
+  const numbered = VALID_RECORD.replace("## failures", "## 6. failures（五要素：轮次、新事实、严重度、结果、选择）");
+  expect(failureDispositionProblems(numbered)).toEqual([]);
+  const missing = numbered.replace("| 1 | 新回执显示权限被拒，改变了继续条件 |", "| 1 |  |");
+  expect(failureDispositionProblems(missing).join("\n")).toMatch(/第 1 行缺新事实或写空/);
+});
