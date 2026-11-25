@@ -14,6 +14,7 @@ import { openTask } from "../runtime/task/task-handle.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
 import { readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
+import { readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
 const AUTH = fileURLToPath(new URL("../runtime/interface/git-authorize.mjs", import.meta.url));
@@ -111,20 +112,6 @@ function contextForPlan(taskDir, planRef) {
   if (dirname(path) !== base || !/^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json$/.test(basename(path))) throw failure("CLOSE_PLAN_REFERENCE", "an explicit task-owned ordinary plan reference is required");
   const preview = JSON.parse(readFile(base, basename(path)));
   return context(dir, { worktreeRequired: false, targetBranch: preview.target_branch });
-}
-function declaredTaskType(markdown) {
-  const lines = String(markdown).split(/\r?\n/), heads = lines.map((line,index) => ({line,index})).filter(({line}) => /^#{1,3}\s+(?:任务身份|task identity)\s*$/i.test(line));
-  if (heads.length !== 1) return "unknown";
-  const start = heads[0].index + 1, end = lines.findIndex((line,index) => index >= start && /^#{1,3}\s/.test(line));
-  const values = []; let fenced = false;
-  const clean = text => String(text).trim().replace(/^\*+|\*+$/g, "").replace(/^`+|`+$/g, "").trim();
-  for (const line of lines.slice(start, end < 0 ? undefined : end)) {
-    if (/^\s*```/.test(line)) { fenced = !fenced; continue; } if (fenced) continue;
-    const bullet = line.match(/^\s*[-*]\s+\*\*任务类型\*\*\s*[:：]\s*(.*?)\s*$/);
-    if (bullet) values.push(clean(bullet[1]));
-    else if (/^\s*\|/.test(line)) { const cells = line.split("|").slice(1,-1).map(clean); if (cells[0] === "任务类型") values.push(cells[1]); }
-  }
-  return values.length === 1 && ["规划任务", "普通任务"].includes(values[0]) ? values[0] : "unknown";
 }
 function actionFacts(c, planRef) {
   const base = closeEvidencePath(c.taskDir);
@@ -592,7 +579,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   }
   const c = context(taskDir, { targetBranch: delivery.target_branch ?? "main" }); const source = sourceState(c.worktree, c.manifest.task_id);
   let taskType = "unknown";
-  try { taskType = declaredTaskType(readFile(c.worktree, `specs/${c.manifest.task_id}/decision-log.md`).toString("utf8")); }
+  try { taskType = readTaskTypeFromDecisionLog(readFile(c.worktree, `specs/${c.manifest.task_id}/decision-log.md`).toString("utf8")); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   const mode = taskType === "规划任务" ? "planning" : closeMode ?? delivery.close_mode ?? "ordinary";
   if (!["ordinary", "planning"].includes(mode)) throw failure("CLOSE_MODE", "unsupported close mode");

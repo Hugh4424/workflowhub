@@ -157,7 +157,7 @@ if (!await removal.verify(after)) throw new Error('worktree removal not verified
 
 worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`git branch -d -- <实际任务分支>`删除已合入本地任务分支，禁止`-D`。删除同名远端任务分支前用`git ls-remote --heads`核真实存在/OID和已交付范围，再按本次远端删除授权record/consume后普通`git push <remote> --delete <实际任务分支>`；不存在记不存在，不造失败或删除成功。清理授权必须明确覆盖远端同名分支删除；范围不含则保留，不借push授权扩大。不得force/强推、整树丢弃或删除main/existing workspace。
 
-交回caller逐项清单：实施/质量/业务验收/发布的真实状态；代码图、文档图各自的更新/无变化/失败回执；commit/push-task/PR/merge/push；两路推送各自的 branch/HEAD 与 consumed 回执；归档/具名保留；worktree/本地分支/远端同名分支清理；每项实际命令/退出/原件及未完成owner/条件。caller据此保存已有正式事实与stage-handoff，报告实际不可变handoff绝对路径，本方法不另写第二进度对象。动作失败、unknown或skipped保原样，不用总计绿填平。
+交回caller逐项清单：实施/质量/业务验收/发布的真实状态；代码图、文档图各自的更新/无变化/失败回执；commit/push-task/PR/merge/push；两路推送各自的 branch/HEAD 与 consumed 回执；归档/具名保留；worktree/本地分支/远端同名分支清理；交接「阶段复盘」行：只核该行存在、行内路径以当前 task 根可打开、每条晋升带旧错 path#L 与失败读数；不复述条目、不判晋升对错；每项实际命令/退出/原件及未完成owner/条件。caller据此保存已有正式事实与stage-handoff，报告实际不可变handoff绝对路径，本方法不另写第二进度对象。动作失败、unknown或skipped保原样，不用总计绿填平。
 
 完成：每项声明都与实际效果及原件对应，本次自建临时物只清具名且确定可再生项；历史raw/review、未知/私有/未交付字节和父材料例外仍可读。真实PR服务、用户选择或外部平台未执行时明确未覆盖。
 

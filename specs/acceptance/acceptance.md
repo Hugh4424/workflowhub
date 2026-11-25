@@ -10,7 +10,7 @@
 
 ## 专业规则与失败边界
 
-每Phase按承接AC与真实输入首判，末Phase聚合沿途结论及必要未闭环case；只跑受影响定向测试，禁止无范围全量vitest/npm test/test:safe。原输出/回执/审查保唯一真实原件，经认证task.captureCommand/appendRecord保存。fixture/静态结构/真实服务分别说明，exit0不代语义或业务完成；unknown/unavailable/incomplete限制完成陈述，不阻安全修复。独立质量裁决不由实施者自签。
+每Phase按承接AC与真实输入首判，末Phase聚合沿途结论及必要未闭环case；测试范围与例外沿[标准工作方法](../../docs/standard-workflow.md#build-code-测试与质量)。原输出/回执/审查保唯一真实原件，经认证task.captureCommand/appendRecord保存。fixture/静态结构/真实服务分别说明，exit0不代语义或业务完成；unknown/unavailable/incomplete限制完成陈述，不阻安全修复。独立质量裁决不由实施者自签。
 
 ## 真实consumer与接缝
 
