@@ -18,8 +18,11 @@ import {
 } from '../../runtime/stage/stage-registry.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const P5_CARD = 'specs/delivery-quality-plan-20261123/phases/P5-判据期限与索引.md';
-const P5_SPEC = 'specs/delivery-quality-plan-20261123/spec.md';
+// The old default pointed at a live task material that no longer exists; read
+// the archived (read-only) original instead. Six write-set assertions in this
+// file are superseded by the 2026-11-25 TCR, so this is provenance only.
+const P5_CARD = 'specs/archive/delivery-quality-plan-20261123/phases/P5-判据期限与索引.md';
+const P5_SPEC = 'specs/archive/delivery-quality-plan-20261123/spec.md';
 const INDEX_TEMPLATE = 'skills/spec-plan/templates/index-template.md';
 const PHASE_TEMPLATE = 'skills/spec-plan/templates/phase-template.md';
 const SPEC_PLAN_SKILL = 'skills/spec-plan/SKILL.md';

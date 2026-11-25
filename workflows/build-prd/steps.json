@@ -56,6 +56,10 @@
         {
           "kind": "task_original_ref",
           "uri_or_path": "facts.jsonl#expand-task-section"
+        },
+        {
+          "kind": "material",
+          "uri_or_path": "prd.md#任务卡"
         }
       ]
     },

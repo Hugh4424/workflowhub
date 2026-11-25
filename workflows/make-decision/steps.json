@@ -152,10 +152,6 @@
           "uri_or_path": "decision-log.md#每个包定了哪些决定"
         },
         {
-          "kind": "talk_original",
-          "uri_or_path": "quality/evidence/decision-log-refs/talk/"
-        },
-        {
           "kind": "task_original_ref",
           "uri_or_path": "facts.jsonl#package-convergence"
         }

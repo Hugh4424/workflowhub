@@ -44,22 +44,60 @@
  * 只读真实工作树；破坏只发生在 /private/tmp 的隔离副本（用完保留，不删真件）。
  */
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join, sep } from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = realpathSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".."));
 const NODE = process.execPath;
 const CLI = join(ROOT, "tools/cli/check-stage-steps.mjs");
+const TEMP_BASE = existsSync("/private/tmp") ? "/private/tmp" : undefined;
+
+// The default roots are an isolated task + material fixture owned by this test.
+// The old default pointed at a historical task library that no longer exists,
+// which made the positive read fail before any contract was checked. The
+// fixture is a real git repo because the checker --commit must equal the
+// material worktree HEAD; mutations below only touch per-test copies.
+function isolatedMaterialFixture() {
+  assert.ok(TEMP_BASE, "P3 默认根需要 /private/tmp 隔离任务与材料根");
+  const base = realpathSync(mkdtempSync(join(TEMP_BASE, "p3-skill-usage-default-")));
+  const repo = join(base, "repo");
+  const taskId = "delivery-quality-plan-20261123";
+  const material = join(repo, "specs", taskId);
+  mkdirSync(join(material, "phases"), { recursive: true });
+  const git = args => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git(["init", "-q", "-b", "main"]);
+  git(["config", "user.name", "p3 default fixture"]);
+  git(["config", "user.email", "fixture@local.invalid"]);
+  writeFileSync(join(material, "decision-log.md"), "# Decision\n\n- 推荐级别：复杂\n");
+  writeFileSync(join(material, "spec.md"), "# Spec\n\n- **FR-001**：受控结果可读。\n");
+  writeFileSync(join(material, "phases/index.md"), `# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| \`P1\` | \`phases/P1-受控结果.md\` | \`phase-P1\` | \`src/alpha.mjs\` | \`none\` | build-code |\n`);
+  writeFileSync(join(material, "phases/P1-受控结果.md"), "# Phase P1 — 受控结果\n\n### T001 — 受控结果\n\n- **文件 / 符号**：\`src/alpha.mjs\` symbol: renderResult。\n");
+  git(["add", "."]);
+  git(["commit", "-qm", "isolated material"]);
+  const head = git(["rev-parse", "HEAD"]);
+  const taskPath = join(base, "storage", "Projects", "workflowhub", "tasks", taskId);
+  mkdirSync(join(taskPath, "quality", "tests"), { recursive: true });
+  writeFileSync(join(taskPath, "task.json"), `${JSON.stringify({
+    schema_version: "1.0.0", project_name: "workflowhub", task_id: taskId,
+    target_repo_root: repo, activation_cohort: "post", record_model: "vnext-single-write",
+  }, null, 2)}\n`);
+  writeFileSync(join(taskPath, "facts.jsonl"), "");
+  return { base, repo, material, taskPath, head };
+}
+const FIXTURE = isolatedMaterialFixture();
+after(() => rmSync(FIXTURE.base, { recursive: true, force: true }));
 const MATERIAL_ROOT = process.env.WORKFLOWHUB_P3_MATERIAL_ROOT
   ? realpathSync(process.env.WORKFLOWHUB_P3_MATERIAL_ROOT)
-  : join(ROOT, "specs/delivery-quality-plan-20261123");
+  : FIXTURE.material;
 const TASK_ROOT = process.env.WORKFLOWHUB_P3_TASK_ROOT
   ? realpathSync(process.env.WORKFLOWHUB_P3_TASK_ROOT)
-  : "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/delivery-quality-plan-20261123";
-const TEMP_BASE = existsSync("/private/tmp") ? "/private/tmp" : undefined;
+  : FIXTURE.taskPath;
+const MATERIAL_CWD = process.env.WORKFLOWHUB_P3_MATERIAL_ROOT
+  ? execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: MATERIAL_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim()
+  : FIXTURE.repo;
 
 // P3 卡第 166–178 行：真实步骤入口 → 声明的文件及目标锚。
 const DESIGNATED = [
@@ -172,7 +210,7 @@ function anchorProblem(text, anchor) {
   return `锚 #${anchor} 在该文件里没有可跳转目标（既无 <a id="${anchor}">，也无匹配标题）`;
 }
 
-const HEAD = headCommit();
+const HEAD = FIXTURE.head;
 const commitArgs = () => [`--commit=${HEAD}`];
 
 function cardArgs({ stage, step, repoRoot = ROOT, taskPath = TASK_ROOT }) {
@@ -343,6 +381,28 @@ test("ORACLE-SKILL-USE 破坏 3：锚写成文件里不存在的锚 → 具名�
   }
 });
 
+test("ORACLE-SKILL-USE 改坏必红：删隔离根的 phases/index.md 后取卡读回不完整", () => {
+  const index = join(MATERIAL_ROOT, "phases/index.md");
+  const moved = join(MATERIAL_ROOT, "phases/index.md.p3-broken");
+  renameSync(index, moved);
+  try {
+    const run = runCli(cardArgs({ stage: "build-plan", step: 6 }));
+    assert.equal(run.status, 0, `删索引后取卡入口退出 ${run.status}：${clip(run.output)}`);
+    const baseline = parseJson(run.stdout)?.card?.reading_baseline;
+    assert.equal(baseline?.complete, false,
+      `删 phases/index.md 后 reading_baseline 仍完整：${JSON.stringify(baseline?.paths ?? [])}；` +
+      "默认根若仍指旧任务或隔离根失效，这条反向断言抓不到缺件");
+    const broken = (baseline?.paths ?? []).find(item => item?.ref === "phases/index.md");
+    assert.equal(broken?.observed, false, "删索引后 phases/index.md 仍记为已读，反向断言失效");
+  } finally {
+    renameSync(moved, index);
+  }
+  const restored = runCli(cardArgs({ stage: "build-plan", step: 6 }));
+  assert.equal(restored.status, 0, `恢复 phases/index.md 后取卡入口退出 ${restored.status}：${clip(restored.output)}`);
+  assert.equal(parseJson(restored.stdout)?.card?.reading_baseline?.complete, true,
+    "恢复 phases/index.md 后 reading_baseline 仍不完整，恢复路径未生效");
+});
+
 test("ORACLE-SKILL-USE 读取标记：缺当次回执/回执不匹配 → 失败；给当前声明的真实读取回执 → 通过", async t => {
   assert.ok(TEMP_BASE, "读取回执需要 /private/tmp 隔离任务根");
   const entry = DESIGNATED.find(item => item.stage === "build-plan" && item.step === 6);
@@ -374,7 +434,7 @@ test("ORACLE-SKILL-USE 读取标记：缺当次回执/回执不匹配 → 失败
   writeFileSync(join(taskPath, "quality/tests/p3-skill-read-output.json"), read.stdout);
 
   const receipt = {
-    cwd: realpathSync(ROOT),
+    cwd: MATERIAL_CWD,
     argv: [NODE, "tools/cli/check-stage-steps.mjs", ...readArgs],
     exit_code: 0,
     started_at: startedAt,

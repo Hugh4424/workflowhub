@@ -11006,6 +11006,45 @@
       ],
       "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
       "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "runtime/task/step-coverage.mjs",
+      "destination": "runtime/task/step-coverage.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "声明步覆盖的唯一判定实现：只从报告行的非空 skill 派生、无对应行不适用、definition_unavailable 单列、named_evidence_gap 保留既有 make-decision 具名缺口；不保存状态、不建第二证据账本。",
+      "owner": "runtime/task（声明步覆盖与收口判定）",
+      "consumer": "core/task-close.mjs 的 closeDelivery 早门（直接 import）与 tools/cli/run-checks.mjs 的 stepCoverageExit（import 并再导出）；两个测试经 run-checks 的 stepCoverageExit 读取，不直接 import 本模块。",
+      "module_consumers": [
+        "core/task-close.mjs",
+        "tools/cli/run-checks.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/make-decision/steps.json",
+        "workflows/build-prd/steps.json",
+        "workflows/build-plan/steps.json",
+        "workflows/build-code/steps.json"
+      ],
+      "delete_condition": "声明步覆盖改由经独立验证的同一职责替代实现承接、core 与 CLI 两 consumer 迁移后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P9/T059；R-030；登记不证明已验收。"
+    },
+    {
+      "source": "runtime/interface/record-step-evidence.mjs",
+      "destination": "runtime/interface/record-step-evidence.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "声明步单步证据的唯一私有写入口：校验 receipt/claim 后经 runtime/task/task-store.mjs#appendStepEvidence 写 facts；不是公共 runtime behavior，不新增公共命令节点。",
+      "owner": "runtime/task（task-store 写入口）",
+      "consumer": "build-code 阶段执行者以 `node runtime/interface/record-step-evidence.mjs` 显式调用；tests/contract/four-skill-wiring.test.mjs 以子进程 spawn 调用（模块 import 关系为无）；不进入 RUNTIME_BEHAVIORS、不是 stage 步骤。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/steps.json",
+        "workflows/build-prd/steps.json",
+        "workflows/build-plan/steps.json",
+        "workflows/build-code/steps.json"
+      ],
+      "delete_condition": "声明步证据生产者由经独立验证的同一职责替代实现承接且全部调用者迁移后删除；已写入 facts 条目保留为历史事实。",
+      "retention_basis": "delivery-quality-code-20261124 P9/T057；A1 宪法修正（record-* 只作私有实现）；登记不证明已验收。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

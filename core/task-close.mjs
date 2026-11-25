@@ -1234,10 +1234,64 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
     return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claimsReadback, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
   });
 }
+// The declared-step gate must read the same material root the close plan will
+// publish: the task worktree owns `specs/<task-id>` even when the process runs
+// from the target checkout. Candidates are tried in order and the first one
+// with a readable decision-log.md wins; an empty list is a hard failure, never a
+// silent fallback to "no missing steps".
+function declaredStepMaterialRoot(taskDir, manifest, targetBranch) {
+  const candidates = [];
+  // `context` with worktreeRequired=false only throws for identity/registration
+  // failures; a genuinely absent worktree falls through. Never swallow an
+  // identity failure and silently read an unrelated checkout, and use the same
+  // target branch the close plan will use.
+  const c = context(taskDir, { worktreeRequired: false, targetBranch });
+  candidates.push(join(c.worktree, "specs", manifest.task_id), join(c.worktree, "specs", "archive", manifest.task_id));
+  for (const root of [manifest.target_repo_root, manifest.workspace_root, process.cwd()].filter(value => typeof value === "string" && value)) {
+    candidates.push(join(root, "specs", manifest.task_id), join(root, "specs", "archive", manifest.task_id));
+  }
+  return candidates.find(candidate => {
+    try { return lstatSync(join(candidate, "decision-log.md")).isFile(); } catch { return false; }
+  }) ?? null;
+}
+async function assertDeclaredStepsComplete(taskDir, delivery = {}) {
+  const manifest = JSON.parse(readFile(taskDir, "task.json"));
+  const targetBranch = delivery.target_branch ?? "main";
+  const materialRoot = declaredStepMaterialRoot(taskDir, manifest, targetBranch);
+  if (!materialRoot) {
+    throw failure("STEP_EVIDENCE_UNREADABLE", "收口前读不到任何含 decision-log.md 的任务材料根；声明步骤无法判定，不回落成通过");
+  }
+  const { runFinalChainCheck } = await import("../runtime/task/final-chain-runner.mjs");
+  const { declaredStepCoverage } = await import("../runtime/task/step-coverage.mjs");
+  let report;
+  try {
+    report = runFinalChainCheck({ taskPath: taskDir, materialRoot });
+  } catch (error) {
+    throw failure("STEP_EVIDENCE_UNREADABLE", `收口前读不到步骤报告（${materialRoot}）：${error.message}`);
+  }
+  const coverage = declaredStepCoverage(report, { failClosed: true });
+  if (coverage.evaluable !== true && coverage.definition_unavailable) {
+    throw failure("STEP_EVIDENCE_UNDEFINED", `收口前读不到步骤定义：${coverage.definition_unavailable.stages.join("、")}；声明步骤无法判定，不写 plan、确认或 close 记录`);
+  }
+  if (coverage.exit_code !== 0) {
+    const missing = (coverage.declared ?? []).map(row => `${row.source}#${row.step_slug}（${row.state}）`).join("；");
+    // Distinguish the two causes of a rejection: a declared-step gap names the
+    // steps; the pre-existing make-decision named-evidence gap is not a declared
+    // step, so it must not be reported as "declared steps: unavailable".
+    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；不写 plan、确认或 close 记录`);
+    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", "收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；不写 plan、确认或 close 记录");
+    throw failure("STEP_EVIDENCE_INCOMPLETE", "收口前步骤判定未通过（未取得具名缺步原因）；不写 plan、确认或 close 记录");
+  }
+}
 // The supplied real user reply covers the displayed action set. Record each
 // native operation grant explicitly, then run its physical transaction. Later
 // known HEAD changes still require a fresh native record under that scope.
 export async function closeDelivery({ taskDir, delivery, closeMode, replyText, priorPlanRef, archiveDeclarationRef, signal } = {}) {
+  assertPostWriter(taskDir);
+  // The declared-step gate runs before any close plan, confirmation or close
+  // record exists, and only covers closeDelivery. The prepare→confirm→
+  // manual-close→execute path is a recorded residual (R16), not covered here.
+  await assertDeclaredStepsComplete(taskDir, delivery);
   const prepared = await prepareDeliveryClosePlan({ taskDir, delivery, closeMode, priorPlanRef, archiveDeclarationRef });
   const confirmed = await confirmClosePlan({ taskDir, planRef: prepared.plan_ref, replyText });
   await authorizeClosePlan({ taskDir, planRef: prepared.plan_ref, confirmationRef: confirmed.confirmation_ref });

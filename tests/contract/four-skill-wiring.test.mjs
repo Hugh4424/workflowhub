@@ -22,7 +22,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test, { after } from "node:test";
@@ -94,7 +94,7 @@ const TASK_BOUND_OR_ARCHIVED = [
 // 隔离夹具：任务根必须保持 <…>/Projects/<项目>/tasks/<任务> 形状，材料根必须是
 // 一个真实 git 工作树（公开读取入口要求 --commit 等于工作区 HEAD）。这里不写入真实任务库。
 function makeFixture() {
-  const root = mkdtempSync(join(tmpdir(), "four-skill-wiring-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "four-skill-wiring-")));
   try {
     const git = args => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     git(["init", "-q"]);
@@ -235,6 +235,93 @@ test("强制读取有效（负例）：不带 --current-read-receipt 时报告�
       `强制读取：${label} 缺当次读取回执时没有具名失败\n${clip(result.output)}`);
     assert.notEqual(result.status, 0,
       `强制读取：${label} 缺当次读取回执仍以退出码 0 放行\n${clip(result.output)}`);
+  }
+});
+
+// P9/T058 新增三条：动态槽真实两态、阶段正文技能串、删索引后第 6 步不完成。
+const STAGE_SKILL = {
+  "make-decision": "skills/decision-maker/SKILL.md",
+  "build-prd": "skills/task-maker/SKILL.md",
+  "build-plan": "skills/phase-maker/SKILL.md",
+  "build-code": "skills/run-phase/SKILL.md",
+};
+
+test("动态槽：写入一条质量证据后 present=true，删除该条后 present=false", () => {
+  const factsPath = join(FIXTURE.taskPath, "facts.jsonl");
+  const original = readFileSync(factsPath, "utf8");
+  const stageRow = {
+    record_kind: "stage", task_id: "contract-fixture", stage: "build-code", source: "four-skill-wiring fixture",
+    created_at: new Date().toISOString(), review_origin: "not_run",
+    review_result_ref: { value: null, reason: "no review result recorded" }, finding_dispositions: [],
+    spec_analyze: { value: null, reason: "spec analysis not run" },
+    evidence: { value: null, reason: "no executed command evidence" },
+    serious_issue_disposition: { value: null, reason: "no serious issue disposition" },
+    close_action: { value: null, reason: "this row carries no close action" },
+    handoff: { value: null, reason: "no handoff recorded" },
+    material_bytes: { value: null, reason: "no material size baseline recorded" },
+  };
+  const claimRef = "quality/evidence/steps/build-code-2.json";
+  const claimPath = join(FIXTURE.taskPath, claimRef);
+  mkdirSync(dirname(claimPath), { recursive: true });
+  writeFileSync(claimPath, `${JSON.stringify({
+    task_id: "contract-fixture", source: "workflows/build-code/steps.json", step_slug: "write-red-tests",
+    commit: FIXTURE.head, reader: "four-skill-wiring fixture", inputs: ["RED capture"], observation: "read back",
+    criteria_ref: "workflows/build-code/SKILL.md#方法", conclusion: "completed", limits: [],
+  }, null, 2)}\n`);
+  try {
+    writeFileSync(factsPath, `${JSON.stringify(stageRow)}\n`);
+    const record = spawnSync(NODE, [join(ROOT, "runtime/interface/record-step-evidence.mjs"),
+      `--task-path=${FIXTURE.taskPath}`, "--stage=build-code", "--step=2",
+      `--ref=${claimRef}`, "--command=sed -n '1,40p' quality/evidence/steps/build-code-2.json",
+      "--exit-code=0", "--failure-signature=none", "--no-receipt",
+      "--reader-action=打开并读回 build-code-2.json 的 RED 记录", "--reader-owner=four-skill-wiring fixture",
+      `--commit=${FIXTURE.head}`, "--json"],
+    { cwd: ROOT, encoding: "utf8", timeout: 180_000, maxBuffer: 16 * 1024 * 1024 });
+    assert.equal(record.status, 0, `写入口没有写入质量证据：${clip(record.stdout)}\n${clip(record.stderr)}`);
+    const args = ["--stage=build-code", "--step=2", "--json", `--task-path=${FIXTURE.taskPath}`,
+      `--material-root=${FIXTURE.materialRoot}`, `--commit=${FIXTURE.head}`];
+    const present = runCli(args);
+    const presentJson = JSON.parse(present.stdout);
+    const presentStep = presentJson?.stages?.find(item => item.stage === "build-code")?.steps?.find(item => item.step_id === 2);
+    const presentSlot = (presentStep?.evidence ?? []).find(item => item.kind === "task_original" && item.ref === claimRef);
+    assert.equal(presentSlot?.present, true,
+      `写入后动态槽没有判 present=true：${JSON.stringify(presentStep?.evidence ?? [])}`);
+    writeFileSync(factsPath, `${JSON.stringify(stageRow)}\n`);
+    const removed = runCli(args);
+    const removedStep = JSON.parse(removed.stdout)?.stages?.find(item => item.stage === "build-code")?.steps?.find(item => item.step_id === 2);
+    const removedSlot = (removedStep?.evidence ?? []).find(item => item.kind === "task_original" && item.ref === claimRef);
+    assert.notEqual(removedSlot?.present, true,
+      `删除 facts 条目后动态槽仍判 present=true：${JSON.stringify(removedStep?.evidence ?? [])}`);
+    assert.ok((removedStep?.evidence ?? []).every(item => !(item.ref === claimRef && item.present === true)),
+      `删除 facts 条目后仍存在指向 ${claimRef} 的 present=true 条目`);
+  } finally {
+    writeFileSync(factsPath, original);
+    rmSync(claimPath, { force: true });
+  }
+});
+
+test("阶段正文含技能串：四份阶段 SKILL.md 的「方法」节点名对应技能文件", () => {
+  for (const [stage, skill] of Object.entries(STAGE_SKILL)) {
+    const body = readFileSync(join(ROOT, "workflows", stage, "SKILL.md"), "utf8");
+    assert.ok(body.includes(skill),
+      `workflows/${stage}/SKILL.md 正文没有点名 ${skill}：阶段正文与声明脱钩`);
+  }
+});
+
+test("删 phases/index.md 后 build-plan 第 6 步不判完成并点名缺件", () => {
+  const index = join(FIXTURE.materialRoot, "phases", "index.md");
+  const moved = `${index}.wiring-broken`;
+  renameSync(index, moved);
+  try {
+    const run = runCli(["--stage=build-plan", "--step=6", "--json", `--task-path=${FIXTURE.taskPath}`,
+      `--material-root=${FIXTURE.materialRoot}`, `--commit=${FIXTURE.head}`]);
+    const step = JSON.parse(run.stdout)?.stages?.find(item => item.stage === "build-plan")?.steps?.find(item => item.step_id === 6);
+    assert.notEqual(step?.judgment, "已完成",
+      `删索引后第 6 步仍判「已完成」：${JSON.stringify(step ?? null)}`);
+    assert.match(String(step?.gap ?? ""), /phases\/index\.md|索引/,
+      `第 6 步缺件没有点名 phases/index.md：${step?.gap ?? "（空）"}`);
+  } finally {
+    renameSync(moved, index);
   }
 });
 

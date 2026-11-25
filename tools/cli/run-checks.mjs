@@ -35,6 +35,7 @@ import { GAP, SIX_KEYS, validateExecutionRecord } from "../../metrics/execution-
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
 import { resolve, dirname, isAbsolute, basename, sep, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { declaredStepCoverage } from "../../runtime/task/step-coverage.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -779,53 +780,13 @@ function triageSkipReasons(phases) {
   return errors;
 }
 
-// A report projection only: zero attestation does not claim that a workflow ran.
+// The declared-step decision lives in the runtime module; this CLI only adapts
+// its report input and keeps the historical `stepCoverageExit` report shape.
+export { declaredStepCoverage } from "../../runtime/task/step-coverage.mjs";
 export function stepCoverageExit(report) {
-  if (!Array.isArray(report?.workflow_steps)) throw new TypeError("workflow_steps report is required");
-  const stages = new Map();
-  const definition_unavailable = [];
-  for (const row of report.workflow_steps) {
-    if (!row || typeof row.stage !== "string" || !row.stage || typeof row.source !== "string"
-        || typeof row.step_slug !== "string" || typeof row.state !== "string") {
-      throw new TypeError("workflow step identity/state is required");
-    }
-    // A definition failure is not a declared step. The final-chain runner keeps
-    // its <definition-unavailable> sentinel outside the evaluated denominator,
-    // so it must not be reported here as a missing (or unattested) step. Its
-    // stage stays visible below as undetermined, never as clean coverage.
-    if (row.definition_status === "unreadable") {
-      if (!definition_unavailable.includes(row.stage)) definition_unavailable.push(row.stage);
-      continue;
-    }
-    if (!stages.has(row.stage)) stages.set(row.stage, []);
-    stages.get(row.stage).push(row);
-  }
-  const missing_steps = [], steps_unattested = [];
-  for (const [stage, rows] of stages) {
-    const attested = rows.some(row => row.state === "completed" || row.state === "not_applicable");
-    if (!attested) {
-      steps_unattested.push({ stage, declared_steps: rows.length });
-    }
-    for (const { source, step_slug, state } of rows) {
-      if (state !== "completed" && state !== "not_applicable") missing_steps.push({ source, step_slug, state });
-    }
-  }
-  // S4: a make-decision row whose named evidence basis is incomplete returns 1;
-  // build-code rows and rows without basis stay report-only.
-  const namedEvidenceGap = (stages.get('make-decision') ?? []).some((row) =>
-    row.state === 'incomplete' && Array.isArray(row.basis)
-    && row.basis.some(item => item && item.conclusion === 'incomplete'));
-  return {
-    exit_code: namedEvidenceGap ? 1 : 0, missing_steps, steps_unattested,
-    ...(definition_unavailable.length ? {
-      definition_unavailable: {
-        stages: definition_unavailable,
-        summary: `${definition_unavailable.length} 个阶段未判定：读不到步骤定义`,
-      },
-    } : {}),
-  };
+  const { declared, evaluable, named_evidence_gap, ...coverage } = declaredStepCoverage(report);
+  return coverage;
 }
-
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) return runAggregate();
