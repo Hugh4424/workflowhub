@@ -622,3 +622,75 @@ describe("审查修复：排除、精确副本与入口（F1/F3/F6/F7/F9/F2）",
     expect(three.code).toBe(3);
   });
 });
+
+describe("P6 兼容：markdown 链接锚点、html 目标与同文件嵌套区段（迟到发现）", () => {
+  function p6Project() {
+    const root = tempProject();
+    write(root, "AGENTS.md", [
+      "# AGENTS.md",
+      "",
+      "- [specs/backend/README.md](specs/backend/README.md)",
+      "- [specs/backend/architecture.md](specs/backend/architecture.md)",
+      "",
+    ].join("\n"));
+    write(root, "specs/backend/README.md", [
+      "# 后端",
+      "",
+      header,
+      "| --- | --- | --- | --- | --- |",
+      "| 总览规则 | [总览](architecture.md#总览) | 审查问句 | 已强制 | 读前 |",
+      "| 细则规则 | [细则](architecture.md#细则) | 审查问句 | 已强制 | 读前 |",
+      "| 模板规则 | [模板](templates/overview.html) | 结构 | 已强制 | 改页前 |",
+      "",
+    ].join("\n"));
+    write(root, "specs/backend/architecture.md", [
+      "# 总览",
+      "",
+      "总览正文说明模块边界与依赖方向，跨层调用必须经公开入口。",
+      "",
+      "## 细则",
+      "",
+      "细则正文说明失败边界与恢复责任人，审查时逐条核对。",
+      "",
+    ].join("\n"));
+    write(root, "specs/backend/templates/overview.html",
+      "<!doctype html>\n<html><body><div id=\"top\">模板</div></body></html>\n");
+    return root;
+  }
+
+  it("接受 [文字](path#slug) 与 .html 路径锚；同文件嵌套区段不自我比较", () => {
+    const root = p6Project();
+    const table = read(root, "specs/backend/README.md").replace(
+      "| 模板规则 | [模板](templates/overview.html) | 结构 | 已强制 | 改页前 |",
+      [
+        "| 模板规则 | [模板](templates/overview.html) | 结构 | 已强制 | 改页前 |",
+        "| 模板锚规则 | [锚](templates/overview.html#top) | 结构 | 已强制 | 改页前 |",
+      ].join("\n"));
+    write(root, "specs/backend/README.md", table);
+    const result = run(root, ["check", "--root", root]);
+    expect(result.code, result.out + result.err).toBe(0);
+    expect(result.out).not.toContain("ANCHOR_PATH");
+    expect(result.out).not.toContain("ANCHOR_FORMAT");
+    expect(result.out).not.toContain("BODY_DUPLICATE");
+    expect(result.out).toContain("PASS tables=1 rules=4");
+  });
+
+  it("不放宽：链接写法下坏路径、坏 slug 与跨文件逐字副本仍红", () => {
+    const root = p6Project();
+    const table = read(root, "specs/backend/README.md").replace(
+      "| 模板规则 | [模板](templates/overview.html) | 结构 | 已强制 | 改页前 |",
+      [
+        "| 模板规则 | [模板](templates/overview.html) | 结构 | 已强制 | 改页前 |",
+        "| 坏路径规则 | [坏](missing.md#总览) | 审查问句 | 已强制 | 读前 |",
+        "| 坏slug规则 | [坏](architecture.md#不存在) | 审查问句 | 已强制 | 读前 |",
+      ].join("\n"));
+    write(root, "specs/backend/README.md", table);
+    write(root, "specs/backend/architecture-copy.md", read(root, "specs/backend/architecture.md"));
+    const result = run(root, ["check", "--root", root]);
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("ANCHOR_PATH specs/backend/README.md:8");
+    expect(result.out).toContain("ANCHOR_AMBIGUOUS specs/backend/README.md:9");
+    // 同一跨文件副本只报最具体的区段一次（外层 H1 不再重复计数）。
+    expect((result.out.match(/BODY_DUPLICATE specs\/backend\/architecture-copy\.md/g) ?? [])).toHaveLength(2);
+  });
+});

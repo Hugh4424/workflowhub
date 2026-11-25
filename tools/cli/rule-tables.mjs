@@ -3,7 +3,7 @@
 // 设计原件：任务库 quality/evidence/build-plan/design-p1-v4.md（sha256 24eb4334ac49…）。
 // 职责：规则表的建、锚点唯一、逐字副本检测；不新增规范根，不写规则正文。
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { withLock } from "../../runtime/interface/record-lock.mjs";
@@ -170,8 +170,10 @@ function readHint(domain) {
   return READ_HINTS[domain] ?? `动 ${domain} 相关产出前`;
 }
 
+// AGENTS 指针行与仓内索引表同一口径：域｜实质源入口｜何时读 / 谁读（P6 T035 表头）。
+const AGENTS_LABELS = { design: "设计", frontend: "前端", backend: "后端", api: "接口", acceptance: "验收", "code-changes": "代码改动" };
 function agentsRow({ domain, tableRel }) {
-  return `| ${domain} | [${tableRel}](${tableRel}) | ${readHint(domain)} |`;
+  return `| ${AGENTS_LABELS[domain] ?? domain} | [${tableRel}](${tableRel}) | ${readHint(domain)} |`;
 }
 
 // 列形取阶段卡 §2 与设计 §2 的逐字骨架（域｜规则表｜什么时候读）；本仓 P6 的四列索引不在 P1 写集。
@@ -182,7 +184,7 @@ function buildAgentsSkeleton(domains) {
     BEGIN_MARKER,
     "## 项目规范入口",
     "",
-    "| 域 | 规则表 | 什么时候读 |",
+    "| 域 | 实质源入口 | 何时读 / 谁读 |",
     "| --- | --- | --- |",
     ...domains.map(agentsRow),
     END_MARKER,
@@ -214,7 +216,7 @@ async function upsertAgentsPointer(root, domains) {
       BEGIN_MARKER,
       "## 项目规范入口",
       "",
-      "| 域 | 规则表 | 什么时候读 |",
+      "| 域 | 实质源入口 | 何时读 / 谁读 |",
       "| --- | --- | --- |",
       ...missing.map(agentsRow),
       END_MARKER,
@@ -387,8 +389,10 @@ function structuralFindings(root, tables, rows, declared) {
   const tablePaths = new Set(tables.map((table) => table.rel));
   const registeredPaths = new Set();
   for (const row of rows) {
-    const hash = row.cells[1].lastIndexOf("#");
-    if (hash > 0) registeredPaths.add(row.cells[1].slice(0, hash));
+    const rawPath = anchorTargetPath(row.cells[1]);
+    if (!rawPath) continue;
+    const resolved = resolveAnchor(root, row.cells[1], row.table);
+    registeredPaths.add(resolved.path ?? rawPath);
   }
   for (const table of tables) {
     if (!/^specs\/[^/]+\//.test(table.rel)) {
@@ -535,13 +539,19 @@ export function anchorTitles(text) {
   return titles;
 }
 
+export function sectionEndLine(text, title) {
+  let end = String(text).split(/\r?\n/).length;
+  for (const candidate of anchorTitles(text)) {
+    if (candidate.line <= title.line) continue;
+    if (candidate.level <= title.level) { end = candidate.line - 1; break; }
+  }
+  return end;
+}
+
 export function sectionBody(text, title) {
   const lines = String(text).split(/\r?\n/);
   let end = lines.length;
-  for (const candidate of anchorTitles(text)) {
-    if (candidate.line <= title.line) continue;
-    if (candidate.level <= title.level) { end = Math.min(end, candidate.line - 1); break; }
-  }
+  end = sectionEndLine(text, title);
   return lines.slice(title.bodyStart, end).join("\n");
 }
 
@@ -573,28 +583,58 @@ function bodyRegions(text) {
   const titles = anchorTitles(text);
   const regions = [];
   const firstHeadingLine = titles.length ? titles[0].line : lines.length + 1;
-  regions.push({ line: 1, body: lines.slice(0, firstHeadingLine - 1).join("\n") });
-  for (const title of titles) regions.push({ line: title.line, body: sectionBody(text, title) });
+  regions.push({ line: 1, endLine: firstHeadingLine - 1, body: lines.slice(0, firstHeadingLine - 1).join("\n") });
+  for (const title of titles) regions.push({ line: title.line, endLine: sectionEndLine(text, title), body: sectionBody(text, title) });
   return regions;
 }
 
-function resolveAnchor(root, anchor) {
-  const hash = anchor.lastIndexOf("#");
-  if (hash <= 0 || hash === anchor.length - 1) return { error: "ANCHOR_FORMAT" };
-  const path = anchor.slice(0, hash);
-  const slug = anchor.slice(hash + 1);
-  if (isAbsolute(path) || path.split("/").includes("..") || path.startsWith("../")) {
-    return { error: "ANCHOR_PATH" };
+function parseAnchorTarget(anchor) {
+  const text = String(anchor ?? "").trim();
+  const link = text.match(/^\[[^\]]*\]\(([^)]+)\)$/);
+  return (link ? link[1] : text).trim();
+}
+
+function anchorTargetPath(anchor) {
+  const target = parseAnchorTarget(anchor);
+  const hash = target.lastIndexOf("#");
+  return hash > 0 ? target.slice(0, hash) : target;
+}
+
+function candidatePaths(root, tableRel, rawPath) {
+  const candidates = [];
+  if (tableRel) candidates.push(resolve(root, dirname(tableRel), rawPath));
+  candidates.push(resolve(root, rawPath));
+  return [...new Set(candidates)].filter((absolute) =>
+    (absolute === root || absolute.startsWith(`${root}${sep}`)) && existsSync(absolute));
+}
+
+function resolveAnchor(root, anchor, tableRel) {
+  const target = parseAnchorTarget(anchor);
+  const hash = target.lastIndexOf("#");
+  const hasSlug = hash > 0 && hash < target.length - 1;
+  const rawPath = hasSlug ? target.slice(0, hash) : target;
+  if (!rawPath || isAbsolute(rawPath)) {
+    return { error: "ANCHOR_FORMAT" };
   }
-  const absolute = resolve(root, path);
-  if (!(absolute === root || absolute.startsWith(`${root}${sep}`)) || !existsSync(absolute)) {
-    return { error: "ANCHOR_PATH" };
-  }
+  const html = /\.html?$/i.test(rawPath);
+  if (!hasSlug && !html) return { error: "ANCHOR_FORMAT" };
+  const matches = candidatePaths(root, tableRel, rawPath);
+  if (!matches.length) return { error: "ANCHOR_PATH" };
+  const absolute = matches[0];
+  const path = relative(root, absolute).split(sep).join("/");
   const text = readFileSync(absolute, "utf8");
+  if (html) {
+    if (!hasSlug) return { path, text, html: true, slug: null };
+    const slug = target.slice(hash + 1);
+    const idPattern = new RegExp(`(?:id|name)=["']${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`);
+    if (!idPattern.test(text)) return { error: "ANCHOR_AMBIGUOUS", matches: 0, path };
+    return { path, text, html: true, slug };
+  }
+  const slug = target.slice(hash + 1);
   const titles = anchorTitles(text);
-  const matches = titles.filter((title) => deriveSlug(title.title) === slug.replace(/-+/g, "-"));
-  if (matches.length !== 1) return { error: "ANCHOR_AMBIGUOUS", matches: matches.length, path };
-  return { path, text, title: matches[0], slug };
+  const found = titles.filter((title) => deriveSlug(title.title) === slug.replace(/-+/g, "-"));
+  if (found.length !== 1) return { error: "ANCHOR_AMBIGUOUS", matches: found.length, path };
+  return { path, text, title: found[0], slug };
 }
 
 function bodyFindings(root, rows, tablePaths, excludes) {
@@ -605,14 +645,17 @@ function bodyFindings(root, rows, tablePaths, excludes) {
     const text = readFileSync(join(root, rel), "utf8");
     for (const region of bodyRegions(text)) {
       const normalized = normalizeBody(region.body);
-      if (normalized) candidates.push({ rel, line: region.line, normalized });
+      if (normalized) candidates.push({ rel, line: region.line, endLine: region.endLine, span: region.endLine - region.line, normalized });
     }
   }
+  // 小区段先比：同一文件里外层 H1 区段包含内层 H2 区段时，只报最具体的一处，避免同一处重复计数。
+  candidates.sort((left, right) => left.span - right.span);
   for (const row of rows) {
     const rule = row.cells[0];
     const anchor = row.cells[1];
-    const resolved = resolveAnchor(root, anchor);
-    if (resolved.error) continue;
+    const resolved = resolveAnchor(root, anchor, row.table);
+    if (resolved.error || resolved.html) continue;
+    const sourceRange = { start: resolved.title.line, end: sectionEndLine(resolved.text, resolved.title) };
     const source = normalizeBody(sectionBody(resolved.text, resolved.title));
     if (source.length < 8) {
       findings.push({ code: "BODY_TOO_SHORT", file: row.table, line: row.line,
@@ -620,13 +663,20 @@ function bodyFindings(root, rows, tablePaths, excludes) {
       continue;
     }
     const ruleLikeSource = RULE_WORDS.test(source);
+    const keptRanges = [];
+    const overlapsKept = (candidate) => keptRanges.some((range) =>
+      range.rel === candidate.rel && candidate.line <= range.endLine && range.line <= candidate.endLine);
     for (const candidate of candidates) {
-      if (candidate.rel === resolved.path && candidate.line === resolved.title.line) continue;
+      if (candidate.rel === resolved.path
+        && candidate.line <= sourceRange.end && sourceRange.start <= candidate.endLine) continue;
       // 逐字/归一化整段相等：与规则语气无关，任何 ≥8 字正文都必须抓到。
       if (candidate.normalized === source) {
-        findings.push({ code: "BODY_DUPLICATE", file: candidate.rel, line: candidate.line,
-          message: `「${rule}」正文归一化后整段相等，出现在本规则锚点 ${anchor} 之外`,
-          secondHome: `${candidate.rel}:${candidate.line} — ${rule}` });
+        if (!overlapsKept(candidate)) {
+          keptRanges.push(candidate);
+          findings.push({ code: "BODY_DUPLICATE", file: candidate.rel, line: candidate.line,
+            message: `「${rule}」正文归一化后整段相等，出现在本规则锚点 ${anchor} 之外`,
+            secondHome: `${candidate.rel}:${candidate.line} — ${rule}` });
+        }
         continue;
       }
       if (source.length < WINDOW) continue; // 短正文只判整段相等
@@ -634,6 +684,8 @@ function bodyFindings(root, rows, tablePaths, excludes) {
         && !candidate.normalized.startsWith("|") && !candidate.normalized.startsWith("-")) continue;
       const value = coverage(source, candidate.normalized);
       if (value >= DUPLICATE_COVERAGE) {
+        if (overlapsKept(candidate)) continue;
+        keptRanges.push(candidate);
         findings.push({ code: "BODY_DUPLICATE", file: candidate.rel, line: candidate.line,
           message: `「${rule}」正文覆盖率 ${readableCoverage(value)} 出现在本规则锚点 ${anchor} 之外`,
           secondHome: `${candidate.rel}:${candidate.line} — ${rule}` });
@@ -668,9 +720,10 @@ function rowFindings(root, rows) {
       findings.push({ code: "ANCHOR_FORMAT", file: row.table, line: row.line, message: "正文锚点为空" });
       continue;
     }
-    if (seenAnchors.has(anchor)) findings.push({ code: "ANCHOR_DUPLICATE", file: row.table, line: row.line, message: `同一锚点已被 ${seenAnchors.get(anchor)} 登记` });
-    else seenAnchors.set(anchor, where);
-    const resolved = resolveAnchor(root, anchor);
+    const anchorKey = parseAnchorTarget(anchor);
+    if (seenAnchors.has(anchorKey)) findings.push({ code: "ANCHOR_DUPLICATE", file: row.table, line: row.line, message: `同一锚点已被 ${seenAnchors.get(anchorKey)} 登记` });
+    else seenAnchors.set(anchorKey, where);
+    const resolved = resolveAnchor(root, anchor, row.table);
     if (resolved.error === "ANCHOR_AMBIGUOUS") {
       findings.push({ code: "ANCHOR_AMBIGUOUS", file: row.table, line: row.line, message: `${anchor} 在 ${resolved.path} 命中 ${resolved.matches} 个标题` });
     } else if (resolved.error) {
