@@ -16,6 +16,8 @@ version: 2.3.0
 - 冲突回报：与本内核冲突时以内核为准；内核缺条或条号对不上记具名缺口，回报内核 owner（`skills/unit-kernel/SKILL.md` 的维护者），不就地改写正文
 - 升版顺序：先改内核正文并升版本，再同批改四处接线指针，最后逐处核四处同版与条号
 
+方法条款：本阶段第 2–9 步消费 `skills/run-phase/SKILL.md` 的 `#step-write-red-tests`、`#step-implement-change`、`#step-inspect-and-route-actual-tests`、`#step-run-tests`、`#step-inspect-acceptance-and-ui`、`#step-scan-diff`、`#step-review-change`、`#step-analyze-review-findings` 的方法与产物判据；本阶段正文只留步骤编号与产物，不另立第二套方法。
+
 ## 目标与材料
 
 按当前任务的 spec、独立 `phases/P<n>.md` 和纯指针索引实施最小正确改动；decision-log 给出已确认方向。读取 Phase 正文和当前任务事实选择下一项，游标只是续跑定位，缺失或过期时按实际材料与交付判断。历史材料、旧审查和旧记录只作背景，不重启 pre 工作流或整阶段重跑。

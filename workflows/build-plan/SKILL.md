@@ -16,6 +16,8 @@ version: 4.2.0
 - 冲突回报：与本内核冲突时以内核为准；内核缺条或条号对不上记具名缺口，回报内核 owner（`skills/unit-kernel/SKILL.md` 的维护者），不就地改写正文
 - 升版顺序：先改内核正文并升版本，再同批改四处接线指针，最后逐处核四处同版与条号
 
+方法条款：本阶段第 6 步消费 `skills/phase-maker/SKILL.md#八步` 的方法与产物判据；本阶段正文只留步骤编号与产物，不另立第二套方法。
+
 ## 目标与边界
 
 消费当前 `decision-log.md` 和真实需求来源，编写同一 `spec.md` 的产品规格与全局实现设计、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。索引不能替代 Phase 正文，post 不双写 plan/tasks；pre 历史材料只读。本阶段不重新进行方向 Talk/Grill，不替用户决定新方向，不实施生产代码。材料有歧义走本阶段 spec-clarify，方向变化回 make-decision；无关的安全规划可以继续。

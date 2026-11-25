@@ -1973,7 +1973,7 @@ export function checkAcceptanceObject(input, context = {}) {
   关联 FR-CODE-P8。
   判定方式：只能人读；判定时点：build-plan 第 6 步出卡后、第 7 步渲染索引前。
   落点：P8/T050、T051 与 `phases/P8-设计时质量与四技能流程.md`。
-  验证：给读者一张真实新卡与 `skills/spec-plan/templates/phase-template.md`，要求只读卡正文指出三句位置；逐句记录在第几节第几行。
+  验证：给读者一张真实新卡、`skills/spec-plan/templates/phase-template.md` 与 `skills/decision-maker/templates/card.md`，要求只读卡正文指出三句位置；逐句记录在第几节第几行。
   环境与数据：build-plan 出的真实卡、Phase 模板当前字节；卡未出时记 `incomplete`，恢复条件＝build-plan 第 6 步出卡。
   谁判：没参与写作的独立读者，出卡后、渲染索引前。
   承接：结论写 P8/T050、T051 完成记录与 `quality/tests/p8-card-five-sentences.md`。
@@ -2014,7 +2014,8 @@ export function checkAcceptanceObject(input, context = {}) {
   为什么不能再简：只判「正文提到技能」判不出何时调与交出什么；只问一个人判不出是否靠会话记忆补齐。
   未执行记 `incomplete`，写判定者、观察协议与证据落点；`unavailable` 须给原因与恢复条件。
   通过：三问都有具名答案，且都能在正文里定位到对应句。
-  失败：把 build-plan 第 6 步的技能点名句删掉，陌生执行者必然答成「按技能执行」，本条必须判不通过。
+  失败：把四份「方法条款」中的任一份删掉，陌生执行者必然答成「按技能执行」，本条必须判不通过。
+  订正说明（2026-11-26，计划负责人代行）：原句写「删 build-plan 第 6 步点名句」，实施按卡改为判「方法条款」；只订正失败例的落点，判据强度未变。
   证据：quality/tests/p8-stranger-readback.md。
 
 - [ ] **AC-P8-004**：独立审查者按本包五问判三条真实坏例，三条都判不成立并写明死在第几问。
@@ -2022,7 +2023,8 @@ export function checkAcceptanceObject(input, context = {}) {
   判定方式：只能人读；判定时点：P8 合并前。
   落点：P8/T053、T051 与 `phases/P8-设计时质量与四技能流程.md`。
   验证：独立审查者逐条读三个坏例并作答：①任务三 P4（`specs/archive/delivery-quality-plan-20261123/phases/P4-计划首卡与供件.md:284` 的 Done 写 7773 B／`5348ba5b…`／`skill_binding.ok=true`）；②任务三 P8（`.../phases/P8-代码红测与演示.md:189` 门 7/7 但 AC-QUAL-020 incomplete）；③任务四 P4 旧版（`convergence-notes.md:46`）。每条写「死在第几问」并引原文行位。
-  环境与数据：前两例原件在归档任务三只读区，可直接打开；**第三例 `convergence-notes.md:46` 在本仓未找到 → 未取得**，原因：仓内无该文件，owner＝任务四材料 owner，恢复条件＝提供该原件或由原决定人确认同源替代件；缺该件时本条对第三例只记 `incomplete`，前两例照判，不因缺一例判整条通过。
+  环境与数据：三例原件均可读——前两例在归档任务三只读区，第三例在任务库 `quality/evidence/decision-log-refs/convergence-notes.md:46`（89 行 / 9027 字节，sha256 前 4 位 `36f0`）。
+  订正说明（2026-11-26，计划负责人代行）：原句写第三例「在本仓未找到 → 未取得」，实测该件在任务库可读；原写法会导致按 AC 判时误记 `incomplete`。只订正可用性事实，判据未变。
   谁判：独立审查者（非写者、非判据作者），P8 合并前。
   承接：结论写 P8/T053、T051 完成记录与 `quality/reviews/p8-bad-examples.md`。
   成本：executor=独立审查者；estimate_min=30；hard_cap_min=70；resources=两个归档坏例、第三例原件（缺）；observation=三条是否都判不成立、是否写明死在第几问；retry_cap=1；evidence_tier=人读复读。
@@ -2061,7 +2063,7 @@ export function checkAcceptanceObject(input, context = {}) {
   关联 FR-CODE-008。判定方式：只能人读；判定时点：P8 实现提交后。
   落点：P8/T075 与 `phases/P8-设计时质量与四技能流程.md`。
   验证：逐张阶段卡找「派发预算」一节，四要素逐项核——①三次派发各做什么 ②哪一次与别的阶段并行 ③超过三次要写理由 ④审查只一轮。只写了节名或写「尽量并行」这类不可判的话，按缺节算。
-  环境与数据：13 张阶段卡与阶段模板。谁判：未参与写作的独立读者。承接：`quality/tests/p8-dispatch-budget.md`。
+  环境与数据：13 张阶段卡与阶段模板。谁判：未参与写作的独立读者。承接：`quality/tests/p8-dispatch-budget.output`（规格原写 `.md`，实际产物为 `.output`，以实际为准）。
   成本：executor=独立读者；estimate_min=20；hard_cap_min=45；retry_cap=1；evidence_tier=人读复读。
   资源来源：仓库自带卡与模板。为什么不能再简：只 grep 节名会把「写了标题没写内容」判成通过。
   未执行记 `incomplete`。通过：13 张卡四要素逐项齐。失败：任一卡缺节或四要素不全。
@@ -2070,7 +2072,7 @@ export function checkAcceptanceObject(input, context = {}) {
   关联 FR-CODE-008（R-029）。判定方式：只能人读；判定时点：P8 实现提交后。
   落点：P8/T078 与 `phases/P8-设计时质量与四技能流程.md`。
   验证：逐份技能读六件事——上下文来源（会话／调研／原始需求）、谁派调研、歧义先 talk、产出形状（人话卡／阶段卡／任务节）、谁做冷读与对抗与异源、怎么算收敛（最多三包、问答串行、完成一包补一包）。六件缺一件按未完成算。
-  环境与数据：四份技能正文。谁判：未参与写作的独立读者。承接：`quality/tests/p8-008-four-process.md`。
+  环境与数据：四份技能正文。谁判：未参与写作的独立读者。承接：`quality/tests/t078.md`（规格原写 `p8-008-four-process.md`，实际产物为该索引件，以实际为准）。
   成本：executor=独立读者；estimate_min=15；hard_cap_min=35；retry_cap=1；evidence_tier=人读复读。
   资源来源：仓库自带技能。为什么不能再简：六件事只能逐份人读。
   未执行记 `incomplete`。通过：四份各六件齐。失败：任一份缺件，或只写一句「按流程执行」。

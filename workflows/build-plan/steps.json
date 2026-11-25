@@ -79,6 +79,10 @@
         {
           "kind": "task_original_ref",
           "uri_or_path": "facts.jsonl#first-card-skill-read"
+        },
+        {
+          "kind": "material",
+          "uri_or_path": "phases/index.md"
         }
       ],
       "method_anchor": "step-spec-plan",
