@@ -6,7 +6,7 @@
 // 隔离：全部数据建在 createTrackedTempDir 的临时目录，不写产品库、不连真实任务。
 import { afterEach, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTrackedTempDir } from "../../runtime/interface/temp-dir.mjs";
@@ -553,9 +553,14 @@ it("ORACLE-PHASE-READINESS: 人判行在前时材料侧仍按机器探针对齐"
   expect(record.probes.length, "原件只存机器探针").toBe(1);
   expect(record.human_rows.length, "人判行单独记录").toBe(1);
   expect(record.human_rows[0].status).toBe("unverified");
+  // P3/T020: the summary names the unverified human rows; naming never turns
+  // into a dispatch gate (the exit codes and the status above stay unchanged).
+  expect(record.probe, "就绪原件摘要必须点名").toBe("1 machine; 1 human; 人判未验证＝1");
+  expect(JSON.parse(run.stdout).human_unverified, "回执派生点名计数").toBe(1);
   const check = runChecks(fixture, "build-code");
   expect.soft(check.status, `人判在前时材料侧对齐：${check.stdout.slice(-600)} ${check.stderr.slice(-300)}`).toBe(0);
   expect.soft(check.stdout).toMatch(/readiness phase=P1 status=pass/);
+  expect.soft(check.stdout, "材料侧同时点名未验证人判").toMatch(/人判未验证＝1/);
   expect.soft(check.stdout).not.toMatch(/drift/i);
 });
 
@@ -571,4 +576,54 @@ it("ORACLE-PHASE-READINESS: 省略 --stage 时按 build-code 只诊断，缺表�
   expect.soft(explicit.stdout).toMatch(/missing readiness table/i);
   // Archive materials and arbitrary helper directories keep the old diagnostic
   // behavior; nothing is inferred into a dispatch gate.
+});
+
+// --- P3/AC-008: stale readiness keeps the existing named failure. -------------
+// The failure reason family is the text after the ORACLE tag up to the first
+// path or parenthesis; temporary roots, material sha256 and timestamps are
+// normalised so two different fixture roots can be compared.
+const staleFailureFamilies = (run) => {
+  const text = `${run.stdout}\n${run.stderr}`;
+  return [...text.matchAll(/ORACLE-PHASE-READINESS: ([^\n(]*)/g)].map((match) => match[1]
+    .replace(/\/[^\s;]*/g, "<path>")
+    .replace(/[0-9a-f]{64}/g, "<sha>")
+    .replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, "<time>")
+    .trim());
+};
+const staleOracleCount = (run) => (`${run.stdout}\n${run.stderr}`.match(/ORACLE-PHASE-READINESS: /g) ?? []).length;
+const staleFixture = (taskId) => {
+  const fixture = entryFixture({ probe: PASSING_PROBE, taskId });
+  const pass = fixture.runEntry(cursorInput());
+  expect(pass.exit, `${ORACLE}: 首次必须通过；实际 ${summarise(pass)}`).toBe(0);
+  const phase = readFileSync(join(fixture.materialRoot, PHASE_REF), "utf8");
+  writeFileSync(join(fixture.materialRoot, PHASE_REF), `${phase}\n<!-- P3-AC-008 one material byte changed -->\n`);
+  const stale = fixture.runEntry(cursorInput());
+  expect(stale.exit, `${ORACLE}: stale 必须非零拒绝；实际 ${summarise(stale)}`).not.toBe(0);
+  return { fixture, stale };
+};
+
+it("P3-AC-008: stale readiness keeps its named failure family, exit code and count across temporary roots and stays byte-identical inside one root", () => {
+  const left = staleFixture("p3-ac-008-left"), right = staleFixture("p3-ac-008-right");
+  const families = staleFailureFamilies(left.stale);
+  expect(families.length, "stale 失败必须有可读原因族").toBeGreaterThan(0);
+  // The pre-change baseline keeps this named family. Folding stale into the new
+  // 人判未验证 wording would change it, so the literal prefix is frozen here.
+  expect(families.every((family) => family.startsWith("stale readiness result")), "既有具名失败原因族不变").toBe(true);
+  expect(families.join(" ")).not.toMatch(/人判未验证/);
+  // Cross-directory tier: only the three normalised facts are comparable.
+  expect(staleFailureFamilies(right.stale), "跨临时目录归一化后原因族一致").toEqual(families);
+  expect(right.stale.exit, "跨临时目录退出码一致").toBe(left.stale.exit);
+  expect(staleOracleCount(right.stale), "跨临时目录失败条数一致").toBe(staleOracleCount(left.stale));
+  // Same-directory tier: byte equality is reachable only inside one fixture
+  // root. Removing the stale original this fixture just wrote lets the same
+  // inputs produce the same failure again; it is temp fixture state, not a real
+  // evidence original.
+  const fixture = left.fixture;
+  const staleName = readinessFiles(fixture).filter((name) => name.endsWith("-stale.json")).at(-1);
+  expect(staleName, "stale 拒绝必须留下具名原件").toBeTruthy();
+  rmSync(join(fixture.taskDir, "quality", "tests", staleName));
+  const again = fixture.runEntry(cursorInput());
+  expect(again.exit, "同目录重放仍是同一具名失败").toBe(left.stale.exit);
+  expect(again.stdout, "同目录 stdout 逐字一致").toBe(left.stale.stdout);
+  expect(again.stderr, "同目录 stderr 逐字一致").toBe(left.stale.stderr);
 });

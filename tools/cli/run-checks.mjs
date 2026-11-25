@@ -632,8 +632,13 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
       }
     }
     if (!failed) {
+      // Same single source as the readiness original: human rows counted by
+      // their own status, not by array length.
+      const humanUnverified = Array.isArray(stored.human_rows)
+        ? stored.human_rows.filter((row) => row?.status === "unverified").length : 0;
       console.log(`[run-checks][material] readiness phase=${phase.phase_id} status=pass `
         + `machine=${phase.rows.filter((row) => row.kind === "machine").length} human=${human.length} `
+        + `human_unverified=${humanUnverified} (人判未验证＝${humanUnverified}) `
         + `material_sha256=${facts.material_sha256} original=${ref}`);
     }
   }
@@ -857,9 +862,10 @@ async function main() {
       if (existsSync(material)) {
         const { runStageStepsCheck } = await import("./check-stage-steps.mjs");
         const checked = runStageStepsCheck({ taskPath: resolve(options.taskPath), materialRoot: material, repoRoot: options.workflowRoot ?? undefined, stage: "make-decision" });
-        const gaps = checked.convergence?.gaps ?? [];
-        const { isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
-        if (gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
+        // P3/AC-P3-009: read the same frozen code table through the one seam;
+        // this entry keeps no second text predicate.
+        const { convergenceExitCode } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+        if (convergenceExitCode({ stage: "make-decision", gap_codes: checked.convergence?.gap_codes ?? [] }) === 1) convergenceExit = 1;
       }
     } catch (error) {
       // The material root existed, so a throw here is a real reader failure:
@@ -883,7 +889,7 @@ async function main() {
         const cwdMaterial = join(process.cwd(), "specs", manifest.task_id);
         if (existsSync(join(cwdMaterial, "decision-log.md"))) material = cwdMaterial;
       }
-      const { convergencePointerRefs, convergenceChecklistGaps, isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+      const { convergencePointerRefs, convergenceChecklistGaps, gapFailureCode, convergenceExitCode } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
       const reportGaps = [];
       let body = null, level = null, decision = "";
       const decideLevel = text => {
@@ -943,7 +949,7 @@ async function main() {
       }
       const gaps = [...new Set(reportGaps)];
       for (const gap of gaps) console.error(`[run-checks] ${gap}`);
-      if (gaps.some(gap => String(gap).startsWith("未收敛：")) || gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
+      if (convergenceExitCode({ stage: "make-decision", gap_codes: gaps.map(gapFailureCode) }) === 1) convergenceExit = 1;
     }
     process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
     process.exitCode = convergenceExit;

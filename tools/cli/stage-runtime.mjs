@@ -14,7 +14,7 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessProbeArgv, materialFingerprint } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessMode, readinessProbeArgv, materialFingerprint } from "../../runtime/stage/stage-content-contracts.mjs";
 import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex, isPhaseMaterialFile } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
@@ -1162,7 +1162,9 @@ export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receip
   const gateIdentity = gateIdentityFromCapture({ phases, command: { argv: receipt.argv }, phaseId });
   return {
     schema_version: "gate-results.v1",
-    gate_identity: gateIdentity,
+    gate_identity: gateIdentity.identity,
+    gate_unbound: gateIdentity.unbound,
+    gate_unwrap_depth: gateIdentity.depth,
     capture_route: "verify:execute",
     capture_surface: "stage-runtime verify --action=execute (capture-tests)",
     task_id: taskId,
@@ -1284,13 +1286,6 @@ function readinessOwner(rows) {
   return owners.length ? owners.join(", ") : "计划负责人";
 }
 
-function readinessProbeKind(mode) {
-  const text = String(mode ?? "").toLowerCase();
-  if (text.includes("机器") || text.includes("machine")) return "machine";
-  if (text.includes("人") || text.includes("human") || text.includes("manual")) return "human";
-  return "unknown";
-}
-
 // Only a structured EACCES/EPERM error code classifies a permission failure.
 // Output text is auxiliary: a normal failed probe that merely prints
 // "permission denied" stays a failed probe, never a permission conclusion.
@@ -1398,7 +1393,7 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
     if (!row.command) throw new Error(`ORACLE-PHASE-READINESS: ${label} has an empty command`);
     if (!row.evidence) throw new Error(`ORACLE-PHASE-READINESS: ${label} lacks evidence`);
     if (!row.owner) throw new Error(`ORACLE-PHASE-READINESS: ${label} lacks owner`);
-    const kind = readinessProbeKind(row.mode);
+    const kind = readinessMode(row.mode);
     if (kind === "unknown") throw new Error(`ORACLE-PHASE-READINESS: ${label} has unknown judgement mode ${JSON.stringify(row.mode)}`);
     if (kind === "human") {
       // Human rows stay unverified; they never block dispatch and never claim a pass.
@@ -1443,11 +1438,13 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
     }
     probes.push(probe);
   }
+  // Single count source: the stored human rows, counted by their own status.
+  const humanUnverified = humanRows.filter((row) => row.status === "unverified").length;
   const record = Object.freeze({
     schema_version: "readiness.v1",
     phase: phaseId,
     material_sha256,
-    probe: `${probes.length} machine; ${humanRows.length} human`,
+    probe: `${probes.length} machine; ${humanRows.length} human; 人判未验证＝${humanUnverified}`,
     status: "pass",
     runner: READINESS_RUNNER,
     at: new Date().toISOString(),
@@ -1545,8 +1542,9 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       phase_progress: phaseProgress,
       record_ref: written.ref,
       action: written.action,
-      // Report-only fact; never persisted to readiness.v1 or the stage row.
+      // Report-only facts; never persisted to readiness.v1 or the stage row.
       write_set_reconciliation: readiness.write_set_reconciliation ?? null,
+      human_unverified: readiness.record.human_rows.filter((row) => row?.status === "unverified").length,
     });
   });
 }

@@ -949,6 +949,15 @@ const CONVERGENCE_FAILURE_PATTERNS = Object.freeze([
 // before any failure pattern reads the string; it never names an evidence or
 // direction failure on its own. Real gaps keep their own entries and still fail.
 const REPORT_ONLY_GAP_PATTERN = /讨论原件缺质询/;
+// Direction-only material failures. The evidence table is judged before this
+// one, so a gap matching both stays an evidence failure (which fails at every
+// stage) instead of relaxing to the direction-only rule.
+const DIRECTION_MATERIAL_PATTERNS = Object.freeze([
+  /收敛清单缺指针/, /收敛清单指针候选数/, /权威模块集合未取得或重复（已声明收敛）/,
+  /收敛清单不可读/, /收敛清单越界/,
+  new RegExp(`包 \\d+ (?:${FIVE_MATERIAL_CLASS_PATTERN})：`),
+  /包 \d+ 同包五件：/,
+]);
 export function isConvergenceEvidenceFailure(gap) {
   const text = String(gap);
   if (REPORT_ONLY_GAP_PATTERN.test(text)) return false;
@@ -957,14 +966,50 @@ export function isConvergenceEvidenceFailure(gap) {
 function isDirectionMaterialFailure(gap) {
   const text = String(gap);
   if (REPORT_ONLY_GAP_PATTERN.test(text)) return false;
-  return [
-    // Direction-only material failures. The shared evidence list below is the
-    // same one both public exits use, so this predicate cannot drift from them.
-    /收敛清单缺指针/, /收敛清单指针候选数/, /权威模块集合未取得或重复（已声明收敛）/,
-    /收敛清单不可读/, /收敛清单越界/,
-    new RegExp(`包 \\d+ (?:${FIVE_MATERIAL_CLASS_PATTERN})：`),
-    /包 \d+ 同包五件：/,
-  ].some(pattern => pattern.test(String(gap))) || isConvergenceEvidenceFailure(gap);
+  return DIRECTION_MATERIAL_PATTERNS.some(pattern => pattern.test(text)) || isConvergenceEvidenceFailure(gap);
+}
+// P3/AC-P3-009: one frozen name table is the only authority for the readable
+// code, the value domain and the exit. The gap text stays a human record; no
+// exit reads it. Order matters: report-only first, the machine-generated 未收敛：
+// prefix second, the evidence table before the direction table (so a double hit
+// cannot relax), then the only-record UNCLASSIFIED fallback (user decision
+// 2026-11-25). A code outside the table or a non-array input is a named input
+// error, never a silent 0: the user decision covers UNCLASSIFIED only.
+const GAP_CODE = Object.freeze({
+  PACKAGE_UNCONVERGED: "PACKAGE_UNCONVERGED",
+  EVIDENCE_MISSING: "EVIDENCE_MISSING",
+  DIRECTION_MATERIAL: "DIRECTION_MATERIAL",
+  UNCLASSIFIED: "UNCLASSIFIED",
+});
+export const GAP_CODES = Object.freeze(Object.values(GAP_CODE));
+const GAP_CODE_EXIT = Object.freeze({
+  [GAP_CODE.PACKAGE_UNCONVERGED]: 1,
+  [GAP_CODE.EVIDENCE_MISSING]: 1,
+  [GAP_CODE.DIRECTION_MATERIAL]: "direction",
+  [GAP_CODE.UNCLASSIFIED]: 0,
+});
+export function gapFailureCode(gap) {
+  const text = String(gap);
+  if (REPORT_ONLY_GAP_PATTERN.test(text)) return GAP_CODE.UNCLASSIFIED;
+  if (/^未收敛：/.test(text)) return GAP_CODE.PACKAGE_UNCONVERGED;
+  if (CONVERGENCE_FAILURE_PATTERNS.some(pattern => pattern.test(text))) return GAP_CODE.EVIDENCE_MISSING;
+  if (DIRECTION_MATERIAL_PATTERNS.some(pattern => pattern.test(text))) return GAP_CODE.DIRECTION_MATERIAL;
+  return GAP_CODE.UNCLASSIFIED;
+}
+export function convergenceExitCode({ stage = null, gap_codes = [] } = {}) {
+  if (!Array.isArray(gap_codes)) {
+    throw Object.assign(new TypeError(`convergenceExitCode requires gap_codes as an array, got ${typeof gap_codes}`), { code: "GAP_CODES_INVALID" });
+  }
+  const direction = !stage || stage === "make-decision";
+  for (const code of gap_codes) {
+    if (!GAP_CODES.includes(code)) {
+      throw Object.assign(new TypeError(`unregistered gap code: ${JSON.stringify(code)}`), { code: "GAP_CODE_UNREGISTERED" });
+    }
+    const rule = GAP_CODE_EXIT[code];
+    if (rule === 1) return 1;
+    if (rule === "direction" && direction) return 1;
+  }
+  return 0;
 }
 // Explicit version boundary. A current package is a bare `### 包 N` block or any
 // declaration carrying 轮次; it must record the reviewer, round and reviewed card
@@ -1363,7 +1408,7 @@ export function convergenceChecklistGaps({ taskPath, taskId, body, level = null 
 // Single exported seam for the two internal readers. run-checks imports this
 // object instead of copying the pointer, class or failure lists.
 export function directionMaterialApi() {
-  return { convergencePointerRefs, convergenceChecklistGaps, coldReadGaps, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, isConvergenceEvidenceFailure, fiveMaterialHeading: FIVE_MATERIAL_HEADING, lightPackageGaps };
+  return { convergencePointerRefs, convergenceChecklistGaps, coldReadGaps, fiveMaterialDeclarationGaps, isDirectionMaterialFailure, isConvergenceEvidenceFailure, gapFailureCode, convergenceExitCode, GAP_CODES, fiveMaterialHeading: FIVE_MATERIAL_HEADING, lightPackageGaps };
 }
 // A skill read is evidence only when the host opened the declared file in the
 // current call and the authenticated capture kept the original bytes. The
@@ -1694,6 +1739,12 @@ function validateSkillReadReceipt({ taskPath, receiptRef, stage: name, step: ste
 }
 export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = repository, stage, step: selectedStep, card = false, runId, phase, commit, currentReadReceipt, skipGap = null, inputErrors = [] } = {}) {
   const errors = [];
+  // P3/AC-P3-009: each production point records the kind of the text it pushes.
+  // The report prefers that explicit kind; only gaps without one fall back to
+  // the text classifier. convergenceChecklistGaps (:1348) keeps the
+  // machine-generated prefix and is classified afterwards.
+  const explicitKinds = new Map();
+  const gapOf = (kind, text) => { explicitKinds.set(text, kind); return text; };
   errors.push(...inputErrors);
   const executionIdentity = { ...(runId ? { run_id: runId } : {}), ...(phase ? { phase } : {}), ...(commit ? { commit } : {}) };
   let manifest = {}, factRows = [];
@@ -2375,7 +2426,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
           const batch = (packageBatchMap.get(id) ?? [])[0] ?? null;
           gaps.push(...p5StrictGaps({ id, block, taskPath, batch }));
           // 讨论原件四要素/批次对不上：不是证据缺口，而是未收敛点名。
-          if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) strictUnconverged.push('未收敛：' + row.name);
+          if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) strictUnconverged.push(gapOf('PACKAGE_UNCONVERGED', '未收敛：' + row.name));
         }
       } else {
         gaps.push('缺冷读记录');
@@ -2399,7 +2450,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         : fiveMaterialDeclarationGaps({ id, body, taskPath, taskName: row.name, taskId: manifest?.task_id, versioned: checklistVersioned });
       row.evidenceGaps = [...new Set([...(row.evidenceGaps ?? []), ...declared.gaps])];
       fiveMaterialGaps.push(...declared.gaps);
-      if (!lightPackage && declared.gaps.some(gap => /缺五件声明/.test(gap))) strictUnconverged.push(`未收敛：${row.name}（缺五件声明）`);
+      if (!lightPackage && declared.gaps.some(gap => /缺五件声明/.test(gap))) strictUnconverged.push(gapOf('PACKAGE_UNCONVERGED', `未收敛：${row.name}（缺五件声明）`));
       errors.push(...declared.errors);
     }
     convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
@@ -2424,7 +2475,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         .filter(line => !/无\s*[（(][^）)]*可推迟/.test(line))
         .filter(line => !/可推迟\s*[:：]\s*无/.test(line)).join('\n');
       return /可推迟/.test(visible);
-    }).map(row => '未收敛：' + row.name);
+    }).map(row => gapOf('PACKAGE_UNCONVERGED', '未收敛：' + row.name));
     deferralGaps = deferralRows;
   } catch (error) { errors.push(`${convergenceRef ?? '收敛清单'}: ${error.message}`); }
   const level = levelDisplay;
@@ -2440,7 +2491,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const statusBearing = convergenceFormat === 'five-column-status' || convergenceFormat === 'status-column-evidence';
   const stateGaps = modules
     .filter(row => row.state !== '已收敛' && (statusBearing || (row.state ?? '') !== ''))
-    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+    .map(row => gapOf('PACKAGE_UNCONVERGED', '未收敛：' + (row.name || `第 ${row.line} 行`)));
   // 「无（…）」不是无：括号里交代了未测/交接但仍写「无」，按未收敛点名。
   const ordinaryPendingGaps = modules
     .filter(row => /^已收敛/.test(String(row.state ?? '')))
@@ -2451,11 +2502,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       if (/^可推迟\s*[:：]\s*无/.test(pending)) return false;
       return true;
     })
-    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+    .map(row => gapOf('PACKAGE_UNCONVERGED', '未收敛：' + (row.name || `第 ${row.line} 行`)));
   const parenthesizedPendingGaps = modules
     .filter(row => /^无\s*[（(]/.test(String(row.pending ?? '')))
     .filter(row => !/^无\s*[（(]\s*(?:理由|原因|可推迟|不适用|本包无未决|已核)/.test(String(row.pending ?? '')))
-    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+    .map(row => gapOf('PACKAGE_UNCONVERGED', '未收敛：' + (row.name || `第 ${row.line} 行`)));
   // ORACLE-MD-007: evidence-class gaps are real failures and set exit 1 below;
   // naming/format notes stay report-only. Keep this list aligned with the
   // gaps.push sites in coldReadGaps/packageBlock and with SKILL:382/462.
@@ -2492,7 +2543,8 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   // pre-convergence state (exit stays 0). Two or more candidate pointers is a
   // different failure: the single current checklist is not identifiable.
   if (pointers.length > 1) gaps.push(`收敛清单指针候选数：${pointers.length}`);
-  const convergence = { source: convergenceRef, expected_modules: expected, complete: gaps.length === 0 && expected.length > 0, gaps };
+  const gap_codes = gaps.map(gap => explicitKinds.get(gap) ?? gapFailureCode(gap));
+  const convergence = { source: convergenceRef, expected_modules: expected, complete: gaps.length === 0 && expected.length > 0, gaps, gap_codes };
   const invalidatedList = invalidated.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]);
   // Per-line readable record values, plus one named gap per missing label. Both
   // stay in the report: named field gaps never enter errors or the exit code.
@@ -2778,15 +2830,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // A named unconverged package is a real gap, not a format note: surface it
   // through the exit code so a skipped convergence cannot pass as clean.
   if (report.skill_binding && report.skill_binding.ok === false) process.exitCode = 1;
-  if (report.convergence.gaps.some(gap => String(gap).startsWith('未收敛：'))) process.exitCode = 1;
-  // ORACLE-MD-007: evidence-class gaps fail the exit; naming/format notes stay
-  // report-only. The list is the single source shared with SKILL:382/462.
-  if (report.convergence.gaps.some(isConvergenceEvidenceFailure)) process.exitCode = 1;
-  // P1 direction material failures are non-zero at the direction stage only.
-  // build-plan keeps its existing report-only semantics: its author records the
-  // named gap and stops the affected package instead of treating exit 0 as done.
-  if ((!options.stage || options.stage === 'make-decision')
-    && report.convergence.gaps.some(isDirectionMaterialFailure)) process.exitCode = 1;
+  // P3/AC-P3-009: the exit reads only the frozen code table. A named
+  // PACKAGE_UNCONVERGED/EVIDENCE_MISSING fails at every stage, DIRECTION_MATERIAL
+  // fails only at the direction stage, and an unrecognised legacy gap
+  // (UNCLASSIFIED) is recorded without blocking (user decision 2026-11-25).
+  if (convergenceExitCode({ stage: options.stage, gap_codes: report.convergence.gap_codes }) === 1) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
     if (report.card) console.log(JSON.stringify(report.card, null, 2));
@@ -2817,7 +2865,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps；「讨论原件缺质询」只报告、不改退出码。');
+    console.log('退出码只读 gap_codes 与冻结表（PACKAGE_UNCONVERGED / EVIDENCE_MISSING / DIRECTION_MATERIAL）；UNCLASSIFIED 只记录、不拦；表外码报具名输入错误、不静默退 0；格式/命名缺口与十列字段缺口只进上面的 complete/gaps；「讨论原件缺质询」只报告、不改退出码。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));

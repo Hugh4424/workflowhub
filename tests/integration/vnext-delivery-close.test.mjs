@@ -580,6 +580,12 @@ it("bound delivery claims: a later green capture that is not the declared Phase 
   expect(body.claims.verified.status).toBe("fail");
   expect(body.claims.verified.reasons.join(" ")).toMatch(/exit is 1, not 0/);
   expect(body.claims.verified.evidence).toMatchObject(red);
+  // P3/T017: the failure names both rounds' commands and the later original, so
+  // "the shortcut was green" can never be read as "the gate was green".
+  const laterReason=body.claims.verified.reasons.join(" ");
+  expect(laterReason).toMatch(/later capture/);
+  expect(laterReason).toContain(JSON.stringify(f.gateArtifact.command));
+  expect(laterReason).toContain(JSON.stringify(shortcutArtifact.command));
   expect(body.claims.accepted.status).toBe("fail");
   expect(body.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
   const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
@@ -621,6 +627,9 @@ it("bound delivery claims: only a re-run of the declared gate replaces the red c
   const resignedBody=claimBody(resigned);
   expect(resignedBody.claims.implemented).toMatchObject({status:"pass",evidence:green});
   expect(resignedBody.claims.verified).toMatchObject({status:"pass",evidence:green});
+  // P3/T016: passing has no failure code at either the claim or the report level.
+  expect(resignedBody.claims.verified.code).toBeNull();
+  expect(resignedBody.claim_codes.verified).toBeNull();
   expect(resignedBody.claims.accepted.reasons.join(" ")).toMatch(/readback/);
   expect(resignedBody.claims.accepted.reasons.join(" ")).not.toMatch(/gate-results original/);
 });
@@ -800,4 +809,118 @@ it("restores the archived materials when the delivery commit is rejected so the 
   const retry=await withGraph(GRAPH_UNCHANGED,()=>executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:2000}));
   expect(retry.status,JSON.stringify(retry.error)).toBe("completed");
   expect(f.git(f.repo,["ls-tree","-r","--name-only",`${retry.records.find(row=>row.operation==="commit").source_head}`,"--",`specs/archive/${f.taskId}`])).toContain("extra.md");
+});
+
+// --- P3 ORACLE-CHECK-IDENTITY: the reader only reads the record's own
+// `gate_identity`; a missing identity is a named failure at that exact
+// original, and no unknown record ever falls back to an earlier green capture.
+const shaOf=path=>createHash("sha256").update(readFileSync(path)).digest("hex");
+
+it("P3-AC-001: deleting the latest declared gate's identity fails at that original and never falls back",async()=>{
+  const f=await claimsFixture();
+  await captureVerify(f,{argv:f.captured.argv,slug:"owned-gate-second"});
+  const markers=gateMarkersOf(f);
+  expect(markers).toHaveLength(2);
+  const latest=markers.at(-1);
+  // SETUP: rewriteGate resolves through f.gate, which is the earlier capture
+  // after a second capture; the patch must land on the latest original or the
+  // evidence assertion would compare a stale sha against fresh bytes.
+  const f2=rewriteGate({...f,gate:latest},artifact=>{delete artifact.gate_identity;});
+  expect(f2.gate.ref).toBe(latest.ref);
+  expect(f2.gate.sha256).not.toBe(latest.sha256);
+  const run=runClaims(f2);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.verified.status,"状态仍是 fail，不是第三态").toBe("fail");
+  expect(body.claims.verified.reasons.join(" ")).toMatch(/身份缺失|no gate identity/);
+  expect(body.claim_codes.verified).toBe("GATE_IDENTITY_MISSING");
+  expect(body.claims.verified.evidence).toEqual(f2.gate);
+  expect(body.claims.verified.evidence).not.toEqual(markers[0]);
+  const p=await prepareDeliveryClosePlan({taskDir:f2.taskDir});
+  const c=await confirmClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  const result=await executeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
+  expect(result.status).toBe("failed");
+  expect(result.operation).toBe("claims");
+  expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
+  expect(result.error.message).toContain("GATE_IDENTITY_MISSING");
+  expect(readbackFiles(f2)).toEqual([]);
+});
+
+it("P3-AC-002: a record with no gate_identity key is 未取得, the close refuses, and the original bytes never change",async()=>{
+  const f=await claimsFixture();
+  const f2=rewriteGate(f,artifact=>{delete artifact.gate_identity;delete artifact.gate_unbound;delete artifact.gate_unwrap_depth;});
+  const file=join(f2.taskDir,f2.gate.ref),shaBefore=shaOf(file);
+  const run=runClaims(f2);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.verified.status).toBe("fail");
+  expect(body.claims.verified.reasons.join(" "),"缺键只能判未取得").toMatch(/未取得/);
+  expect(body.claim_codes.verified).toBe("GATE_IDENTITY_MISSING");
+  expect(body.claims.verified.evidence).toEqual(f2.gate);
+  expect(shaOf(file),"读侧从不写回原件").toBe(shaBefore);
+  const p=await prepareDeliveryClosePlan({taskDir:f2.taskDir});
+  const c=await confirmClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  const result=await executeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
+  expect(result.status).toBe("failed");expect(result.operation).toBe("claims");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
+  expect(shaOf(file),"close 拒绝后原件字节不变").toBe(shaBefore);
+  // The automated counterexample: a hand-written identity without rebinding the
+  // facts pointer is still refused by the recorded sha256, never accepted.
+  const artifact=JSON.parse(readFileSync(file,"utf8"));
+  artifact.gate_identity={phase_id:"P1",phase_ref:"phases/P1-owned.md",gate_cmd_sha256:f.gateArtifact.gate_identity.gate_cmd_sha256};
+  writeFileSync(file,`${JSON.stringify(artifact,null,2)}\n`);
+  const forged=runClaims(f2);expect(forged.status).toBe(1);
+  expect(claimBody(forged).claims.verified.reasons.join(" ")).toMatch(/original bytes differ from the recorded sha256/);
+});
+
+it("P3-AC-005: an unreadable latest original is reported as 原件不可读 and is never skipped for an earlier green capture",async()=>{
+  const f=await claimsFixture();
+  await captureVerify(f,{argv:f.captured.argv,slug:"owned-gate-second"});
+  const markers=gateMarkersOf(f);const latest=markers.at(-1);
+  const file=join(f.taskDir,latest.ref),shaBefore=shaOf(file);
+  chmodSync(file,0o000);
+  try{
+    const run=runClaims(f);expect(run.status).toBe(1);
+    const body=claimBody(run);
+    expect(body.claims.verified.status).toBe("fail");
+    expect(body.claims.verified.reasons.join(" ")).toMatch(/原件不可读/);
+    expect(body.claim_codes.verified).toBe("GATE_ORIGINAL_UNREADABLE");
+    expect(body.claims.verified.evidence).toEqual(latest);
+    expect(body.claims.verified.evidence).not.toEqual(markers[0]);
+  }finally{chmodSync(file,0o644);}
+  expect(shaOf(file),"还原后原件字节与操作前相同").toBe(shaBefore);
+});
+
+it("P3-AC-006: a double-layer sh -c bash -c capture is bound to the declared gate with unwrap depth 2",async()=>{
+  const f=await claimsFixture();
+  const script=join(f.root,"owned-gate.mjs");
+  const captured=await captureVerify(f,{shell:`bash -c '${process.execPath} ${script}'`,slug:"owned-gate-double"});
+  // The real capture wraps shell text as ["/bin/sh","-c",<text>].
+  expect(captured.argv.slice(0,2)).toEqual(["/bin/sh","-c"]);
+  expect(captured.argv[2]).toContain("bash -c");
+  expect(captured.exit_code).toBe(0);
+  const markers=gateMarkersOf(f);const latest=markers.at(-1);
+  const artifact=JSON.parse(readFileSync(join(f.taskDir,latest.ref),"utf8"));
+  expect(artifact.gate_identity).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
+  expect(artifact.gate_unwrap_depth).toBe(2);
+  expect(artifact.gate_unbound).toBeNull();
+  const run=runClaims(f);const body=claimBody(run);
+  expect(body.claims.verified).toMatchObject({status:"pass",evidence:latest});
+  expect(body.claim_codes.verified).toBeNull();
+});
+
+it("P3-AC-002: an unknown gate_unbound value is 未取得 and is never skipped for an earlier capture",async()=>{
+  const f=await claimsFixture();
+  await captureVerify(f,{argv:f.captured.argv,slug:"owned-gate-second"});
+  const markers=gateMarkersOf(f);const latest=markers.at(-1);
+  // Only `null` is the writer's known negative ("not any declared gate"). Any
+  // other non-null reason is unknown and must stop at this original.
+  const f2=rewriteGate({...f,gate:latest},artifact=>{artifact.gate_identity=null;artifact.gate_unbound="future-writer-reason";});
+  expect(f2.gate.ref).toBe(latest.ref);
+  const run=runClaims(f2);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.verified.status).toBe("fail");
+  expect(body.claims.verified.reasons.join(" ")).toMatch(/未取得/);
+  expect(body.claim_codes.verified).toBe("GATE_IDENTITY_UNOBTAINED");
+  expect(body.claims.verified.evidence).toEqual(f2.gate);
+  expect(body.claims.verified.evidence).not.toEqual(markers[0]);
 });

@@ -740,7 +740,7 @@ export function phaseReadinessRows(body) {
   return Object.freeze({ declared: true, rows: Object.freeze(rows), error: null });
 }
 
-function readinessMode(mode) {
+export function readinessMode(mode) {
   const text = String(mode ?? "").toLowerCase();
   if (text.includes("机器") || text.includes("machine")) return "machine";
   if (text.includes("人") || text.includes("human") || text.includes("manual")) return "human";

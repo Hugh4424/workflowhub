@@ -124,6 +124,12 @@
 - 审查事实由 review-record-route 单一 producer 保存；调用与回读时读 [标准工作方法“build-code 测试与质量”](docs/standard-workflow.md#build-code-测试与质量) 的 wh-review/OCR、不可用检测、同源补充、原始失败与有效单源发现边界；不换执行者，不以 provider 失败冒质量通过。
 - 退役登记保决定、未决项及理由/决定人/来源，供人读交接；不增机器 reader/字段。
 
+### P3 检查记录与就绪的字段登记（2026-11-26）
+
+- `convergence.gap_codes`（`tools/cli/check-stage-steps.mjs`）：`gaps` 文本的并行结构化码。名字只由 `GAP_CODE` 一处定义，值域 `GAP_CODES` 与退出表 `GAP_CODE_EXIT` 都从它派生；分类器 `gapFailureCode` 也返回这些名字，不再写字面量。唯一 consumer 是两个 CLI 的退出判定（`check-stage-steps` 的 `convergenceExitCode(...)` 与 `run-checks` 的两处同缝调用）；owner＝P3 实现者。替代关系：旧退出直接读 `gaps` 中文字串（前缀/证据/方向），现改为只读 `gap_codes` 与冻结表；人读文本 `gaps` 保留，33 行既有断言不动，旧退出读法已删除。表外码与非数组是具名输入错误，不静默退 0；`UNCLASSIFIED` 由用户 2026-11-25 裁决只记录。删除条件：出现带 schema 版本的退出字段，或后续阶段把退出判定迁到唯一新 reader，且两处 CLI 与四个测试文件都不再读它。
+- `gate_unbound` / `gate_unwrap_depth`（`runtime/task/delivery-claims.mjs` 计算，`tools/cli/stage-runtime.mjs` 写进 gate-results 原件）：声明门捕获的「未取得原因」与剥离层数。唯一 consumer 是 `selectDeclaredGate` 的「未取得」判定与 AC-P3-006 的层数断言；owner＝P3 实现者。替代关系：此前这两类事实只在内存在，读侧看不见；现在进持久原件，读侧只读它、不重算命令。删除条件：写侧改为签名式/不可伪造的身份绑定（新机制，需先登记 consumer 与 owner）后，读侧不再需要这两个字段。
+- `claim_codes`（`runtime/task/delivery-claims.mjs`）：三个 delivery claim 的具名失败码，`claims.<name>.code` 的顶层投影。consumer 是 close 拒绝消息前缀与 `tools/cli/check-delivery-claims.mjs` 的 JSON 输出；owner＝P3 实现者。替代关系：此前只有中英文原因串，码是原因串的机器可读投影，原因串保留。删除条件：出现不可伪造的写侧身份后 claim 判定改为签名校验，码面由新 reader 承接。
+
 ## vNext 永久实施边界
 
 - post 的 `make-decision` 允许写读 `decision-log.md`、`spec.md`、纯指针 `phases/index.md` 与索引内独立 Phase；这是对 N6「只许 decision-log」材料边界的显式覆盖，用于轻档在同一阶段完成规格与实施，理由与影响见 [ADR-0051](docs/adr/0051-light-tasks-complete-inside-make-decision.md)。允许集合不改变复杂流程的必需材料或阶段身份。`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。

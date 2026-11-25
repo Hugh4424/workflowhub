@@ -5,7 +5,7 @@
 // self-reference code).
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -2083,5 +2083,30 @@ describe("P5 stage-steps evidence gaps — 讨论原件缺质询", () => {
     const stale = p5Public(p5Fixture({ chatFor: () => true, orderFor: () => true, answerBatchFor: (id) => (id === 1 ? "batch-old" : null) }));
     expect(stale.report.convergence.gaps).toContain("包 1 真实答复：原件批次不符");
     expect(stale.result.status).toBe(1);
+  });
+});
+
+// P3/AC-P3-009: run-checks reads the same frozen four-value table through the
+// single directionMaterialApi seam; its task-path exit names an unconverged
+// checklist gap instead of a second hand-copied text predicate.
+describe("P3 AC-P3-009 gap_codes at the run-checks seam", () => {
+  const runTask = (task) => spawnSync(process.execPath, [join(ROOT, "tools/cli/run-checks.mjs"), `--task-path=${task}`, `--workflow-root=${ROOT}`], { encoding: "utf8", timeout: 120_000 });
+  it("gap_codes: the seam exposes four codes and run-checks exits 1 on an unconverged checklist", async () => {
+    const { gapFailureCode, convergenceExitCode, GAP_CODES } = (await import("../../tools/cli/check-stage-steps.mjs")).directionMaterialApi();
+    expect(GAP_CODES).toEqual(["PACKAGE_UNCONVERGED", "EVIDENCE_MISSING", "DIRECTION_MATERIAL", "UNCLASSIFIED"]);
+    expect(gapFailureCode("未收敛：1 controlled")).toBe("PACKAGE_UNCONVERGED");
+    expect(convergenceExitCode({ stage: "make-decision", gap_codes: ["未收敛：1 controlled"].map(gapFailureCode) })).toBe(1);
+    expect(gapFailureCode("跨包合批：批次 b1 被包 1、2 共用")).toBe("UNCLASSIFIED");
+    expect(convergenceExitCode({ stage: "make-decision", gap_codes: ["跨包合批：批次 b1 被包 1、2 共用"].map(gapFailureCode) })).toBe(0);
+    // realpath: the safe task reader rejects the /var -> /private/var alias.
+    const task = realpathSync(temp("p3-gap-codes-"));
+    mkdirSync(join(task, "quality/evidence/decision-log-refs"), { recursive: true });
+    writeFileSync(join(task, "task.json"), `${JSON.stringify({ schema_version: "1.0.0", project_name: "fixture", task_id: "p3-gap-codes", target_repo_root: ROOT, baseline_commit: "1cc4023e", activation_cohort: "post" })}\n`);
+    writeFileSync(join(task, "facts.jsonl"), "");
+    writeFileSync(join(task, "quality/evidence/decision-log.md"), ["# T", "## 级别与路线", "- 推荐级别：复杂", "清单：`quality/evidence/decision-log-refs/convergence-checklist.md`", ""].join("\n"));
+    writeFileSync(join(task, "quality/evidence/decision-log-refs/convergence-checklist.md"), ["# 清单", "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |", "| 1 controlled | 未收敛 | details§1 | ev-1 | 待你定 |", ""].join("\n"));
+    const result = runTask(task);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("未收敛：1 controlled");
   });
 });

@@ -440,6 +440,21 @@ describe('five-column status table names unconverged packages', () => {
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
   }, ''));
+  // P3/AC-P3-009: the public CLI reports the structured code next to the text,
+  // and the two arrays stay aligned. A 未收敛 row is PACKAGE_UNCONVERGED.
+  it('gapFailureCode: the real CLI names gap_codes for an unconverged package and exits 1', () => statusFixture(header + '| 1 controlled | 未收敛 | details§1 | ev-1 | 待你定 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status, result.stderr).toBe(1);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toContain('未收敛：1 controlled');
+    expect(report.convergence.gap_codes).toContain('PACKAGE_UNCONVERGED');
+    expect(report.convergence.gap_codes.length).toBe(report.convergence.gaps.length);
+    // The code was recorded by the production point, so rewriting the report's
+    // text to a synonym cannot turn the failure off. This report is the real
+    // CLI report above, not a hand-built object.
+    report.convergence.gaps = report.convergence.gaps.map(() => '该工作包未收敛（改写）');
+    expect(checker.convergenceExitCode({ stage: 'make-decision', gap_codes: report.convergence.gap_codes })).toBe(1);
+  }));
 });
 
 describe('ten-column status table names unconverged packages', () => {
@@ -791,11 +806,14 @@ describe('current-shape 工作包 N / 决定 N mapping', () => {
 describe('WPn package table behavior', () => {
   it('keeps the archived WPn fields unchanged', () => convergenceFixture(({ invoke }) => {
     const report = invoke();
+    // P3/T022: the report now carries the parallel code array; the expected
+    // object stays exact-equal (same strictness, no weakening).
     expect(report.convergence).toEqual({
       source: 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md',
       expected_modules: ['1', '2'],
       complete: true,
       gaps: [],
+      gap_codes: [],
     });
     expect(report.modules.map(module => [module.name, module.state, module.fields.map(field => field.present)])).toEqual([
       ['1 controlled', '已收敛', Array(8).fill(true)],
@@ -1849,7 +1867,7 @@ describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', 
     const { status, report, stderr } = runCheck({ decision: current });
     expect(stderr).toBe('');
     expect(status, stderr).toBe(0);
-    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [] });
+    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [], gap_codes: [] });
     expect(report.modules).toHaveLength(1);
     expect(report.modules[0]).toMatchObject({ source: ref, line: 3, state: '已收敛' });
     // The checker reports the digest of the very bytes it opened; the frozen
@@ -1915,7 +1933,7 @@ describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', 
   it('keeps the legacy WPn package control on its previous result', () => {
     const { status, report } = runCheck({ decision: legacy });
     expect(status).toBe(0);
-    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [] });
+    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [], gap_codes: [] });
   });
 
   it('names a missing pointer, an unreadable ledger and an out-of-range ledger separately', () => {
@@ -2588,5 +2606,48 @@ describe('CLI space-separated flags — gate commands are not silently ignored',
       expect(report.supersede.invalidated).toEqual(['4']);
       expect(report.stages.find(stage => stage.stage === 'make-decision').steps.find(step => step.step_id === 4).judgment).toBe('待重做');
     } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+});
+
+// P3/AC-P3-009: one frozen four-value table decides both the readable code and
+// the public exit; the gap text is never parsed for the exit decision.
+describe('P3 AC-P3-009 gapFailureCode and convergenceExitCode', () => {
+  it('gapFailureCode closes four values with evidence before direction, and convergenceExitCode follows the frozen table', () => {
+    const { gapFailureCode, convergenceExitCode, GAP_CODES } = checker;
+    // ① value domain, evidence table judged before the direction table.
+    expect(gapFailureCode('未收敛：1 controlled')).toBe('PACKAGE_UNCONVERGED');
+    expect(gapFailureCode('冷读原件未绑定卡摘要')).toBe('EVIDENCE_MISSING');
+    expect(gapFailureCode('收敛清单缺指针：已声明 3 个工作包')).toBe('DIRECTION_MATERIAL');
+    expect(gapFailureCode('跨包合批：批次 b1 被包 1、2 共用')).toBe('UNCLASSIFIED');
+    expect(gapFailureCode('讨论原件缺质询')).toBe('UNCLASSIFIED');
+    // A text matching both tables keeps the evidence verdict; direction-first
+    // would relax it outside the direction stage.
+    expect(gapFailureCode('包 2 冷读：缺冷读原件')).toBe('EVIDENCE_MISSING');
+    expect(GAP_CODES).toEqual(['PACKAGE_UNCONVERGED', 'EVIDENCE_MISSING', 'DIRECTION_MATERIAL', 'UNCLASSIFIED']);
+    expect(GAP_CODES).toContain(gapFailureCode('未收敛：1 controlled'));
+    // ② exit codes: rule 1 fails everywhere, "direction" fails only there,
+    // UNCLASSIFIED is recorded only. A code outside the table and a non-array
+    // input are named input errors, never a silent 0: the user decision covers
+    // UNCLASSIFIED only, not a misspelling or a future unregistered code.
+    expect(convergenceExitCode({ stage: 'build-code', gap_codes: ['PACKAGE_UNCONVERGED'] })).toBe(1);
+    expect(convergenceExitCode({ stage: 'build-code', gap_codes: ['EVIDENCE_MISSING'] })).toBe(1);
+    expect(convergenceExitCode({ stage: 'build-code', gap_codes: ['DIRECTION_MATERIAL'] })).toBe(0);
+    expect(convergenceExitCode({ stage: 'make-decision', gap_codes: ['DIRECTION_MATERIAL'] })).toBe(1);
+    expect(convergenceExitCode({ gap_codes: ['DIRECTION_MATERIAL'] })).toBe(1);
+    expect(convergenceExitCode({ gap_codes: ['UNCLASSIFIED'] })).toBe(0);
+    expect(() => convergenceExitCode({ gap_codes: ['BOGUS'] }), 'unregistered code must be a named input error').toThrow(/unregistered gap code/);
+    expect(() => convergenceExitCode({ gap_codes: 'PACKAGE_UNCONVERGED' }), 'non-array input must be a named input error').toThrow(/requires gap_codes as an array/);
+    // ③ the exit reads only gap_codes. The production points record the kind
+    // with the text (gapOf), so the real-CLI case above already proves a
+    // rewritten text keeps failing; this unit assertion keeps the pure rule.
+    const synonym = '该工作包未收敛（改写）';
+    const rewritten = { convergence: { gaps: [synonym], gap_codes: ['PACKAGE_UNCONVERGED'] } };
+    expect(gapFailureCode(synonym)).toBe('UNCLASSIFIED');
+    expect(convergenceExitCode({ stage: 'make-decision', gap_codes: rewritten.convergence.gap_codes })).toBe(1);
+    // ④ an old gap without kind falls back to the same tables: recognisable
+    // ones still fail, unrecognised ones are recorded only.
+    expect(gapFailureCode('未收敛：1 controlled')).toBe('PACKAGE_UNCONVERGED');
+    expect(convergenceExitCode({ stage: 'make-decision', gap_codes: ['未收敛：1 controlled'].map(gapFailureCode) })).toBe(1);
+    expect(convergenceExitCode({ stage: 'make-decision', gap_codes: ['跨包合批：批次 b1 被包 1、2 共用'].map(gapFailureCode) })).toBe(0);
   });
 });
