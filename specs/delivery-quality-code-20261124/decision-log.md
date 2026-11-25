@@ -1194,57 +1194,58 @@
 - blocked 以任务 closeout 未闭环缺口为唯一来源，任务一二三全列（任务一 AC-MAT/EVID/CLOSE；任务二 AC-P1-001/P2-001/P3-001/002/P4-002/P5-001；任务三 AC-008/009/016/020/021/022/023），不写“等”。
 - 与 P9 表引用同一条，不重复定义；受控替身不算。
 
-### 包 11：残余与独立收口
+### 包 11：缺口分诊与闭环收口
 
 #### 1. 原始需求
-- 问题：任务三收口时结论写“尚未整体达成”，但 close 仍完成；AC-001 由收口作者按当前字节自称“独立重判”改 pass；verdict 同时写 `conclusion:pass` 和 12 项未闭环 gaps，close 只读 pass 不读 gaps。来源：`closeout-report.md:8,15-16,22,248`；任务库 `verdict.json`；`close-claims-readback`。
-- 对应 R：R-032。
-- 坏处：没做完也能收口成完成；AC 改判可以自签；残余写了没人消费。
+- 问题：很多任务到 build-code 才发现做不完——可能是设计问题、实现问题、验收标准问题或资源问题；stage-close 现在只确认物理范围，没有分诊和闭环；强行“incomplete 不能收口”会把任务永远卡住。来源：用户 2026-11-25 原话；任务三 9 incomplete、任务二 `{ans}`、任务一 AC-MAT/EVID。
+- 对应 R：R-032（改为“缺口分诊与闭环”，不是硬拒收）。
+- 坏处：不分类就卡住/放行，问题永远不解决；或者随意放宽验收、扩范围。
 
 #### 2. 最初方案
-- 一开始想在 Phase 卡 Done/覆盖上限加残余清单；被否：卡片不拥有收口语义，且 P8-2 已在“下一消费者”加残余，重复写会双写。
+- 一开始想“全 incomplete 不能 pass、close 拒收”；被用户否：会造成永久卡住，且 stage-close 没这么严。
 
 #### 3. 发散与被否
-- A（选）：收口按“结论未达成或 gaps 非空→拒收”，AC 改判要独立判词且覆盖 closeout/AC 表；残余复用 P8-2 一句。
-- B（否）：只在卡模板加“不得收口”——卡片不拥有收口语义，造第二权威。
-- C（否）：新建 residual 台账——违“不新建账本”。
-- D（否）：靠人读——任务三已证明人读会放行。
+- A（选）：缺口分诊——设计/实现/验收标准/资源四类，各走各的修复闭环，修完验完再收口。
+- B（否）：硬拒收——卡死，不解决根因。
+- C（否）：直接放行——重演任务三。
+- D（否）：新建缺口台账——违“不新建账本”。
 
 #### 4. 调研
-- `runtime/task/delivery-claims.mjs:499-516` 只认 `verdict.conclusion==="pass"`，不读 gaps；`stage-close:120,138` 已要求 close 读 verdict、作者签字即拒；`core/task-close.mjs:937` 在 Git 动作前跑。
-- `verdict.material_sha256` 只覆盖 spec/index/phases，不覆盖 closeout-report 和 AC 表。
-- 任务三 13 pass/9 incomplete/1 inconclusive/2 deferred，结论“尚未整体达成”，close 仍完成。
+- 任务三 9 incomplete：AC-007 缺现场卡号、AC-008 无真实下游、AC-009 无规划试用、AC-016 缺两路原件、AC-019 缺真实 PRD、AC-020 缺消费者读回、AC-021 缺外审负控、AC-022/023 缺真实周期——多数是资源/验收标准问题，不是实现 bug。
+- 任务二 `{ans}` 是用户答复资源缺失；任务一 AC-MAT/EVID 是材料/授权资源缺失。
+- 现有 close 只确认物理范围；verdict 可同时有 pass 与 gaps，说明“结论”和“缺口”没有分类路由。
 
 #### 5. 最终决定
-- P11-1：`stage-close` 收口条件加“conclusion 必须是达成、gaps 必须为空；否则拒收，不进入物理收口”。
-- P11-2：AC 改判的独立判词必须带 `material_sha256` 覆盖 closeout-report 与 AC 表；判者≠写者；自判报告不作依据。
-- P11-3：残余复用 P8-2 的“下一消费者”句，不另写一份。
-- 承诺：必须｜结论未达成或 gaps 非空不得收口｜R-032；必须｜AC 改判只认署名独立判词｜R-032；本次不做｜不新建 residual 台账；待定｜B1–B4 回原决定人。
+- P11-1：build-code/close 对每个未完成项做四类分诊：设计问题、实现问题、验收标准问题、资源/外部依赖问题；写“哪类、证据、owner、下一步”。
+- P11-2：按类闭环——设计回 P8/P9/P10 重设计；实现回 build-code 修复并重跑；验收标准回原决定人改标准（不随意扩范围）；资源恢复或写明确接受限制（不冒充 pass）。
+- P11-3：收口条件改为“每个缺口有分类、owner、闭环动作；已修已验证，或已明确接受限制”；全未分类不得收口；不硬拒 incomplete。
+- P11-4：不新建台账；用现有 gaps/verdict/close 字段；残余复用 P8 一句。
+- 承诺：必须｜每个缺口先分类再决定修什么｜R-032；必须｜修完/验完/明确接受才收口｜R-032；本次不做｜不硬拒 incomplete、不新建台账、不随意扩范围。
 
 #### 6. 完整方案
-- 接口：`stage-close` 读 `verdict.conclusion` 与 `gaps`；`delivery-claims` 增“conclusion≠达成或 gaps 非空→DELIVERY_CLAIMS_REJECTED”；AC 表 hash 进 `material_sha256`。
-- 数据与状态：不新增 schema；复用现有 verdict/gaps。
-- 依赖与顺序：P8 先写残余句；P11 只改 close/claims。
+- 接口：close/build-code 读现有 gaps，逐条加 `分类/owner/闭环动作/验证`；不新增持久 schema，字段放现有材料。
+- 数据与状态：gaps 仍是事实；分类是处置，不是新账本。
+- 依赖与顺序：P8 的残余句先落；P11 只加分诊与闭环。
 - 唯一 writer：P11 实现者。
-- 写集：`skills/stage-close/SKILL.md`、`runtime/task/delivery-claims.mjs`、`core/task-close.mjs`、`tests/contract/delivery-claims-gaps.test.mjs`。
+- 写集：`skills/stage-close/SKILL.md`、`workflows/build-code/SKILL.md`、`core/task-close.mjs`、`tests/contract/gap-triage.test.mjs`。
 
 #### 7. 验收
-- AC-P11-001：任务三“结论未达成仍收口”回放，close 必须拒收；反例：只看物理范围。
-- AC-P11-002：AC-001 自判报告必须拒；独立判词且 sha 覆盖 closeout/AC 表才过。
-- AC-P11-003：残余只存在 P8-2 一处；Phase 卡不再重复。
-- 证据：`quality/tests/p11-close-gaps.output`、`p11-ac-signature.md`。
+- AC-P11-001：任务三 9 incomplete 逐条分类，至少各给一个设计/实现/验收/资源例子；未分类不得收口。
+- AC-P11-002：设计缺口回 P8/P9/P10 重设计并复验；实现缺口修复并重跑；验收标准缺口回原决定人；资源缺口写恢复/接受限制。
+- AC-P11-003：不硬拒 incomplete——有分类/owner/动作/验证即可收口；无分类才拒。
+- 证据：`quality/tests/p11-gap-triage.md`。
 
 #### 8. 风险/回退
-- 触发：close 误拒；缓解：只用 conclusion/gaps 两个既有事实；回滚：还原 stage-close/claims 一处。
+- 分诊变成填表；用“证据+owner+验证”判，不用字段齐。误放宽验收回原决定人；出问题回滚分诊句。
 
 #### 9. 未决/消费者/证据
-- 未决：B1–B4 回原决定人。
-- 消费者：stage-close、delivery-claims、独立签字人。
-- 证据：closeout/verdict/readback refs；未取得：独立签字人名单。
+- 未决：四类边界的判定人；B1–B4 回原决定人。
+- 消费者：build-code、stage-close、下一任务。
+- 证据：任务一二三 gaps；未取得：分类 owner 名单。
 
 #### 10. 配套与影响
-- 配套调整：stage-close、delivery-claims、task-close、契约测试。
-- 迁移：无；移除：无；影响：收口执行者、独立签字人、任务一二三复核。
+- 配套：stage-close、build-code、task-close、契约测试。
+- 迁移/移除：无；影响：build-code 执行者、收口执行者、缺口 owner。
 
 ### 包 12：任务一二三修复（C2 现在修，其余设计+blocked）
 
