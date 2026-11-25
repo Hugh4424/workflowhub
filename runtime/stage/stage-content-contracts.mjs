@@ -390,9 +390,9 @@ function executionIndexRows(document, errors, reviewReadScope, invalidDependency
     }
     const paths = inlinePaths(cells[3]);
     const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(cells[3].trim());
-    if (paths.length === 0 && !explicitNone) rowErrors.push("write set is empty");
-    if (EMPTY_WRITE_SET_PREFIX.test(cells[3].trim()) && !explicitNone) rowErrors.push("none write set declaration is invalid");
-    for (const path of paths) if (unsafeWritePath(path, reviewReadScope)) rowErrors.push(`unsafe write set path: ${path}`);
+    // 2026-11-25 用户裁决：索引写入集列只作推荐，不校验。
+    // 2026-11-25 用户裁决：索引写入集列只作推荐，不校验。
+    // 2026-11-25 用户裁决：索引写入集列只作推荐，不校验。
     if (rowErrors.length) {
       errors.push(...rowErrors.map((error) => `${label} ${error}`));
       continue;
@@ -976,57 +976,14 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     // supplies a Phase-level value.
     const phaseField = (name) => fieldValue(machineBody, name) ?? fieldValue(authorityFields, name);
     const declaration = phaseField("Write set");
+    // 2026-11-25 用户裁决：写入集字段只作推荐，不再校验（缺字段、摘要不符、
+    // 与索引不一致、同路径多阶段重复都不报错）。仍读取它，供「只读阶段」判定使用。
     const pointer = parseWriteSetPointer(declaration);
-    let explicitNone;
-    if (pointer) {
-      // Single source: the index row's write set is the executable set. A
-      // pointer with a stray second list, a missing/bad digest, or a digest that
-      // no longer matches the row fails by name and yields no usable set.
-      explicitNone = false;
-      if (pointer.extraTokens.length > 0 || pointer.digests.length !== 1) {
-        const observed = pointer.digests.length ? `sha256=${pointer.digests.join(",")}` : "sha256 is missing";
-        errors.push(`${expectedPath} Write set pointer declaration is invalid: ${observed}; only \`phases/index.md#execution-index\` and one sha256=<64 lowercase hex> are allowed`);
-        scopeValid = false;
-      } else {
-        const rowExplicitNone = row.explicit_none === true;
-        const expectedDigest = writeSetDigest(row.write_set, rowExplicitNone);
-        if (expectedDigest !== pointer.digests[0]) {
-          errors.push(`${expectedPath} Write set pointer sha256=${pointer.digests[0]} does not match phases/index.md ${expectedId} row sha256=${expectedDigest}`);
-          scopeValid = false;
-        } else {
-          declaredWriteSet.push(...row.write_set);
-          explicitNone = rowExplicitNone && row.write_set.length === 0;
-        }
-      }
-    } else {
-      declaredWriteSet.push(...phaseWriteSet(body));
-      explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
-      if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
-        errors.push(`${expectedPath} Write set none declaration is invalid`);
-        scopeValid = false;
-      }
-    }
-    if (declaredWriteSet.length === 0 && !(explicitNone && row.write_set.length === 0)) {
-      errors.push(`${expectedPath} Write set is missing`);
-      scopeValid = false;
-    }
-    for (const path of declaredWriteSet) if (unsafeWritePath(path, reviewReadScope)) {
-      errors.push(`${expectedPath} unsafe Write set path: ${path}`);
-      scopeValid = false;
-    }
+    if (pointer) declaredWriteSet.push(...(row.write_set ?? []));
+    else declaredWriteSet.push(...phaseWriteSet(body));
+    let explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "")
+      || (pointer ? (row.write_set ?? []).length === 0 : declaredWriteSet.length === 0);
     const sourceIdentity = path => writePathIdentity(path, reviewReadScope);
-    if (!sameIds(new Set(declaredWriteSet.map(sourceIdentity)), new Set(row.write_set.map(sourceIdentity)))) {
-      errors.push(`${expectedPath} write set differs from Phase index`);
-      scopeValid = false;
-    }
-    for (const path of declaredWriteSet) {
-      if (isSharedGovernancePath(path)) continue;
-      const identity = sourceIdentity(path);
-      const owners = writeOwners.get(identity) ?? [];
-      const owner = owners.find((ref) => !serializedPair(ref, expectedPath));
-      if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
-      writeOwners.set(identity, [...owners, expectedPath]);
-    }
     const dependencyText = phaseField("Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
     const phaseDependencies = WITHOUT_PREDECESSOR.test(dependency ?? "") ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
@@ -1140,8 +1097,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         && /(?:read-only|只读)/i.test(fields.Action ?? "")
         && /(?:no production writes|无生产修改|不.*(?:写|修改)|do not produce or change code)/i.test(`${fields["Files / symbols"] ?? ""} ${fields.Action ?? ""}`)
         && !hasAffirmativeCodeWrite(fields.Action);
-      if (!readOnlyTask && (filePaths.length === 0 || filePaths.some((path) => !declaredWriteSet.some(owned => sourceIdentity(owned) === sourceIdentity(path))))) {
-        errors.push(`${expectedPath} ${taskId} Files / symbols must name owned write-set paths`);
+      if (!readOnlyTask && filePaths.length === 0) {
+        errors.push(`${expectedPath} ${taskId} Files / symbols must name at least one path`);
       }
       if (!/(?:\bsymbol|符号|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {
         errors.push(`${expectedPath} ${taskId} Files / symbols must name a symbol or explain N/A for non-code files`);
