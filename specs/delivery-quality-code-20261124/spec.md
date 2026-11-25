@@ -1890,7 +1890,8 @@ export function checkAcceptanceObject(input, context = {}) {
   关联 FR-CODE-P7。
   判定方式：机器可判；判定时点：P7 实现提交后。
   落点：P7/T045 与 `phases/P7-阶段收口与退役.md`。
-  验证：查 `core/task-close.mjs` 是否 import 并调用 `readTaskTypeFromDecisionLog`、私有解析函数是否已删；跑规划任务收尾测试，记录退出码；再读申报的 19/108 判定变化句。
+  订正说明（2026-11-26，计划负责人席位由主会话代行）：原句写「19/108」，实测 decision-log 共 **110** 份、双解析差异 19 份（`unknown→普通任务` 15、`unknown→规划任务` 4）。只订正分母，判据未变。
+  验证：查 `core/task-close.mjs` 是否 import 并调用 `readTaskTypeFromDecisionLog`、私有解析函数是否已删；跑规划任务收尾测试，记录退出码；再读申报的 19/110 判定变化句。
   环境与数据：仓内 `core/task-close.mjs`、共享解析器、规划任务收尾测试；19 份历史材料只读，不改字节。
   谁判：未参与实现的独立执行单元，P7 提交后。
   承接：结论写 P7/T045 完成记录与 `quality/tests/p7-task-close-shared.output`。
