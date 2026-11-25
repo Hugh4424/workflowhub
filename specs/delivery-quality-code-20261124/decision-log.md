@@ -1224,170 +1224,57 @@
 - 配套调整：stage-close、delivery-claims、task-close、契约测试。
 - 迁移：无；移除：无；影响：收口执行者、独立签字人、任务一二三复核。
 
-### 包 12：任务一二三低质量交付修复（P12a／P12b／P12c 三个子 Phase）
+### 包 12：任务一二三修复（C2 现在修，其余设计+blocked）
 
 #### 1. 原始需求
-- 问题（六条真实缺陷，各自有复现）：C1 风险接受缺 `reply_ref` 时 close 路由不拒；C2 wh-review detail 轨缺必需要件仍 `status:"available"`；C3 收敛清单只抓重复模块 id、不抓重复正文，原失败原件记「放入重复正文后仍 14 pass/0 fail」；B2 `write_set_reconciliation` 在无 `phase_id` 时早退为 `unavailable`，登记在但没消费；B3 三项迁移只登记、调用点仍指旧技能，悬空 pointer 无人拦；D1 AC-001 由唯一写者自判 pass。
-- 来源①`p12/context.md`「已有盘点」与「目标」：先把三条低质量交付的每条调研成可独立修复的条目，再按失败模式拆子 Phase，每个子 Phase 目标单一、能独立交付与验收。
-- 来源②`p12/design-6-fixes.md` 逐条（文件/函数、红、绿、负控、真实消费者、残余、顺序）。
-- 来源③审计：`2026-11-25-005-task3-root-cause-audit.md` §3.2/§3.4、§4 B1–B4。
-- 对应 R：R-011（真实入口、边做边验）、R-012、R-021（迁移同批退出旧实现）、R-027。
-- 用户可观察的坏处：登记了「已迁移／已修复」，真实消费者还是旧行为；门禁绿而真错误照样进清单。
+- 问题：任务一二三同一病——方法文本/登记/指针代替真实行为。逐项调研 11 条，但只有 C2（wh-review detail 缺键只写一句退 0）现在能安全修；C1/B2/B3/C3/D1 分别卡在判据变更、冻结测试、归档解冻、技能承接、解析前移。来源：`p12/context.md`、逐项调研、六条修复详细设计。
+- 对应 R：R-033。
+- 坏处：把“设计完成”当“修好”，或把 blocked 冒绿。
 
 #### 2. 最初方案
-- 一开始想怎么做：一个 Phase 全包六条修复，同时把调研与补全做在同一 Phase 里（`p12/context.md`「目标」原话否的就是这个）。
-- 谁否：设计角色（`p12/context.md`「目标」段）——「不是让一个 Phase 包办调研+补全」。
-- 为什么否：六条失败模式不同（门禁证伪、登记→真实消费、独立验收），混在一个 Phase 无法独立验收，任一条红都拖住其余；也无法说清哪条先修。
+- 一开始想六条全部现在修；被质量审查否：只有 C2 真能复现原失败并安全修，其余会越界/改判据/动冻结测试。
 
 #### 3. 发散与被否
-- 备选 A（选）：拆三个子 Phase——P12a 门禁证伪（C1/C2/C3）、P12b 登记→真实消费（B2/B3）、P12c 独立验收（D1）。代价＝三次提交、三份验收。
-- 备选 B（否）：按文件拆（`runtime/`／`tools/`／`skills/` 三组）。代价＝写集不重叠、可并行。否，理由：同一文件跨条（`tools/cli/stage-runtime.mjs` 被 B2/C1 共碰），按文件拆会把一条失败拆到两个 Phase，验收对象说不清。
-- 备选 C（否）：只修三条可复现门禁（C1/C2/C3），B2/B3/D1 留后续任务。代价＝最小、最快。否，理由：B2/B3 与 C 组是同一失败模式（登记代替真实消费），留着等于继续冒充；D1 不修则前面全白做。
-- 备选 D（否）：六条合成一个「修复包」，一个 Phase 顺序做完。代价＝一次交付 6 条。否，理由：无法独立验收，任一条红拖住其余。
-- 被否完整理由：`p12/context.md`「目标」与「待调研」；主文一句：按文件拆、只修三条、合成一包三条都不成立。
+- A（选）：C2 现在修；C1/B2/B3/C3/D1 保留设计、逐条 blocked，写 owner/恢复条件。
+- B（否）：六条一起改——越界、改判据、动冻结测试。
+- C（否）：只写文档不修——C2 本可修，浪费。
+- D（否）：新建第二套修复权威——违边界。
 
 #### 4. 调研
-- 事实 C1：`runtime/review/stage-review-disposition.mjs` 的 `accepted_risk` 分支把「缺授权／缺 reply／reply 空／缺 `reply_ref`」合并成一条普通 `missing_items` 字符串，不抛码；`core/task-close.mjs` 的 `closeDelivery`(:1253) 与 `executeClosePlan`(:917) 从不读 `finding_dispositions`；`validateReportableFindingDispositions` 无任何非测试 consumer（设计原件记 `grep` 只剩定义）。真校验只存在 `tools/cli/stage-runtime.mjs` 的 `terminalAssessmentQuality`：读 `risk_acceptances[]`、要求 `reply_ref` 前缀 `quality/evidence/human-confirmations/`、打开原件并核 verbatim 答复。
-- 事实 C1 更正：设计原件提的 `risk_acceptance_reply_ref` 行字段当前不被接受——`runtime/task/task-store.mjs:10-13` 的 `STAGE_ROW_KEYS` 没有它，`:67` 对未知字段抛 `task row contains unsupported fields`。故改为「抽一处校验、两入口共用」，不新增行字段。
-- 事实 C2：`skills/wh-review/scripts/review-materials.mjs:793` 算 `missing`，`:816` 只在 `review-instructions.md` 末尾追加「Supplied material is incomplete …」，仍返回完整 bundle；detail 轨 required＝`raw_requirement`/`approved_direction`；`simple-review-runner.mjs` 的 `shouldRunMaterialPreflight`(:882) 对只有未知键的 materials 返回 false，跳过 preflight → `status:"available"`。
-- 事实 C3：`tools/cli/check-stage-steps.mjs:2433` 的 `duplicate` 只按模块 id；`:2471` 只把「重复模块」推进 `gaps`；退出码只认「未收敛：」前缀与 `isConvergenceEvidenceFailure`（`:936` 的 `CONVERGENCE_FAILURE_PATTERNS` 无「重复正文」）；`packageBlock`(:626) 能取正文，但没有一处比较两段正文。原失败原件：`tasks/delivery-quality-plan-20261123/quality/tests/2026-11-24-055-p01-neg2-case2-duplicate-body.output`。
-- 事实 B2：`reconcileWriteSetDiff`(`runtime/stage/stage-content-contracts.mjs:578`) 无 phase 即 `unavailable`；`tools/cli/stage-runtime.mjs:645` 在 `request.phase_id == null` 早退返回占位 `write_set_reconciliation:null`；`:681` 已能从 facts 读 `phase_progress`。
-- 事实 B3：三项迁移只登记在 `specs/archive/delivery-quality-plan-20261123/closeout-report.md:157-163`；调用点仍在 `workflows/build-code/skill-deps.yaml:28-30`、`workflows/build-plan/skill-deps.yaml:27-28,51-53`、`workflows/make-decision/skill-deps.yaml:57-59`；`tools/cli/build-skill-manifests.mjs` 只读 catalog/registry/manifest，从不读 skill-deps，`--check` 对悬空 pointer 退 0。
-- 事实 D1：`specs/archive/delivery-quality-plan-20261123/closeout-report.md:7` 判定者＝P12 实施者（唯一写者），`:8` AC-001 由本报告重判改 pass，`:248` 再写一次；独立读者原件 `quality/tests/p01-independent-readback.md:38` 判 pass，但 `:30`、`:50` 记「坏例 2 未抓到，14 pass/0 fail」；`specs/archive/**` 冻结（`p12/context.md:13`）。
-- 假设 H1：C1 只要抛码就够。推翻条件：close 根本不调用它（已成立）→ 必须接 close 路由。
-- 假设 H2：C3 加失败模式就够。推翻条件：正文比较本身没人做，得先写比较。
-- 假设 H3：B2 只要给 `phase_id`。推翻条件：`:681` 只在 cursor 有 `phase_id` 时可用，且 `selectedPhaseScopeValid` 还要索引命中。
-- 哪些事实改变了方向：①C1 从「新增行字段」改成「抽一处校验、两入口共用」；②C3 从「加失败模式」改成「先写正文比较再挂退出码」；③D1 从「改归档」改成「当前任务新独立原件＋归档只读」；④B3 从「删旧技能目录」改成「先切调用点、目录后删」。
-- 原始材料：`p12/design-6-fixes.md`、`p12/context.md`、审计 005（sha256 见第 9 项）。
+- C2 真实复现：detail 只给未知键时 `buildReviewMaterials` 不抛错，只写 `Supplied material is incomplete`；`runSimpleReview` 仍 `available`。
+- C1：`task-store` 的 STAGE_ROW_KEYS 不接受 `risk_acceptance_reply_ref`；close 拒绝属判据变更，需质量 owner。
+- C3：坏例来自冻结的 `unit-kernel-wiring`（14/0），改的是另一门；需冻结测试 owner 变更请求。
+- D1：057 已判 AC-001 incomplete；解冻归档+改判需用户。
+- B2：解析在 projection，`phaseReviewDiffBase/ChangeScope` 已用 null 算完，需前移+fallback。
+- B3：backend-testing/project-norm-init 未先承接，切 pointer 会丢方法。
 
 #### 5. 最终决定
-- 选了什么：备选 A，三个子 Phase、六个决定。
-  - P12a 门禁证伪（C1/C2/C3）：C1 抽 `assertRiskAcceptanceReplyRefs` 到 `runtime/review/stage-review-disposition.mjs` 并让 `task-close` 两个入口调用；C2 在 `buildReviewMaterials` 的 detail 轨缺件时抛 `MATERIAL_INCOMPLETE`；C3 在 `check-stage-steps` 加包正文比较并挂 `重复正文` 失败模式。
-  - P12b 登记→真实消费（B2/B3）：B2 从 facts 的 `phase_progress.phase_id` 解析当前 Phase 再判早退；B3 切四个 skill-deps 调用点并给 `build-skill-manifests --check` 加指针校验。
-  - P12c 独立验收（D1）：当前任务新出独立读回原件判 AC-001，归档自判降为历史记录。
-- 为什么：三条低质量交付的失败模式分别是「门禁抓不到」「登记没消费」「自判」，正好三组；每组有自己的红→绿→负控，能独立验收。
-- 代价：三次提交、三份验收；C1 要抽一处共用校验（删 stage-runtime 内联，避免双写）；D1 的归档改写被冻结挡住，只能交当前任务独立原件。
-- 跨包编号：P12-1…P12-6。P12 依赖包 9 的生产者与包 11 的判词口径；包 13 的端到端依赖 P12 修完（否则会撞同一批旧缺陷）。
-- 承诺：必须｜每条修复先复现原失败，再证明消失（红→绿），并有负控｜R-011。
-- 承诺：必须｜迁移同批退出旧实现（调用点切换与校验同批）｜R-021。
-- 承诺：必须｜AC 改判只认独立判词，自判不作通过依据｜R-011。
-- 承诺：允许｜归档侧不改字节，只交当前任务独立原件（D1 的冻结边界）。
-- 承诺：本次不做｜不改 `specs/archive/**` 字节；不改冻结测试 `unit-kernel-wiring`／`convergence-card`／`module-convergence-card`。
-- 承诺：待定｜A1–A4 与 B1 五条 blocked 的恢复时点（见第 9 项）。
-- 派生建议：P12a 三条可并行、P12b 两条可并行（写集不重叠），P12c 必须最后（它消费 C3 的负控）。
-- 被否方案：按文件拆、只修三条、合成一包（理由见第 3 项）。
+- P12a：C2 现在修——detail 缺键报 `MATERIAL_INCOMPLETE`，补契约测试；C1 blocked（质量 owner 定“close 拒绝算不算改判据”）。
+- P12b：B2 设计（解析前移+fallback）；B3 blocked（等 P8/P9 三技能承接+manifest）。
+- P12c：C3 blocked（冻结测试 owner 变更请求）；D1 blocked（用户解冻归档+处理 057）。
+- 承诺：必须｜C2 红→绿→负控｜R-033；本次不做｜其余五条不冒充现在修；待定｜C1/C3/D1/B3 owner 决策。
 
 #### 6. 完整方案
-- 接口/行为：六条各自的对外形状——①`assertRiskAcceptanceReplyRefs({dispositions,riskAcceptances,readOriginal,taskId})` 在缺 `reply_ref`、原件不可读、答复不一致时抛 `RISK_ACCEPTANCE_REPLY_REF_MISSING`；②`buildReviewMaterials` 在 `stage==="make-decision" && reviewTrack==="detail"` 且缺 required 时抛 `MATERIAL_INCOMPLETE: detail review requires <缺键>`；③`check-stage-steps` 的收敛报告新增 `重复正文：包 X 与 包 Y 正文相同` 并让退出码为 1；④`resolveCurrentPhaseId(context)` 返回当前 `phase_id` 或 `null`，两个入口先补再判早退；⑤`build-skill-manifests --check` 对悬空 skill-deps pointer 非 0 并点名；⑥AC-001 的通过依据只能指向 `quality/tests/p01-independent-readback.superseding.md`。
-- 数据与状态：C1 不新增行字段（`STAGE_ROW_KEYS` 不变）；B2 不改 `reconcileWriteSetDiff` 的默认语义；C3 只加报告项与退出码，不改收敛清单格式；B3 只切调用点、不删目录；D1 不改归档字节，只新增当前任务原件。
-- 依赖与顺序：B2 → C1（同碰 `tools/cli/stage-runtime.mjs` 的阶段行读取，先落 phase 解析再让 close 读该行）；C3 → D1（C3 是 `check-stage-steps` 与新增用例的唯一写主，D1 只读它的负控原件）；C2 独立；B3 独立（与 C1/B2 不同文件，可并行）。
-- 唯一 writer：C1／C2／C3 归 P12a 实现者，B2／B3 归 P12b 实现者，D1 归 P12c 的独立执行者（不属实施写者集合）；`specs/archive/**`、两份冻结卡测试、`unit-kernel-wiring.test.mjs` 只读。
-
-六条修复逐条写文件、函数、红、绿、负控、消费者。
-
-- **C1 风险接受缺 `reply_ref` → close 路由具名拒绝**（决定 P12-1）
-  - 文件/函数：`runtime/review/stage-review-disposition.mjs`（`accepted_risk` 分支）；`tools/cli/stage-runtime.mjs`（`terminalAssessmentQuality` 的内联校验改为调同一导出）；`core/task-close.mjs`（`closeDelivery` 与 `executeClosePlan` 入口）。
-  - 改动：①`accepted_risk` 分支拆四段，缺 `reply_ref` 抛 `RISK_ACCEPTANCE_REPLY_REF_MISSING`；②把「`reply_ref` 前缀必须是 `quality/evidence/human-confirmations/`、原件可读、`original.reply` 含 verbatim 答复」抽成导出 `assertRiskAcceptanceReplyRefs({dispositions,riskAcceptances,readOriginal,taskId})`，stage-runtime 改调它；③`task-close` 两个入口在写 close 证据前调用；不新增行字段。
-  - 红：`node --input-type=module -e 'import {validateReportableFindingDispositions as v} from "./runtime/review/stage-review-disposition.mjs"; const r={status:"available",findings:[{id:"F1",severity:"major",issue:"x",path:"a.mjs",evidence_kind:"direct",evidence_status:"direct"}]}; const d=[{finding_id:"F1",status:"accepted_risk",original_fact:"a",source:"review",consequence:"b",next_action:"c"}]; console.log(JSON.stringify(v({result:r,dispositions:d,authorizedRiskFindingIds:["F1"],userReply:{finding_id:"F1",reply:"ok"}})))'` → 当前退 0、stdout 含 `"status":"incomplete"` 与 `accepted_risk requires a real user risk reply for F1`，无错误码；close 对带 `accepted_risk` 缺 `reply_ref` 的任务当前不拒（`grep -n "risk" core/task-close.mjs` 无命中，设计原件记）。
-  - 绿：同命令非 0、`error.code === "RISK_ACCEPTANCE_REPLY_REF_MISSING"`；`node tools/cli/task-close.mjs close …` 对缺 `reply_ref` 的任务 stderr JSON `code` 同名、exit 1；给合法 `reply_ref`（原件含 verbatim 答复）时 close exit 0。
-  - 负控：`reply_ref` 指向不存在原件 → 同码；`reply` 与原件不一致 → 同码；只改 disposition 不改 reply → 同码。
-  - 消费者：`tools/cli/task-close.mjs close` → `closeDelivery`；build-code 终末收口。
-- **C2 wh-review detail 缺键 → `MATERIAL_INCOMPLETE`**（决定 P12-2）
-  - 文件/函数：`skills/wh-review/scripts/review-materials.mjs`（`buildReviewMaterials`，`missing` 计算与 instructions 追加之间）；`skills/wh-review/scripts/simple-review-runner.mjs`（`normalizeProviderError` 透传 code，必要时在 `buildBundle` 的 catch 前加分支）。
-  - 改动：`stage==="make-decision" && reviewTrack==="detail" && missing.length` 时在创建 `bundleRoot` 之前抛 `MATERIAL_INCOMPLETE: detail review requires <缺键>`；runner 侧保留该 code 并返回 `blockedPreflight`。
-  - 红：`buildReviewMaterials({stage:"make-decision",reviewTrack:"detail",materials:{raw_requirement:"R"}})` 当前返回 bundle、`review-instructions.md` 含 `Supplied material is incomplete: approved_direction`（设计原件记实读）；dispatch 层对 `{decision:"only an unknown key"}` 当前 `status:"available"`。
-  - 绿：低层抛错、message 以 `MATERIAL_INCOMPLETE: detail review requires approved_direction` 开头；`node skills/wh-review/scripts/wh-review-cli.mjs run <input.json>` 对 detail 缺键 exit 1、`error.code==="MATERIAL_INCOMPLETE"`。
-  - 负控：只给未知键（两个 required 都缺）→ 同码；`approved_direction:""` → 同码；direction 轨不受影响（跑一次仍 available）。
-  - 消费者：`skills/wh-review/scripts/wh-review-cli.mjs run`；make-decision detail 审查派发。
-- **C3 重复正文不捕获 → fail**（决定 P12-3，唯一写主）
-  - 文件/函数：`tools/cli/check-stage-steps.mjs`（`packageBlock:626`、`duplicate:2433`、`gaps:2471`、`CONVERGENCE_FAILURE_PATTERNS:936`、退出码分支）；`tests/contract/check-stage-steps.test.mjs`（新增用例）。
-  - 改动：新增 `duplicateBodyGaps`：逐包取 `packageBlock`，去标题行、空白归一、`<40` 字跳过，命中写 `重复正文：包 X 与 包 Y 正文相同`；并入 `gaps`；`CONVERGENCE_FAILURE_PATTERNS` 加 `/重复正文/`；`重复模块 WPxx` 旧 gap 保留。
-  - 红：新用例（两个不同 id 包正文相同只改标题）→ 当前 `gaps` 不含「重复正文」、`process.exitCode===0`（等价既有原件 14 pass/0 fail）。
-  - 绿：同用例 `gaps` 含具名行、exit 1、`--json` 的 `convergence.complete=false`。
-  - 负控：两包正文不同 → 不出现、exit 0（不误杀）；正文 `<40` 字 → 不判重（口径）。
-  - 消费者：`node tools/cli/check-stage-steps.mjs --stage=make-decision --json`；make-decision 第 9 步 `module-convergence`。
-- **B2 write_set 对账 `unavailable` → `recorded`**（决定 P12-4）
-  - 文件/函数：`tools/cli/stage-runtime.mjs`（`phaseReviewSourceProjection` 的早退、`captureScopedReviewSource` 的相位分支、`:681` 既有 cursor 读取）。
-  - 改动：新增 `resolveCurrentPhaseId(context)`，从 facts 的 `phase_progress.phase_id` 解析；两个入口先把 `request.phase_id` 补成解析值再判早退，解析不到才回占位；`reconcileWriteSetDiff` 不加默认。
-  - 红：新用例（request 不带 `phase_id`，facts 有 `phase_progress:{phase_id:"P1"}`）→ 当前 `captureContractFacts` 为 `null`（占位早退）。
-  - 绿：同用例 `{"status":"recorded","phase_id":"P1","out_of_scope":["outside.mjs"],"matched":["src/owned.mjs"]}`；`run --action=execute` 的 `write_set_reconciliation.status === "recorded"`。
-  - 负控：facts 清空 `phase_progress` 且 request 无 `phase_id` → `unavailable`、`matched:[]`、reason 含 `phase_id`，退出码不变（事实非门）；`phase_id` 不在索引 → `unavailable`（不退化成空 match）。
-  - 消费者：`tools/cli/stage-runtime.mjs run --action=execute`；`tools/cli/check-stage-quality.mjs --report`。
-- **B3 三项迁移只登记 → 切调用者＋悬空 pointer 具名**（决定 P12-5）
-  - 文件：`workflows/build-code/skill-deps.yaml:28-30`、`workflows/build-plan/skill-deps.yaml:27-28,51-53`、`workflows/make-decision/skill-deps.yaml:57-59`、`tools/cli/build-skill-manifests.mjs`。
-  - 改动：四个调用点切到承接者（`fullstack-slice-testing`→`backend-testing`；`design-source-readiness`→`project-norm-init`；`plan-eng-review`→`unit-kernel`），trigger 保留；`build-skill-manifests.mjs` 在 external 读取后、check 输出前增 skill-deps 指针校验（复用 `check-skill-consistency` 的解析），悬空即 `skill-deps pointer dangling`；旧技能目录暂不删。
-  - 红：`node tools/cli/build-skill-manifests.mjs --check` 对当前 skill-deps 退 0；用一段 yaml 读脚本打印三份 skill-deps 里的旧名，当前打印三条旧名。
-  - 绿：三条都打印 `[]`；`--check` 通过；在临时副本把某条 `path` 改成 `skills/ghost/SKILL.md` 后 `--check` 非 0 且点名 `skill-deps pointer dangling`。
-  - 负控：`name` 在 catalog 无登记 → `check-skill-consistency` 报 `has no current registration`。
-  - 消费者：`node tools/cli/build-skill-manifests.mjs --check`（CI 守卫与 release 投影）、`check-skill-consistency.mjs`。
-- **D1 AC-001 自判 → 独立读者判 pass**（决定 P12-6）
-  - 文件：当前任务 `quality/tests/p01-independent-readback.superseding.md`（新，独立执行者写）；当前任务收口报告的 AC-001 依据行；`specs/archive/**` 不动。
-  - 改动：新原件按 C3 修复后的重复正文门禁判 AC-001 的实质条件，并引 C3 的负控（重复正文 → exit 1）作为覆盖缺口已闭；收口依据只引新原件，写明 `plan/closeout-report.md:8,53,248` 的自判为历史记录、不作通过依据。
-  - 红：`grep -n "由本报告按当前字节独立重判改 pass" specs/archive/delivery-quality-plan-20261123/closeout-report.md` → 命中 `:8`/`:248`；`quality/tests/p01-independent-readback.md:38` 判 pass 但 `:30,:50` 记未抓坏例。
-  - 绿：当前任务新 closeout 的 AC-001 依据行只含新原件路径，不含「本报告重判」；新原件结论 pass 且附 C3 负控。
-  - 负控：收口草稿写「本报告重判 pass」且不引独立原件 → 断言失败 `SELF_JUDGED_NO_INDEPENDENT_READBACK`；引独立原件但结论非 pass → `INDEPENDENT_VERDICT_NOT_PASS`。
-  - 消费者：收口读者；`tools/cli/check-delivery-claims.mjs` 的 accepted 声明（signer≠author）。
-
-写集（指针模式；三子 Phase 各一次提交）：
-
-| 文件 | 改什么 | 工作包 | 决定 |
-| --- | --- | --- | --- |
-| `runtime/review/stage-review-disposition.mjs` | `accepted_risk` 分支拆段并抛 `RISK_ACCEPTANCE_REPLY_REF_MISSING`；导出 `assertRiskAcceptanceReplyRefs` | P12a | P12-1 |
-| `tools/cli/stage-runtime.mjs` | `terminalAssessmentQuality` 内联校验改调同一导出 | P12a | P12-1 |
-| `core/task-close.mjs` | `closeDelivery`、`executeClosePlan` 入口调用同一校验 | P12a | P12-1 |
-| `skills/wh-review/scripts/review-materials.mjs` | detail 轨缺 required 时抛 `MATERIAL_INCOMPLETE` | P12a | P12-2 |
-| `skills/wh-review/scripts/simple-review-runner.mjs` | 保留 `MATERIAL_INCOMPLETE` code 并返回 `blockedPreflight` | P12a | P12-2 |
-| `tools/cli/check-stage-steps.mjs` | 新增包正文比较、并入 `gaps`、挂 `/重复正文/` 失败模式 | P12a | P12-3 |
-| `tests/contract/check-stage-steps.test.mjs` | 新增重复正文用例与两条负控 | P12a | P12-3 |
-| `tools/cli/stage-runtime.mjs` | 新增 `resolveCurrentPhaseId`，两入口先补 `phase_id` 再判早退 | P12b | P12-4 |
-| `tests/contract/stage-write-set-reconciliation.test.mjs` | 新增「无 `phase_id` 但 facts 有 cursor」用例与两条负控 | P12b | P12-4 |
-| `workflows/build-code/skill-deps.yaml` | 调用点 `fullstack-slice-testing`→`backend-testing` | P12b | P12-5 |
-| `workflows/build-plan/skill-deps.yaml` | `plan-eng-review`→`unit-kernel`；`design-source-readiness`→`project-norm-init` | P12b | P12-5 |
-| `workflows/make-decision/skill-deps.yaml` | `design-source-readiness`→`project-norm-init` | P12b | P12-5 |
-| `tools/cli/build-skill-manifests.mjs` | 增 skill-deps 指针校验，悬空即失败 | P12b | P12-5 |
-| `quality/tests/p01-independent-readback.superseding.md`（任务库） | 新建独立读回，判 AC-001 并附 C3 负控 | P12c | P12-6 |
-| 当前任务 closeout 报告的 AC-001 依据行 | 只引新独立原件，自判降为历史记录 | P12c | P12-6 |
+- C2 写集：`skills/wh-review/scripts/review-materials.mjs`、`simple-review-runner.mjs`、`tests/contract/wh-review-detail-incomplete.test.mjs`、`ocr-delegation-route.test.mjs`（预期断言更新）。
+- B2/B3/C1/C3/D1 写集保留在设计文档，不进入本次实施。
+- 唯一 writer：P12 实现者；C2 与 P9 共享 detail 断言，按 P9→P12 串行。
 
 #### 7. 验收
-- 判据 AC-P12-001（C1）：来源 R-011。命令：第 6 项 C1 的红/绿两条命令＋close 路由一次。期望：改前退 0 且无码；改后同码非 0、close 退 1；合法 `reply_ref` 时 close 退 0。反例：`reply_ref` 指向不存在原件仍退 0。谁验何时验：独立执行者，P12a 提交后。证据：`quality/tests/p12-c1.output`。不检查：不判 close 的其它拒绝条件。
-- 判据 AC-P12-002（C2）：来源 R-011。命令：detail 缺键的低层调用与 `wh-review-cli run`。期望：改后 `MATERIAL_INCOMPLETE`、exit 1；改前 available。反例：未知键仍 `status:"available"`。证据：`quality/tests/p12-c2.output`。不检查：不判 direction 轨（只要求它不受影响）。
-- 判据 AC-P12-003（C3）：来源 R-011、R-012。命令：`npx vitest run tests/contract/check-stage-steps.test.mjs -t "duplicate body"`。期望：改后 gaps 含「重复正文：包 1 与 包 2 正文相同」、exit 1；两包正文不同时 exit 0。反例：`<40` 字空正文被判重。证据：`quality/tests/p12-c3.output`。不检查：不判冻结的 `unit-kernel-wiring`（另属残余）。
-- 判据 AC-P12-004（B2）：来源 R-011。命令：新用例 `npx vitest run tests/contract/stage-write-set-reconciliation.test.mjs -t "resolves the current phase_id"`。期望：改后 `recorded`＋`matched:["src/owned.mjs"]`；无 cursor 时 `unavailable` 且 reason 含 `phase_id`。反例：无 phase 时退化成空 match。证据：`quality/tests/p12-b2.output`。不检查：不跑端到端 `run --action=execute`（见第 9 项未取得）。
-- 判据 AC-P12-005（B3）：来源 R-021、R-011。命令：`node tools/cli/build-skill-manifests.mjs --check`；三份 skill-deps 的旧名打印脚本；临时副本注入 `skills/ghost/SKILL.md` 的负控。期望：三条旧名打印 `[]`、`--check` 通过、负控非 0 且点名 dangling。反例：悬空 pointer 仍退 0。证据：`quality/tests/p12-b3.output`。不检查：不判旧技能目录是否该删（属后续清理）。
-- 判据 AC-P12-006（D1）：来源 R-011、审计 B2。命令：`node tools/cli/check-delivery-claims.mjs --task-path=<当前任务>` 与新 closeout 的 AC-001 依据行 grep。期望：依据行只含新独立原件；判词 signer 不在写者集合。反例：依据行出现「本报告重判」。证据：`quality/tests/p12-d1.md`。不检查：不改归档字节。
-- 判据 AC-P12-007（三子 Phase 不冲突）：来源 R-012。检查：三次提交的 `git diff --name-only` 与写集表逐条比对，无跨子 Phase 同文件并发。反例：P12a 与 P12b 同批改 `stage-runtime.mjs` 而没串行。谁验：独立审查者。证据：`quality/reviews/p12-scope.md`。
-- 判据 AC-P12-008（边界不越）：来源 R-027。检查：`git diff` 不含 `specs/archive/**`、两份冻结卡测试、`unit-kernel-wiring.test.mjs`。反例：任一处被改。证据同上。
-- 命令或检查：上面七条。
-- 谁验、何时验：每条由独立执行者在对应子 Phase 提交后跑；AC-P12-006 由独立读者判。
-- 证据放哪：`quality/tests/p12-*`、`quality/reviews/p12-*`（尚未产生 → 未取得，原因：P12 未开工）。
-- 这条不检查什么：不检查六条之外的历史缺陷；不检查任务一二三其它 AC；不判 close 的 Git 授权流程。
+- AC-P12-001（C2）：缺 `approved_direction` 时 detail 报 `MATERIAL_INCOMPLETE`；反例：只写 instructions 退 0；证据 `quality/tests/p12-c2-detail.output`。
+- AC-P12-002（blocked 不冒绿）：C1/B2/B3/C3/D1 每条有 owner、缺什么、恢复条件；反例：写成 pass。
+- 不声称六条全绿。
 
 #### 8. 风险/回退
-- 触发：C1 抽函数时 stage-runtime 内联未删。后果：两处判定不同步。缓解：一次提交内删内联；负控两条入口各跑一次。
-- 触发：C2 改动溢出到 direction 轨。后果：合法 direction 请求被拒。缓解：条件只认 `stage==="make-decision" && reviewTrack==="detail"`；负控跑一次 direction 仍 available。
-- 触发：C3 误杀模板化卡（去标题后正文相同）。后果：合法卡被判重复。缓解：`<40` 字跳过；报告里同时写两个包号供人工复核；两包正文不同的负控必须绿。
-- 触发：B2 把无 phase 冒充 match。后果：对账变假绿。缓解：解析不到保持 `unavailable`；负控明确。
-- 触发：B3 切调用点后旧技能仍被别处引用。后果：`check-skill-consistency` 报 mandatory mismatch。缓解：`skills/wh-review/manifest.json` 的 `plan-eng-review` 引用同批核；`tests/fixtures/n10-method-readback.json` 的旧 trigger 文案按需同批更新。
-- 回滚：三子 Phase 各一次提交，可独立回退；B3 回退＝四个调用点改回旧名；C1 回退＝恢复内联并删导出（但 close 又回到不拒）；D1 只影响当前任务材料，归档不动。
+- C2 会让现有 detail 契约测试变红，需同批更新断言；出问题回滚两处。
 
 #### 9. 未决/消费者/证据
-- blocked 五条（逐条写恢复条件）：
-  - A1 真实 build-code 周期：缺真实小型任务的首卡端到端（同会话第 2→3 步、持久首卡、原消费者定位）。恢复条件：有真实任务带真实 diff 与首卡；owner：该任务 build-code 执行者。
-  - A2 下一阶段交接：缺 P12 修完后 build-code 真开工一次。恢复条件：任务四设计合并后按新卡开工；owner：build-plan/build-code 主会话。
-  - A3 用户逐包答复：缺用户对 P8–P13 每包十项的逐包回复原件。恢复条件：用户逐包回复并留 Talk 原件；owner：用户＋make-decision 主会话。
-  - A4 真实 review-record 与三链：缺审查侧 finding 原文入库与三链原件。恢复条件：原会话可取，或用户批准以转录取代（B2）；owner：任务三 owner＋原决定人。
-  - B1 归档 160 条只向前建：AC-CLOSE-001 的 160 对象仅文本、无路径级哈希；只向前建需用户批准，不重建历史。恢复条件：用户批准对归档建路径级哈希（只向前）；owner：用户＋任务一 owner。
-- 未决：C1 的 close 拒绝是否算「改判据」（把报告项变阻断项）——谁定：`docs/standard-workflow.md` 质量段 owner；何时定：P12a 提交前；不答后果：C1 只能停在纯函数抛码，close 仍放行。
-- 未决：`skills/wh-review/manifest.json` 的 `plan-eng-review` 必读引用是否同批切——谁定：wh-review manifest owner；何时定：P12b 提交前；不补后果：`check-skill-consistency` 的 compare 段报 mandatory mismatch。
-- 消费者：build-code 终末收口读 C1；make-decision detail 派发读 C2；make-decision 第 9 步读 C3；phase 审查材料与 readiness 读 B2；CI 守卫与 release 投影读 B3；收口读者与 `check-delivery-claims` 读 D1。
-- 证据：`quality/evidence/decision-maker/p12/design-6-fixes.md` sha256 `1344deb8348e240649c6b6d586074090ecf07703c792aaf026e365e53d5dc254`；`quality/evidence/decision-maker/p12/context.md` sha256 `f59ee45a0148d93980f73ea54401d123da296e85bb002d652b53615f233cc4c0`；审计 005 sha256 `32665ad7…`（同包 8）。
-- 未取得：C1 的 close 端到端红（需真实任务库与已授权 close 计划）、B2 的端到端 `run --action=execute` 绿（需真实 worktree 与 `phase_progress` 事实）、C3 的 14/0 原始红复跑（冻结测试，未重跑）、D1 的归档改写（冻结挡住）。原因均为缺真实环境或冻结边界，已在第 6 项逐条写明替代证据。
+- 未决：C1 质量 owner、C3 冻结测试 owner、D1 用户解冻、B3 技能承接。
+- 消费者：wh-review detail、后续 P12 批次。
+- 证据：`p12-c2-detail.output`；未取得：owner 答复。
 
 #### 10. 配套与影响
-- 配套调整：`tests/contract/check-stage-steps.test.mjs`（C3 用例）；`tests/contract/stage-write-set-reconciliation.test.mjs`（B2 用例）；`skills/wh-review/manifest.json` 的 `plan-eng-review` 引用同批核；`tests/fixtures/n10-method-readback.json` 的旧 trigger 文案若被逐字断言需同批更新。
-- 配套迁移：B3 的四个调用点切换即迁移本体，旧技能目录保留；迁移失败回退＝一次提交改回旧名。C1 不新增行字段，故无 facts 迁移。
-- 配套移除：`重复模块 WPxx` 旧 gap 保留；`make-decision` 第 9 步裸目录项归包 9 删；本包不删任何技能目录、不改归档。
-- 影响范围：close 路由、wh-review detail 轨、收敛清单门禁、phase 审查材料、skill 依赖清单、AC-001 判词；`specs/archive/**`、两份冻结卡测试、`unit-kernel-wiring.test.mjs` 不动。
+- 配套：review-materials、simple-review-runner、两个契约测试。
+- 迁移/移除：无；影响：wh-review detail 使用者。
 
 ### 包 13：当前任务重写与独立任务端到端设计（真实执行归 build-code）
 
