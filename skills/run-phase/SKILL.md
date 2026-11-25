@@ -37,7 +37,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 ## 第 4 步：按实际差异选测试面
 
 - **输入**：真实 changed files、当前 Phase 的测试声明、既有实现与消费者。
-- **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。
+- **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。路线含自动触发或对外发送时，同读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」，按四段写证到哪段，并在交付里写明拒绝的接收侧记录与原使用方读回由谁出。
 - **交付**：实际差异到测试面的对应关系、选择理由、风险场景与排除原因。
 - **拒认**：按目录名猜测试面、拿计划路线代替实际 changed files、图或选择器代替真实 oracle。
 - **失败**：图缺失、歧义或目标不存在时如实记 exit 与 unknown，安全回原文与真实测试；图不作质量许可。
@@ -90,6 +90,14 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 - **提交身份**：审后只做一次正常提交，记 commit sha 与 author 并绑定两方回报 ref，末段据此核同一开发；迟到发现按补提交单列。
 - **拒认**：只改处置状态、只改行号或夹具当新事实、拿未绑定的答复记接受风险、两方未回报就宣布完成。
 - **失败**：确实无法在当前范围解决时写影响、证据、原因与剩余选项，继续不受影响的工作；严重风险交真实用户，不自行接受。
+
+## 收尾：单元复盘记录
+
+第 9 步 findings 处置完、Phase Done 的缺口列清，这个 Phase 的设计与执行合成一个单元完成，当场记一条。
+这一节只记一件事：这批 findings 里哪条是真问题、处置后留下了哪条会改变下次做法的实现教训；没有就写具名依据。
+设计侧的切 Phase 信号与切片从 `skills/phase-maker/SKILL.md` 的「收尾：单元复盘记录」读，写进同一条记录；设计侧不另记。
+五问、摘要上限、记录形状、状态词与证据指针，读 `skills/stage-reflection/SKILL.md` 的「单元模式：单元复盘记录」；此处不复述方法。
+少记一条只让本 Phase 这一条判未完成，不拦本 Phase 之后再开工。
 
 ## 与完整方法的关系
 
