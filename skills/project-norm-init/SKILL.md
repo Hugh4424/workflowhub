@@ -26,7 +26,7 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 | ③组件及设计代码对应 | specs/design/components.md；工程独立内容确需时 specs/frontend/components.md，否则归 frontend.md | WenjiaWang/ui-designer 的 frontend-design + `skills/frontend-component-quality/SKILL.md` | 组件设计与前端 owner | 真实 wrapper/API/type、实现/测试 |
 | ④布局与场景 | specs/design/layouts.md；独立工程内容确需时 specs/frontend/layouts.md，否则归 frontend.md | WenjiaWang/ui-designer 的 information-architecture + frontend-design | 布局/信息架构 owner | renderer、实际 DOM/CSS/滚动/浮层 |
 | ⑤通用交互 | specs/design/interaction.md；控件内合同引用组件源 | WenjiaWang/ui-designer 的 ui-interaction-states | 交互/组件行为 owner | 规划、测试、verify reader |
-| ⑥前端工程 | specs/frontend/frontend.md；引用配置/架构/ADR | WenjiaWang/spec-driven-production 分责/更新；现前端工程方法 | 前端工程 owner | 实现、构建、工程验证 |
+| ⑥前端工程 | 先读 specs/frontend/README.md 入口，再读 specs/frontend/frontend.md 正文；引用配置/架构/ADR | WenjiaWang/spec-driven-production 分责/更新；现前端工程方法 | 前端工程 owner | 实现、构建、工程验证 |
 | ⑦内容与设计工艺 | specs/design/craft.md；词义和值引用原源 | WenjiaWang/ui-designer 的 design-brief + frontend-design 文案方法 | 内容设计 owner | 组件、文案、专业 reader |
 | ⑧质量判据 | 确需独立正文时 specs/design/quality.md；工程/运行共用 specs/frontend/ui-quality.md | `skills/frontend-testing/SKILL.md` + `skills/isolated-browser-qa/SKILL.md` | 设计/工程/运行质量原 owner | 独立设计、代码及运行验证 |
 

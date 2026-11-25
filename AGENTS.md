@@ -89,16 +89,17 @@
 
 ## 项目专业规范索引
 
-最后更新：2026-10-25。各原专业owner维护，consumer为规划/实现/独立验收agent。索引只导航；逐类核实际版本/范围/缺口，不复制规则。
+最后更新：2026-11-25。各域 owner 维护本域 README 的五列表（外部引用行除外，该行只列实质源指针）；本表一域一行、只写指针，不写规则正文。域内具体技能与正文由各域 README 的锚点列给出。
 
-| 类别 | 实质来源与用途 | 时机／owner与consumer |
+| 域 | 实质源入口 | 何时读 / 谁读 |
 | --- | --- | --- |
-| 设计 | [原八类职责](skills/project-norm-init/SKILL.md#规范职责)、[来源准备](skills/design-source-readiness/SKILL.md)、[页面组件词汇](skills/answer-as-page/SKILL.md#组件词汇与取舍)及[驾驶舱合同](skills/answer-as-page/SKILL.md#当前任务驾驶舱)；结构样式归[原模板](skills/answer-as-page/templates/overview-template.html) | 出页/设计准备；原设计内容owner；make-decision/build-code 终末页面caller及render-answer-page模板reader |
-| 前端 | [组件质量](skills/frontend-component-quality/SKILL.md)、[前端测试](skills/frontend-testing/SKILL.md)、[页面DATA与输出合同](skills/answer-as-page/SKILL.md#依赖与边界)、[回灌安全](skills/answer-as-page/SKILL.md#回灌安全) | 交互准备/验收；原方法/renderer owner；阶段caller与render-answer-page.mjs；导航不改HTML/renderer |
-| 后端 | [入口](specs/backend/README.md) → [架构](specs/backend/architecture.md) | 模块/依赖/存储选择前；运行时架构owner；实现与审查者 |
-| 接口 | [入口](specs/api/README.md) → [合同](specs/api/contract.md) | public调用/校验/错误选择前；原public owner；CLI/task调用者 |
-| 验收 | [入口](specs/acceptance/README.md) → [规范](specs/acceptance/acceptance.md) | oracle/用例准备前；task及质量owner；独立测试/OCR/build-code 终末 |
-| 外部引用 | [逐项台账与角色分工](specs/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账)、[整包记录样张](skills/external/README.md) | 新增或变更外部内容前；采用卡与登记owner；实施者、后续卡及独立reader |
+| 设计 | [设计域规则表](specs/design/README.md) | 出页、设计准备与独立设计审查前；规划/实现 agent、design-review caller |
+| 前端 | [前端域规则表](specs/frontend/README.md) → [前端工程正文](specs/frontend/frontend.md) | 前端交互准备、实现与验收前；实现/审查 agent、render-answer-page.mjs；导航不改 HTML/renderer |
+| 后端 | [后端域规则表](specs/backend/README.md) | 模块/依赖/存储/并发选择前；实现与代码审查者 |
+| 接口 | [接口域规则表](specs/api/README.md) | public 调用、校验、错误与兼容选择前；CLI/task 调用者 |
+| 验收 | [验收域规则表](specs/acceptance/README.md) | oracle、用例、证据与完成判读前；独立测试/OCR/build-code 终末 |
+| 代码改动 | [代码改动域规则表](specs/code-changes/README.md) | 动代码、改接口、加技能或交记录前；实现/审查 agent |
+| 外部引用 | [整包记录样张](skills/external/README.md)、[逐项台账](specs/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账) | 新增或变更外部内容前；采用卡与登记 owner、后续卡与独立 reader |
 
 ## 当前目录职责
 
@@ -139,7 +140,7 @@
 - public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。
 - reports immutable；M14–M17 只读保留/归档。新增生产文件、命令、schema 或持久对象必须同时写明唯一 consumer、owner、替代关系和删除条件；不得新增双写、永久 compatibility bridge 或 history runtime branch。
 
-规范同步：build-code每Phase收口及verify终末、reflection写经验前、closeout任务收口前实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/隔离缺口不冒完成；权利事实与个人研究适用范围沿下条专业源判读。
+规范同步：build-code每Phase收口及verify终末、reflection写经验前、closeout任务收口前，以及任一域 README 五列表的规则状态或正文锚点变更后，实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/隔离缺口不冒完成；权利事实与个人研究适用范围沿下条专业源判读。
 
 引用版本、归档绑定、权利或失败/覆盖证据，以及处理个人研究使用范围前，先读[KR-EVID-001](specs/acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，由验收专业owner维护，catalog/经验判重/独立reader消费；更新2026-10-28。
 

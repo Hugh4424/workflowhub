@@ -1723,7 +1723,7 @@ export function checkAcceptanceObject(input, context = {}) {
 
 ### A.6 包 6 — 规范索引与开工读取（AC-P6-001 .. AC-P6-005）
 
-- [ ] **AC-P6-001**：9 个新文件都非空且各含五列表头，8 处既有改动逐处可读、不是占位。
+- [ ] **AC-P6-001**：9 个新文件都非空；三份域入口（`specs/code-changes/README.md`、`specs/design/README.md`、`specs/frontend/README.md`）各含五列表头，六份组正文/正文文件不含表头但非空且有真实正文；8 处既有改动逐处可读、不是占位。
   关联 FR-CODE-P6。
   判定方式：机器可判；判定时点：P6 实现提交后。
   落点：P6/T035 与 `phases/P6-规范索引.md`。
@@ -1755,11 +1755,12 @@ export function checkAcceptanceObject(input, context = {}) {
   失败：把 `specs/design/README.md` 里某行的链接改成不存在路径（或把 IPv6 式锚点写成未合并形态），同命令必须退 1 并点名该行；若仍退 0 即本条失败。
   证据：quality/tests/p6-verify-structure.output。
 
-- [ ] **AC-P6-003**：四个读点各有一段三句（命中哪条／改了什么／为什么没命中），同一文件不出现两套读取话术。
+- [ ] **AC-P6-003**：四个读点文件（`make-decision`、`build-plan`、`build-code` 两处、`build-prd`）共六处各有一段三句（命中哪条／改了什么／为什么没命中），同一文件不出现两套读取话术。
   关联 FR-CODE-P6。
   判定方式：只能人读；判定时点：P6 实现提交后、合入前。
   落点：P6/T037 与 `phases/P6-规范索引.md`。
   验证：独立读者打开四个读点（`workflows/make-decision/SKILL.md`:108、`workflows/build-plan/SKILL.md`:67、`workflows/build-code/SKILL.md`:99/:133、`workflows/build-prd/SKILL.md` 第 1 步）逐处读三句结构，并判断同文件内是否只此一套话术。
+  订正说明（2026-11-26，计划负责人席位由主会话代行）：原句写「四个读点各有一段三句」，与卡 `:338-352` 及实测的「4 文件 6 处」不符；`build-code` 第 1 步与第 2 步各有一处。本次只订正计数，判据强度未变。
   环境与数据：四份工作流正文当前字节；行号可能漂移，按实际内容定位。
   谁判：没参与写作的独立读者，P6 合入前。
   承接：结论写 P6/T037 完成记录与 `quality/tests/p6-four-reading-points.md`。

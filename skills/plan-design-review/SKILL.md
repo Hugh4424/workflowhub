@@ -19,10 +19,10 @@ UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」�
 
 - ①领域语义：WorkflowHub 的 `GLOSSARY.md`；宿主使用自己的词义源，PaperBuilder 为 `GLOSSARY.md`。
 - ②视觉设计系统：`specs/design/design.md`；精确值仍引用现 token、主题或 Figma 变量。
-- ③组件及设计代码对应：`specs/design/components.md`；独立工程正文确需时读 `specs/frontend/components.md`，否则读 `specs/frontend/frontend.md`。
-- ④布局与场景：`specs/design/layouts.md`；独立工程正文确需时读 `specs/frontend/layouts.md`，否则读 `specs/frontend/frontend.md`。
+- ③组件及设计代码对应：`specs/design/components.md`；独立工程正文确需时读 `specs/frontend/components.md`，否则先读 `specs/frontend/README.md` 入口，再读 `specs/frontend/frontend.md` 正文。
+- ④布局与场景：`specs/design/layouts.md`；独立工程正文确需时读 `specs/frontend/layouts.md`，否则先读 `specs/frontend/README.md` 入口，再读 `specs/frontend/frontend.md` 正文。
 - ⑤通用交互：`specs/design/interaction.md`；控件内合同引用组件源。
-- ⑥前端工程：`specs/frontend/frontend.md`，配置、架构和 API 保原来源。
+- ⑥前端工程：先读 `specs/frontend/README.md` 入口，再读 `specs/frontend/frontend.md` 正文；配置、架构和 API 保原来源。
 - ⑦内容与设计工艺：`specs/design/craft.md`，词义和值引用原源。
 - ⑧质量判据：确需独立正文时读 `specs/design/quality.md`；工程/运行共用 `specs/frontend/ui-quality.md`。
 
