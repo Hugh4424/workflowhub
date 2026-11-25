@@ -938,6 +938,13 @@
 - 配套移除：无。理由：本包只加句与接线，不删旧节；`skills/unit-kernel/SKILL.md` 的 R6 定义保留。
 - 影响范围：四个技能、四个阶段、1 份 Phase 模板、1 份 `steps.json`；`skills/task-maker/SKILL.md`、`skills/phase-maker/SKILL.md`、`phase-template.md` 与包 9/10/11 共碰；`skills/spec-prd/templates/prd-template.md` 不在本包（改模板触发 TCR，交包 9）。
 
+#### 审查后更正（P8 rev2）
+- 字段只加三处：decision-maker「方案与取舍」加“为什么这条能解决”；phase-maker「交出什么」加“对应原问题/FR”；「下一消费者」加“残余”。**不再加**“不改会怎样”（内核 R6 已有，重复会双写）。
+- 不新增冷读/对抗题数：冷读第 2 问答案改为“具体失败＋为什么这条能防住”，空话判不成立；不改 `cold-read.md` 六问、`adversarial.md` 九问、`validate-card` 6/9。
+- 真实坏例：任务三 P4（`P4:284` Done 7773B/`skill_binding.ok`，旧卡顶新卡）、任务三 P8（`P8:189` 门 7/7 但 AC-QUAL-020 incomplete）、任务四 P4 旧版（`convergence-notes.md:46`）；好例是 P4 新卡＋接手者写出首改路径，不是“字节≠旧卡”。
+- 四技能流程与四阶段接线按 R-029/R-030；task-maker/run-phase 的字段由 P9 承接；run-phase 写“调研/设计不适用，歧义回上游”。
+- 判者：独立审查者，判者≠写者；记录落 `quality/tests/p8-*.md`；不新建字段/矩阵/检查器。
+
 ### 包 9：验收证据落点与步骤硬门
 
 #### 1. 原始需求
@@ -1051,6 +1058,14 @@
 - 配套迁移：三门测试默认路径改隔离根后，旧默认（任务三路径与 `/Users/Hugh/...`）删除；历史回执只读保留，不改字节。
 - 配套移除：`make-decision/steps.json` 第 9 步的裸目录项 `quality/evidence/decision-log-refs/talk/` 删除（理由：目录不满足完成声明）；「重复模块 WPxx」旧 gap 保留。
 - 影响范围：11 步、4 份测试、3 份 `steps.json`、2 份 CLI/运行时、2 份技能/模板；`specs/archive/**` 与两份冻结卡测试不动。
+
+#### 审查后更正（P9 rev2）
+- 权威源不是技能正文，而是 PRD 四行（`spec-prd:79`/`prd-template:48`）、六件（`build-plan:116-128`）、build-code Done（`:165`）；技能只引用；改模板走 TCR。
+- 判者：分节审/Phase 回读/独立审查者实际打开证据，读命令、退出码、原件，写“哪条原问题被解决”；打不开记 incomplete+owner。
+- 替代只限真跑不可能，写原因、owner、不能证明什么、残余；不能只写“测试会过/检查通过”。
+- run-phase 残余并入既有 Phase Done 缺口清单，不新增交付。
+- 坏例用 AC-016/020 回放，且是“字段齐但空/只登记/只复述”，不是“缺字段”。
+- 接线：four-skill-wiring 加产物/facts true/false、正文技能串、删 index 不得完成；三门去任务三路径；11 步硬门按用户确认。
 
 ### 包 10：真实使用者与首用
 
@@ -1172,6 +1187,13 @@
 - 配套移除：无。理由：本包只加句与清单，不删旧节；受控替身的旧写法不删，只在新句里判不算。
 - 影响范围：三个技能、四阶段交接、本任务材料第 5 段；任务一二三归档只读；包 11 判词与包 12 D1 依赖本表。
 
+#### 审查后更正（P10 rev2）
+- decision-maker“真实原答承接”加：`谁拿卡做了什么：<人>；原件路径+行位；记录者≠写者。`
+- phase-maker 回读加：`真实消费者读回：<谁、原件、读回什么。>`
+- 判者用 P11 独立判词；自记 blocked 不能自改绿；不做 grep 门。
+- blocked 以任务 closeout 未闭环缺口为唯一来源，任务一二三全列（任务一 AC-MAT/EVID/CLOSE；任务二 AC-P1-001/P2-001/P3-001/002/P4-002/P5-001；任务三 AC-008/009/016/020/021/022/023），不写“等”。
+- 与 P9 表引用同一条，不重复定义；受控替身不算。
+
 ### 包 11：残余与独立收口
 
 #### 1. 原始需求
@@ -1254,6 +1276,7 @@
 - P12c：C3 blocked（冻结测试 owner 变更请求）；D1 blocked（用户解冻归档+处理 057）。
 - 承诺：必须｜C2 红→绿→负控｜R-033；本次不做｜其余五条不冒充现在修；待定｜C1/C3/D1/B3 owner 决策。
 
+- 用户 2026-11-25 决定（原件 `talk/2026-11-25-004-p12-blocked.md`）：C1 算改判据→blocked（质量 owner）；C3 提测试变更请求→blocked（不动旧断言）；D1 保持 057 的 incomplete，不解冻归档、不改判据。
 #### 6. 完整方案
 - C2 写集：`skills/wh-review/scripts/review-materials.mjs`、`simple-review-runner.mjs`、`tests/contract/wh-review-detail-incomplete.test.mjs`、`ocr-delegation-route.test.mjs`（预期断言更新）。
 - B2/B3/C1/C3/D1 写集保留在设计文档，不进入本次实施。
