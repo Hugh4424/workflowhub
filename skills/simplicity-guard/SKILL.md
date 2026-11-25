@@ -83,4 +83,4 @@ P3：最小新增。先说明P0-P2为何不可；不确定停下问，不静默�
 
 `skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
 
-接线或对外发送类改动另读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」：按分诊、实际处理、发布、原使用方读回写证到哪段，拒绝核接收侧有没有收到；本 lens 只指路，不加第四问。
+接线或对外发送类改动另读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」；本 lens 只指路，不加第四问。
