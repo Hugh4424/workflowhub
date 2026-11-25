@@ -37,8 +37,8 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "test",
-          "uri_or_path": "quality/tests/"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#write-red-tests"
         }
       ],
       "method_anchor": "step-write-red-tests",
@@ -73,8 +73,8 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "test",
-          "uri_or_path": "quality/tests/"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#actual-tests-route"
         }
       ],
       "method_anchor": "step-inspect-and-route-actual-tests",
@@ -91,8 +91,8 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "test",
-          "uri_or_path": "quality/tests/"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#run-tests"
         }
       ],
       "method_anchor": "step-run-tests",
@@ -145,8 +145,8 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "review",
-          "uri_or_path": "quality/reviews/"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#review-change"
         }
       ],
       "method_anchor": "step-review-change",
@@ -163,8 +163,8 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "review",
-          "uri_or_path": "quality/reviews/"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#review-findings"
         }
       ],
       "method_anchor": "step-analyze-review-findings",

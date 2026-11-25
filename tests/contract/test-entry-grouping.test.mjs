@@ -39,7 +39,8 @@ describe("explicit test entry grouping", () => {
       expect(scripts, `retired script ${name}`).not.toHaveProperty(name);
     }
     expect(Object.keys(scripts).filter((name) => /^(?:probe|compare):/u.test(name))).toEqual([]);
-    expect(scripts.check).toBe('markdownlint-cli2 "**/*.md" && node tools/cli/verify-structure.mjs && node tools/cli/run-checks.mjs');
+    // 2026-11-25：四技能接线契约测试挂进 check（修复「声明了但没人跑」的真实故障）。
+    expect(scripts.check).toBe('markdownlint-cli2 "**/*.md" && node tools/cli/verify-structure.mjs && node tools/cli/run-checks.mjs && node --test tests/contract/four-skill-wiring.test.mjs');
   });
 
   it("points every directory or file filter at existing collectible suites", () => {

@@ -77,8 +77,8 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "test",
-          "uri_or_path": "quality/tests/2026-11-24-130-p04-first-card-skill-read.json"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#first-card-skill-read"
         }
       ],
       "method_anchor": "step-spec-plan",
