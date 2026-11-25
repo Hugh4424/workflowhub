@@ -6,7 +6,7 @@
 - 任务类型：普通任务（实现类）。改 WorkflowHub 自身的施工说明、简化审查、后端行为测试与检查结果读回，不新增阶段、确认点或第二套进度记录。
 - 一句话目标：让同一条业务规则在人工入口和自动作业上得到一致结果；坏数据能看到失败，维护者能定位该改哪条规则。
 - 级别与路线：复杂。推荐与真实选择见下；入口评估返回原件 `quality/evidence/entry-evaluation/2026-11-24-001-entry-evaluation.json`。
-- 当前状态：用户 2026-11-25 指出每包第4段压缩过度，已决定补七包十项并新增 R-027（材料合同，消费者含 build-prd/build-plan）；七包已逐包确认；方向审查与整体细节审查均已执行；main（含任务三）已合入当前分支（HEAD 19c9e114）；任务三复核为“部分可用”（25 项 13 pass/9 incomplete/1 inconclusive/2 deferred）；已完成合并后决策更新与联合验收清单；待阶段收尾与交接。未实施、未验收。
+- 当前状态：用户 2026-11-25 确认新增 P8–P13（保留 P1–P7）并开硬门；P8–P13 十项已写入；用户 2026-11-25 指出每包第4段压缩过度，已决定补七包十项并新增 R-027（材料合同，消费者含 build-prd/build-plan）；七包已逐包确认；方向审查与整体细节审查均已执行；main（含任务三）已合入当前分支（HEAD 19c9e114）；任务三复核为“部分可用”（25 项 13 pass/9 incomplete/1 inconclusive/2 deferred）；已完成合并后决策更新与联合验收清单；待阶段收尾与交接。未实施、未验收。
 
 ### 怎么读这份日志
 先读第 2、3 段，知道要解决什么、一共几个包。
@@ -75,6 +75,12 @@
 | R-024 | 每个任务/包/Phase 设计与执行后复盘；四阶段开头检索规范；当前任务＋域 README（U-027 覆盖跨历史）；规则表按域；结构优先；旧错证明；可见摘要 | 用户讨论 U-005–U-027 | P5/P6/P7 |
 | R-025 | 任务四先做设计和计划，build-code 等任务三合并后再做 | 用户讨论 U-025 | 跨包排期 |
 | R-026 | specs 按域存规范；每域 README 是规则表；AGENTS 只留指针；Improvements 保留未决 | 用户讨论 U-023/U-024 | P6 |
+| R-028 | 四技能/四阶段产出在写的时候必须写具体问题、具体方案、为什么能解决、怎么知道解决、残余；不新增字段/矩阵，按任务三已有字段加句 | 用户 2026-11-25；final-p8-p13-design.md | P8 |
+| R-029 | 四技能流程：上下文基于会话/调研/原始需求；派调研/设计子代理；歧义先 talk；11 段人话卡；冷读/对抗/异源；最多三包/问答串行/完成一包补一包 | 用户 2026-11-25；skill-process-audit | P8 |
+| R-030 | 四阶段正文点名技能+锚+产物；steps 证据可成立；指定步未完成不能收口（硬门） | 用户 2026-11-25；four-skill-wiring-audit；talk/2026-11-25-003 | P8/P9 |
+| R-031 | 真实使用者：按产出类型真实使用/读回；只复述/只登记/替身不算；没有真实下游 blocked 全列 | 用户 2026-11-25；p10-review | P10 |
+| R-032 | 残余清单；全 incomplete 不得 pass；AC 改判只认署名独立判词 | 用户 2026-11-25；治理 RCA | P11 |
+| R-033 | 任务一二三修复（P12a/b/c 六条+blocked 五条）；P13 当前任务按新标准重写、另选任务端到端、新旧盲评 | 用户 2026-11-25；legacy-repair-research；final-p8-p13-design.md | P12/P13 |
 | R-027 | 决策日志、PRD、spec、Phase 卡都把对应任务/包/Phase 的细节写在正文；不以摘要、链接目录或“见某目录”代替；任务库原件只作来源指针并登记 ref+sha | 用户 2026-11-25 反馈；talk/2026-11-25-001-package-detail.md、talk/2026-11-25-002-r027-scope.md | P0 材料合同；消费者 make-decision/build-prd/build-plan/phase-maker；P5/P6 经验候选 |
 
 ### 原话与答复索引
@@ -137,6 +143,12 @@
 | P5 单元复盘 | 只写：stage-reflection 单元模式＋四个技能收口＋摘要模板 | 无（先行） |
 | P6 规范索引与开工读取 | 只存/读：specs 按域、域 README 规则表、AGENTS 指针、知识图/深度研究开工检索 | P5、P1、P2 |
 | P7 阶段收口汇总 | 只收：stage-handoff/close 汇总、首批晋升/退役、交接一行 | P1–P6 |
+| P8 设计时质量、四技能流程与四阶段接线 | 在任务三字段上加五句；四技能流程；四阶段点名技能+锚+产物 | P1–P7 |
+| P9 验收与硬门 | 四行第4行证据；六件落点打开；接线断言；11步硬门 | P8 |
+| P10 真实使用者 | 按产出类型真实使用/读回；只复述/替身不算；blocked 全列 | P8、P9 |
+| P11 残余与独立收口 | 残余清单；全 incomplete 不得 pass；独立判词 | P8–P10 |
+| P12 任务一二三修复 | P12a 门禁证伪、P12b 登记→消费、P12c 独立验收 | P8–P11 |
+| P13 当前任务重写与独立任务端到端 | 当前任务按新标准重写；另选任务；新旧盲评 | P8–P12 |
 
 主干：P1 → P4（方法要求）。最小切片：P1 的任务类型例子。
 顺序：P5 → P1 → P3 → P2 → P4 → P6 → P7。
@@ -812,6 +824,721 @@
 #### 本包支撑件
 - 十一格卡、十一列摘要、决定四字段：见各包 `quality/evidence/decision-maker/pN/design.md`（第 6 段登记 ref+sha）。本段只写十项，不重复卡片正文；build-plan 需要逐格细节时沿第 9 项 ref 回读。
 
+### 包 8：设计时质量、四技能流程与四阶段接线
+
+#### 1. 原始需求
+- 问题：任务三交出的四个技能里，三个只剩导航——`skills/phase-maker/SKILL.md` 全文「调研」0 次、「审查」0 次，`skills/task-maker/SKILL.md` 与 `skills/run-phase/SKILL.md` 把方法推回 `skills/spec-plan/SKILL.md`，任务三自己的需求 24「四个技能每个写清执行、验收与流程」没有任何一份正文承接；需求 19「每个 Phase 写完就审」在 phase-maker 里一个字都没有。
+- 来源①用户 2026-11-25：不要八项字段、不要统一命令/AC/机制；不是所有任务都有命令/机制/AC；要具体、能解决和验收原始问题；冷读/对抗是事后找补，质量低于设计时就设计好（`p8/context.md`「原始需求与来源」）。
+- 来源②任务三加码的需求 19/20/24（`specs/archive/delivery-quality-plan-20261123/decision-log.md:87-92`，行号取审计 §1.4）。
+- 来源③本任务真实故障：build-plan 第 6 步由主会话直接把模板交给写卡子代理，没走 phase-maker 八步与回读，没有任何检查因此失败（`2026-11-25-004-four-skill-wiring-repair.md`「怎么发现的」）。
+- 来源④审计：`2026-11-25-005-task3-root-cause-audit.md` §二 #1/#2/#7 与 §3.1（四技能被做成导航页）、§3.2（11 个声明步骤无生产者）。
+- 对应 R：R-027（决策日志/PRD/spec/Phase 四载体把细节写进正文，不以摘要或「见某目录」代替）、R-011（每张卡边做边验、真实入口验证）、R-012（全程大白话、验收可完全验证）。
+- 用户可观察的坏处：没读过本项目的人只读阶段正文，说不出「这一步调哪个技能、什么时候调、交出什么」；11 个声明了技能的步骤在 HEAD 里 0 步能判完成。
+
+#### 2. 最初方案
+- 一开始想怎么做：写两张表——八行设计时质量矩阵（每行四问＋设计方法＋具体/空话判据＋下游怎么用）与八行差异化审查矩阵（每行冷读问、对抗问、必须不成立/可以通过），再用统一命令/AC/字段把八行填满（`p8/design-adaptive.md` §二、§三）。
+- 谁否：用户 2026-11-25（原话见第 1 项来源①）；设计角色据此在 `final-p8-p13-design.md` 把方案收成「字段五句＋四技能流程＋四阶段接线」，矩阵降为写作尺子、不进正文。
+- 为什么否：①文档与决策任务被逼造命令和 AC，只能造假或把「字段齐」当质量（`p8/design-adaptive.md:7-12` 自述）；②两张矩阵本身成了第二套审查题数，与「不新增字段/矩阵」冲突；③一套问句套八行等于没按产出重写（同文件 `:13-17`）。
+
+#### 3. 发散与被否
+- 备选 A（选）：在四个技能写产出当下的位置各加一句，在三个技能加同名流程节，在四个阶段正文加消费条款与步骤点名；不新增字段、矩阵、检查器。代价＝改 4 份技能正文、1 份 Phase 模板、4 份阶段正文、1 份 `steps.json`。选，理由：句子的位置就是作者写卡时正在看的地方，且接线能被 `tests/contract/four-skill-wiring.test.mjs` 与 `check-stage-steps` 判完成。
+- 备选 B（否）：只交付两张矩阵，不动正文与接线。代价＝只改 2 个文件，最省。否，理由：矩阵只在审查时被翻，作者写产出时看不到；任务三的失败正是「事后审得再严也补不回设计时没想清」，且不产生任何可判完成的步骤事实。
+- 备选 C（否）：在 `run-checks` 加「设计时五问」关键词检查器。代价＝一个新的机器门＋一份词表。否，理由：语义判断做不成关键词门，会把「字段齐」重新变成通过条件（`p8/design-adaptive.md:133` 明写不写字段 linter）。
+- 备选 D（否）：只改 decision-maker（四技能里方法最完整：调研 20、审查 63、验收 18 次，审计 §二 #4）。代价＝最小。否，理由：审计 #1/#2/#3 显示另三个技能各缺「流程/调研」，只改一份不解决接线与完成事实。
+- 被否完整理由在 `p8/design-adaptive.md` §二/§三 与 `final-p8-p13-design.md` 总原则；主文只留一句：只加矩阵、加关键词门、只改一个技能三条都不成立。
+
+#### 4. 调研
+- 事实：`grep -c 调研 skills/phase-maker/SKILL.md` → 0，`grep -c 审查` → 0；`skills/task-maker/SKILL.md` 的「流程」0 次（审计 §二 #1/#2，命令在审计附「复现命令」）。
+- 事实：HEAD 的 11 个声明步骤 0 步可判完成——6 步裸目录、1 步跨任务写死、1 步死锚（检查器原话「节「每个包定了哪些决定」不存在或为空」）、1 步只有 facts 通道、3 步只有逻辑槽；裸目录原话「目录仅作导航；不满足完成声明（需具名文件或唯一动态 ref）」（审计 §二 #7）。
+- 事实：工作区已把 11 步的 `completion_evidence` 改成 `facts.jsonl#<slug>` 逻辑槽（`workflows/*/steps.json`，`git status` 显示 4 份 M，HEAD 未提交）；build-plan 第 6 步已声明 `skill: skills/phase-maker/SKILL.md#八步`，build-code 第 2–9 步已声明 `skills/run-phase/SKILL.md#step-*`，build-prd 第 4 步已声明 `skills/task-maker/SKILL.md#expand-task-section`，make-decision 第 9 步已声明 `skills/decision-maker/SKILL.md#package-convergence`。
+- 事实：`tests/contract/four-skill-wiring.test.mjs` 五条断言已存在，但 HEAD 未跟踪（`git cat-file -e HEAD:...` 退 128，审计 §3.3）；工作区 `package.json` 的 `scripts.check` 已追加该测试（004「修了什么」三）。
+- 事实：`originalsFor` 只认 `facts.jsonl` 里 `evidence.value[].{source,step_slug,ref}`（`tools/cli/check-stage-steps.mjs:1706-1712`），任务三 `facts.jsonl` 只有 3 行、无一条带 `step_slug`——逻辑槽没有生产者（审计 §3.2）。
+- 事实：`skills/unit-kernel/SKILL.md` 第 R6 条是十一格唯一定义处（审计 §二 #5，`references/unit-fields.json` 被 `check-stage-quality.mjs:44`、`check-stage-steps.mjs:979` 解析）；两条冻结测试逐字锁格名单（`tests/contract/convergence-card-contract.test.mjs:50,108`、`tests/contract/module-convergence-card.test.mjs:25,89`）。
+- 假设 H1：把五问写进正文，作者就会答。推翻条件：抽掉任一句后，独立审查者对三个坏例仍判成立（对照 004 的反向验证做法：改回裸目录→断言红）。
+- 假设 H2：四阶段接线只改正文、不动 `steps.json`。已推翻：正文点名不产生完成事实，证据形态不可判时步骤永远判不了完成（审计 §二 #7/#8）。
+- 哪些事实改变了方向：①「11 步 0 步可判完成」→ 接线必须同改 `steps.json` 证据形态；②「R6 已迁＋两条冻结测试锁格名」→ 不动内核，只在卡模板与技能呈现节加句；③「PRD 模板改动触发 TCR」→ task-maker 的句只落技能检查项，不改 `skills/spec-prd/templates/prd-template.md`（模板句归包 9）。
+- 原始材料：`p8/design-adaptive.md`（只作反面参考，未登记 sha256，原因：本包不据它下决定）；`final-p8-p13-design.md`、`2026-11-25-004-four-skill-wiring-repair.md`、`2026-11-25-005-task3-root-cause-audit.md`（sha256 见第 9 项）。
+
+#### 5. 最终决定
+- 选了什么：备选 A，六条 P8-1…P8-6。
+  - P8-1 卡面句：`skills/decision-maker/templates/card.md` 的「方案与取舍」格加 `为什么这条能解决：<具体失败→机制/理由>。`；`skills/decision-maker/SKILL.md`「11 段人话卡」写法列加同一必写项。
+  - P8-2 Phase 卡两句：`skills/spec-plan/templates/phase-template.md`「## 这一 Phase 交出什么？」加 `对应原问题/FR：<原话或编号>。`；「## 下一消费者拿什么继续？」加 `残余/未闭环：<剩余失败、owner、下一 Phase>。`
+  - P8-3 任务节一句：`skills/task-maker/SKILL.md`「### 任务节检查项」的「为什么做」行写 `解决谁的什么原问题：<原话>。`
+  - P8-4 run-phase 一句：`skills/run-phase/SKILL.md` 第 9 步「交付」的「Phase Done 的缺口清单」后加 `残余：<剩余失败、owner、下一 Phase>。`
+  - P8-5 四技能流程：decision-maker/phase-maker/task-maker 各加同名节 `## 流程：从上下文到可回读的产出`，固定七步（上下文→调研→设计→Talk→产出→冷读/对抗/异源→收敛）；run-phase 加 `## 流程：调研与设计不适用`，写明方案歧义回 phase-maker/decision-maker；主会话跳角（自写卡或自审）时在包内写缺口与补位人。
+  - P8-6 四阶段接线：四份阶段正文各加一行消费条款指针；build-plan 第 6 步正文点名 `skills/phase-maker/SKILL.md#八步` 与三件产物（`phases/index.md`、`phases/P<n>-*.md`、首卡回读）；build-prd 第 4 步点名 `skills/task-maker/SKILL.md#expand-task-section`；build-code 第 2–9 步点名 `skills/run-phase/SKILL.md#step-*` 对应锚；make-decision 第 9 步点名 `skills/decision-maker/SKILL.md#package-convergence`；`workflows/build-plan/steps.json` 第 6 步补 `phases/index.md`、`phases/{phase}.md` 两个 `material` 具名项，保留 `facts.jsonl#first-card-skill-read`。
+- 为什么：五句落在作者正在写的格/节里（卡模板、Phase 模板、任务节检查项、run-phase 交付），不是审查时才翻；七步让「上下文来自会话＋调研＋原始需求」有固定落点；接线把「技能被声明」变成「步骤能判完成」，这是 004 用反向验证证明会红的唯一形态。
+- 代价：改 4 份技能正文、1 份 Phase 模板、4 份阶段正文、1 份 `steps.json`；不新增字段、矩阵、检查器、阶段。
+- 跨包编号：P8-1…P8-6。`workflows/build-plan/steps.json` 归 P8，build-prd/build-code/make-decision 三份归包 9；`skills/task-maker/SKILL.md`、`skills/phase-maker/SKILL.md`、`skills/spec-plan/templates/phase-template.md` 与包 9、包 10、包 11 共碰，按 P8→P9→P10→P11 串行。
+- 承诺：必须｜决策日志、PRD、spec、Phase 卡把对应细节写进正文，不以摘要或「见某目录」代替；任务库原件只作来源指针并登记 ref+sha｜R-027。
+- 承诺：必须｜四个技能每个写清执行、验收与流程｜任务三需求 24（`decision-log.md:92`）。
+- 承诺：必须｜每个 Phase 写完就审，每单元只审一次；首轮两路（同源冷读＋对抗、异源独立）｜任务三需求 19、20（`decision-log.md:87-88`）。
+- 承诺：必须｜不新增字段、不新增矩阵、不新增审查题数｜用户 2026-11-25。
+- 承诺：允许｜四技能流程节的三份正文共用同一段七步编号，产出物按各自模板写；理由：同一流程、不同产物，不复制方法正文。
+- 承诺：本次不做｜不改 `skills/unit-kernel/SKILL.md` 第 R6 条的格定义与验收四件，不改两条冻结锁名单测试（AC-001 已登记「定义已迁 R6」）。
+- 承诺：本次不做｜不做关键词检查器，不把「字段齐」变成通过条件。
+- 承诺：待定｜四个阶段「设计时先答」插在哪一节｜未答：四个阶段 owner 各自未指定；负责人：make-decision/build-prd/build-plan/build-code 四份正文 owner；恢复条件：build-plan 第 6 步带新正文真实重跑一次。
+- 派生建议：三份流程节的七步可共用一张编号表，但每步的产出物与拒认按各自模板写（作者推断，不支撑承诺）。
+- 被否方案：只交付两张矩阵（理由见第 3 项）。
+
+#### 6. 完整方案
+- 接口/行为（写到句）：
+  - `skills/decision-maker/templates/card.md`「方案与取舍」格：现有占位后加一行 `为什么这条能解决：<具体失败→机制/理由>。`；`validate-card.mjs` 不查这句（人读判据），冷读六问第 2 问按 `skills/decision-maker/SKILL.md#冷读六问` 判：答不出或只重复需求即不成立。
+  - `phase-template.md`：在「这一 Phase 交出什么？」首个列表项后加 `对应原问题/FR：<原话或编号>。`；在「下一消费者拿什么继续？」首个列表项后加 `残余/未闭环：<剩余失败、owner、下一 Phase>。`
+  - `task-maker/SKILL.md`：检查项「为什么做」行改成「为什么做：是否写清解决谁的什么原问题（用原话），而不是只写目标」。
+  - `run-phase/SKILL.md` 第 9 步「交付」：在「Phase Done 的缺口清单」后加 `残余：<剩余失败、owner、下一 Phase>。`；该句只在本包写一次，包 9 只引用。
+  - 三份流程节七步固定为：①上下文（会话原文、调研原件、原始需求各一条 ref；缺一写未取得）②调研（内部三处：decision-log 已定、spec 当前、仓内实现；每处给 ref 与推翻条件）③设计（按本技能产物模板写，被否替代写适用条件）④Talk（每轮一问，问答串行）⑤产出（11 段人话卡／Phase 卡六件／任务节六字段）⑥冷读/对抗/异源（同源两路＋异源一份，一轮一处置）⑦收敛（最多三包并行，完成一包补一包）。
+  - 四阶段消费条款一行固定为：`本阶段消费 <技能>#<节> 的方法与产物判据；本阶段正文只留步骤编号与产物，不复制方法。`
+- 数据与状态：不新增 facts 字段；步骤完成仍走 `facts.jsonl#<slot>`；`steps.json` 第 6 步新增两个 `material` 具名项（`phases/index.md`、`phases/{phase}.md`），`{phase}` 按索引实有卡名替换；索引只导航，不承载正文。
+- 依赖与顺序：模板与技能句（P8-1…P8-5）→ 阶段正文与 `steps.json`（P8-6）→ 提交 → `node --test tests/contract/four-skill-wiring.test.mjs`。与包 9 共碰的三份文件 P8 先提交，提交说明写「本包只加本包句」。
+- 唯一 writer：P8 实现者；`skills/unit-kernel/**` 与 `tests/contract/convergence-*.test.mjs` 只读。
+- 写集（指针模式：卡上只写索引指针＋sha256，可执行集见 `phases/index.md` 该行「写集」列；下表是建索引行时的预期内容，不是第二份权威）：
+
+| 文件 | 改什么 | 工作包 | 决定 |
+| --- | --- | --- | --- |
+| `skills/decision-maker/templates/card.md` | 「方案与取舍」格加「为什么这条能解决」一行 | P8 | P8-1 |
+| `skills/decision-maker/SKILL.md` | 「11 段人话卡」写法列加同一必写项；新增 `## 流程` 七步节；主会话跳角写缺口与补位 | P8 | P8-1、P8-5 |
+| `skills/spec-plan/templates/phase-template.md` | 「这一 Phase 交出什么？」加「对应原问题/FR」；「下一消费者拿什么继续？」加「残余/未闭环」 | P8 | P8-2 |
+| `skills/phase-maker/SKILL.md` | 第 6 步「写任务卡」加一句指向两句；`## 回读契约` 加一句；新增 `## 流程` 节 | P8 | P8-2、P8-5 |
+| `skills/task-maker/SKILL.md` | 「任务节检查项」「为什么做」行改写；新增 `## 流程` 节 | P8 | P8-3、P8-5 |
+| `skills/run-phase/SKILL.md` | 第 9 步「交付」加「残余」；新增 `## 流程：调研与设计不适用` | P8 | P8-4、P8-5 |
+| `workflows/make-decision/SKILL.md` | 第 9 步加消费条款一行，点名 `#package-convergence` | P8 | P8-6 |
+| `workflows/build-prd/SKILL.md` | 第 4 步正文点名 `skills/task-maker/SKILL.md#expand-task-section` 与产物 | P8 | P8-6 |
+| `workflows/build-plan/SKILL.md` | 第 6 步正文点名 `skills/phase-maker/SKILL.md#八步` 与三件产物 | P8 | P8-6 |
+| `workflows/build-code/SKILL.md` | 第 2–9 步各点名 `skills/run-phase/SKILL.md#step-*` 对应锚 | P8 | P8-6 |
+| `workflows/build-plan/steps.json` | 第 6 步 `completion_evidence` 加 `{"kind":"material","uri_or_path":"phases/index.md"}`、`{"kind":"material","uri_or_path":"phases/{phase}.md"}` | P8 | P8-6 |
+
+#### 7. 验收
+- 判据 AC-P8-001（卡面三句可读）：来源 R-027、用户 2026-11-25。检查：没参与写作的读者只打开一张 `phases/P<n>-*.md` 与卡模板，指出「为什么能解决／对应原问题／残余」三句在该卡的位置。期望：三句都在卡正文里；反例：任一句缺，或写成「见 spec」。谁验何时验：独立读者，build-plan 第 6 步出卡后、第 7 步渲染索引前。证据：`quality/tests/p8-card-five-sentences.md`。不检查：不判句子内容对不对（那是 AC-P8-004）。
+- 判据 AC-P8-002（四阶段接线可跑）：来源任务三需求 24、审计 A1/A2。命令 `node --test tests/contract/four-skill-wiring.test.mjs`，期望 5 项全过；反例：把 `workflows/build-code/steps.json` 第 2 步改回 `{"kind":"test","uri_or_path":"quality/tests/"}`，同一命令必须红并点名该步。谁验何时验：独立执行者，P8 提交后。证据：`quality/tests/p8-four-skill-wiring.output`。不检查：不证明四个技能正文质量。
+- 判据 AC-P8-003（陌生执行者答三问）：来源 R-012。检查：陌生执行者只读 `workflows/<stage>/SKILL.md` 与对应技能正文，回答「调哪个技能、何时调、交出什么」。期望：三问都有具名答案（技能路径＋锚＋产物）；反例：答成「按技能执行」，或翻会话才答得出。谁验何时验：没参与写作的执行者，P8 合并前。证据：`quality/tests/p8-stranger-readback.md`。不检查：不判答得对不对，只看有无具名答案。
+- 判据 AC-P8-004（三个真坏例必须不成立）：来源 R-027、审计 §二。检查：独立审查者按本包五问判三条真实坏例——任务三 P4（`phases/P4-计划首卡与供件.md:284` 的 Done 写 7773 B／`5348ba5b…`／`skill_binding.ok=true`）、任务三 P8（`phases/P8-代码红测与演示.md:189` 门 7/7 但 AC-QUAL-020 incomplete）、任务四 P4 旧版（`convergence-notes.md:46`）。期望：三条都判不成立并写明死在第几问；反例：任一条判成立。谁验何时验：独立审查者，P8 合并前。证据：`quality/reviews/p8-bad-examples.md`。不检查：不重判这三个历史任务的其它判据。
+- 判据 AC-P8-005（好例必须通过）：来源 R-012。检查：同一审查者对一条好例（接手者按新卡写出首改路径）判通过。期望：通过且理由落在「第 4 问有真实信号」；反例：只因「字段齐」判通过。证据同 `p8-bad-examples.md` 末节。不检查：不要求好例带命令。
+- 命令或检查：`node --test tests/contract/four-skill-wiring.test.mjs`；`node tools/cli/check-stage-steps.mjs --stage=build-plan --step=6 --task-path=<当前任务根> --material-root=<材料根> --json`（期望第 6 步 gap 不再出现「目录仅作导航」「原件不可读」，只剩 facts 槽未取得）。
+- 谁验、何时验：实现提交后由独立执行者跑两条命令；三问与五个样例由独立读者同批判。
+- 证据放哪：`quality/tests/p8-*`、`quality/reviews/p8-*`（尚未产生 → 未取得，原因：P8 未开工）。
+- 这条不检查什么：不检查四个技能正文是否最优；不检查任务三历史 AC；不新增命令门。
+
+#### 8. 风险/回退
+- 触发：把五句写成新字段清单，或把七步当成新流程门。后果：又回到「字段齐即质量」，作者照填不思考。缓解：五句只落格内散文、不设机检；七步只给产出物与顺序、不设完成证据；AC-P8-004 用三个真坏例专抓「填满但方案空」。
+- 触发：正文点名与 `steps.json` 不同批提交。后果：步骤仍判不了完成，接线等于没做。缓解：P8-6 一次提交含 4 份阶段正文＋1 份 `steps.json`；`four-skill-wiring` 第 2 条卡「声明了 skill 却没有 `facts.jsonl#` 槽」。
+- 触发：与包 9/10/11 并发写同一份技能文件。后果：互相覆盖句。缓解：四包按 P8→P9→P10→P11 串行，各自提交说明写「本包只加本包句」；`skills/simplicity-guard/SKILL.md` 的 Packet lens 先核真实状态与前后 writer。
+- 回滚：一次提交整体回退 4 份技能正文＋1 份模板＋4 份阶段正文＋1 份 `steps.json`；不动内核、不改冻结测试、不删历史原件。
+
+#### 9. 未决/消费者/证据
+- 未决：四个阶段「设计时先答」插在哪一节——谁定：四份阶段正文 owner；何时定：各阶段下一次真实重跑前；不补后果：句在技能里、阶段正文不点名，作者仍可能不看（P8-6 的消费条款兜最坏情况）。
+- 未决：`workflows/make-decision/steps.json` 第 9 步死锚改到 `decision-log.md#包级收敛台账`，但该节需在本决策日志真实存在——谁定：包 13 重写材料时落；何时定：包 9 提交前；不补后果：make-decision 第 9 步仍判「节不存在或为空」。
+- 消费者：build-plan 读第 6 项写集与第 7 项 AC-P8-001…005 写 `phases/P<n>-*.md` 与索引行；build-code 执行者读第 6 项接口与四阶段消费条款；make-decision 读第 9 项未决定材料重写范围；包 13 读五句与七步做重写基准。
+- 证据：`quality/evidence/decision-maker/final-p8-p13-design.md` sha256 `ba467d665956b39105a6da8b27dd4f2f244d79e4b420ef1418c69e9062e70c0c`；`quality/evidence/decision-maker/p8/design-field.md` sha256 `79e1bef315ef5ba0581ec1d9e18340ccf1fa2e9e99621912c594ba41809bc1ac`；`quality/evidence/build-plan/2026-11-25-004-four-skill-wiring-repair.md` sha256 `ef0570240a5a46fdbe33be08721bbcbc5c42677b7b2a91ce98b04fdc355d5580`；`quality/evidence/build-plan/2026-11-25-005-task3-root-cause-audit.md` sha256 `32665ad799feb1da42fc380baf8839ac10c51a4a7672f2b6de747226e8bff033`。
+- 未取得：`quality/tests/p8-*`、`quality/reviews/p8-*` 尚未产生，原因：P8 未开工；`p8/design-adaptive.md` 的 sha256 未计算，原因：本包不据它下决定。
+
+#### 10. 配套与影响
+- 配套调整：`skills/spec-plan/references/authoring-contract.md` 不新增五问条目（理由：P8 的五问只在卡面成句，不另立契约表）；`tests/contract/four-skill-wiring.test.mjs` 本包只消费、不改（新增三条断言归包 9）；`package.json` 的 `scripts.check` 已由 004 追加该测试，P8 不改。
+- 配套迁移：无持久 schema、无旧数据迁移；任务三的 `steps.json` 与卡字节保持只读。
+- 配套移除：无。理由：本包只加句与接线，不删旧节；`skills/unit-kernel/SKILL.md` 的 R6 定义保留。
+- 影响范围：四个技能、四个阶段、1 份 Phase 模板、1 份 `steps.json`；`skills/task-maker/SKILL.md`、`skills/phase-maker/SKILL.md`、`phase-template.md` 与包 9/10/11 共碰；`skills/spec-prd/templates/prd-template.md` 不在本包（改模板触发 TCR，交包 9）。
+
+### 包 9：验收证据落点与步骤硬门
+
+#### 1. 原始需求
+- 问题：任务节四行验收的第 4 行只写「怎样算通过」，没有证据落点与真跑/替代边界，于是「对照物、独立复算者、故意弄坏」写齐也算通过——任务三 P4 卡的验收对象是旧卡字节和 `skill_binding.ok=true`，不是「新卡能让接手者写出首改路径」；P8 门 7/7 而 AC-QUAL-020 仍 incomplete。
+- 来源①用户 2026-11-25：验收不能只查关键词/结构/指针；要能证明原始问题被解决（`p9/context.md`「原始需求与来源」）。
+- 来源②审计：`2026-11-25-005-task3-root-cause-audit.md` §3.2（逻辑槽无生产者）、§3.3（唯一判别器不在交付物里）、§3.4（绿灯与结论无关）、§4 A1–A3 与 B1。
+- 来源③`p9/design-field.md`（字段级改动）与 `p9/design-concrete.md`（11 步生产者与接线断言草案）。
+- 对应 R：R-011（每张卡边做边验、真实入口验证、前置一起验收）、R-012（验收标准保证全部开发完后完全可验证）、R-027。
+- 用户可观察的坏处：`node tools/cli/run-checks.mjs` 退 0，而 11 个声明步骤没有一步能判完成；同一条命令在缺步时也不失败。
+
+#### 2. 最初方案
+- 一开始想怎么做：给四行第 4 行统一写「命令＋退出码＋期望输出」，并用六个 `p9-*-target.test.mjs` 把四个技能各机检一遍（`p9/design-concrete.md` §7）；同时把 11 步的完成义务列统一改成 human＋program。
+- 谁否：用户 2026-11-25 否统一命令（非代码任务没有命令）；设计角色自查否掉六个 target 测试——装置若造不全，反向断言抓不到，等于用测试数量冒充质量（`p9/design-concrete.md:377` 风险③）；同一自查也否掉「统一义务列」（RED 类步骤的捕获天然 exit≠0，program 通道会把它判成失败）。
+- 为什么否：①文档/设计/决策任务的「真跑」是读者、用户或下游动作，硬造成命令只能造假；②六个 target 是与真实任务无关的夹具，跑绿不证明任何真实交付；③统一义务列会让 RED 步永不可能 completed。
+
+#### 3. 发散与被否
+- 备选 A（选）：证据落点句落权威源（`spec-prd:79`＋`prd-template:48`，模板改动走 TCR）；phase-maker 六件沿用、只加「证据落点必须能打开」；run-phase 残余复用包 8 的句子；接线断言加在既有 `four-skill-wiring`；11 步硬门落 `run-checks`。代价＝改 3 份技能/模板、2 份 CLI/运行时、3 份 `steps.json`、4 份测试。
+- 备选 B（否）：只在 task-maker/phase-maker 技能里加句，不动权威源。代价＝不触发 TCR、改动最小。否，理由：权威句在 `spec-prd:79` 与 `prd-template:48`，技能只引用；只改技能会让同一句有两处口径，作者按哪份写都算对。
+- 备选 C（否）：统一「命令＋退出码」判据＋六个 target 测试。代价＝要造 6 份与真实任务无关的夹具。否，理由：非代码任务无命令；夹具绿不证明真实交付；与用户 2026-11-25 相反。
+- 备选 D（否）：只把 `run-checks` 改成报告更多缺口，不改退出码。代价＝最小、不动判据。否，理由：报告加行仍 exit 0，审计 §3.4 已证「绿灯与结论无关」；用户已确认打开硬门。
+- 被否完整理由：`p9/design-concrete.md` §7 与 `final-p8-p13-design.md` P9 段；主文一句：只改技能、统一命令、只加报告三条都不成立。
+
+#### 4. 调研
+- 事实：四行第 4 行的权威句在 `skills/spec-prd/SKILL.md:79`（「第 3、4 行写对照物、独立复算者、故意弄坏」）与 `skills/spec-prd/templates/prd-template.md:48`；`skills/task-maker/SKILL.md:47` 只写检查项并声明「以模板四要素定义为准」。
+- 事实：一条验收六件的权威在 `workflows/build-plan/SKILL.md:116-128`，第 5 件「真跑还是替代」与第 6 件「谁判与证据」已经存在；`skills/phase-maker/SKILL.md`「六件验收与三账」只引用、不复制。
+- 事实：`workflows/build-code/SKILL.md:165` 的 `Done` 已要求「逐条承接 AC：AC 编号＋8 值档位＋具名证据指针」，并允许档位不全是 pass。
+- 事实：`tests/contract/prd-card-shape.test.mjs:74` 只断言第 4 行含「对照/独立复算/故意弄坏」，加「证据落点」不会使它红；但它属 TCR 范围（改模板要独立审查，用户未批前不能擅自改）。
+- 事实：11 个声明步骤在 HEAD 0 步可判完成；工作区已改逻辑槽，但 `originalsFor` 只认 `evidence.value[].{source,step_slug,ref}`（`check-stage-steps.mjs:1706-1712`），`task-store.mjs` 的 `currentRow` 还要求每条证据带 `command`/`exit_code`/`failure_signature`。
+- 事实：`run-checks.mjs` 的 `stepCoverageExit`（:773-815）只在 make-decision 具名缺口退 1，build-code 缺步仍 0；S4 注释写明「build-code rows and rows without basis stay report-only」。
+- 事实：`core/task-close.mjs` 的 `closeDelivery`(:1253) 当前不读 `run-checks` 退出码，收口不因缺步被拦。
+- 假设 H1：加一句到权威源，作者就会写落点。推翻条件：独立读者在三张真卡上找不到「证据落点」行仍判过。
+- 假设 H2：硬门只改 `stepCoverageExit` 就够。推翻条件：收口不消费该退出码（见上条事实）→ 未完成仍能收口。
+- 哪些事实改变了方向：①「模板改动触发 TCR」→ 句子先落 `spec-prd:79`，模板句与 TCR 同批；②「`Done` 已允许档位不全是 pass」→ 硬门只判「指定步没有具名完成原件」，不把档位非 pass 一律判失败；③「`stepCoverageExit` 拿不到 skill 声明」→ 硬门从四份 `steps.json` 派生 11 步，不写死步骤号。
+- 原始材料：`p9/design-field.md`、`p9/design-concrete.md`、`final-p8-p13-design.md`、审计 005（sha256 见第 9 项）。
+
+#### 5. 最终决定
+- 选了什么：备选 A，五条 P9-1…P9-5。
+  - P9-1 四行第 4 行：`skills/spec-prd/SKILL.md:79` 与 `skills/spec-prd/templates/prd-template.md:48` 各加 `证据落点：<原件路径+行位>；真跑或替代：<命令/读者动作/替代理由>。`；替代只限真跑不可能，并写原因、owner、不能证明什么、残余；`skills/task-maker/SKILL.md:47` 检查项同步加同句（技能只引用模板）。
+  - P9-2 六件沿用：`skills/spec-plan/templates/phase-template.md`「这一 Phase 怎么验收」末与 `skills/phase-maker/SKILL.md`「六件验收与三账」末各加 `每条验收的证据落点必须由分节审/Phase 回读/独立审查者实际打开并读回；打不开记 incomplete 并写 owner。`
+  - P9-3 生产者与槽：`runtime/task/task-store.mjs` 新增 `appendStepEvidence`；新建 `tools/cli/record-step-evidence.mjs`；`workflows/build-prd/steps.json` 第 4 步、`workflows/build-code/steps.json` 第 2–9 步、`workflows/make-decision/steps.json` 第 9 步把槽具名化（make-decision 死锚改 `decision-log.md#包级收敛台账`，删 `quality/evidence/decision-log-refs/talk/` 裸目录项）。
+  - P9-4 接线断言：`tests/contract/four-skill-wiring.test.mjs` 加三条——产物/facts 放入→present true、删除→false；阶段正文含技能串；删 `phases/index.md`→build-plan 第 6 步不得判完成；三门测试（`skill-usage-negative.test.mjs`、`phase-author-first-card.test.mjs`、`phase-index-write-authority.test.mjs`）默认路径改 `mkdtemp` 隔离根，各带「改坏即红」反向断言。
+  - P9-5 硬门：`tools/cli/run-checks.mjs` 的 `stepCoverageExit` 从四份 `steps.json` 派生声明了 `skill` 的 11 步；任一步 `state` 不是 `completed`/`not_applicable` 即退 1 并列 `missing_steps`；`core/task-close.mjs` 收口前消费同一判定（指定步未完成不得收口）。
+- 为什么：句子落在写卡人正在看的权威源；生产者让逻辑槽有真实 ref；硬门把「报告项」变「阻断项」——审计 §3.4 的三处「绿灯与结论无关」正需要这一条。
+- 代价：改 3 份技能/模板、2 份 CLI/运行时、3 份 `steps.json`、4 份测试；模板改动走 TCR（独立审查）；硬门会让现状所有未完成指定步的收口被拒（本任务与历史任务三都会红）。
+- 跨包编号：P9-1 的 `prd-template.md:48` 与 P9-2 的 `phase-template.md` 与包 8 共碰（P8 先）；P9-3 的 `appendStepEvidence` 是包 13 端到端的前置；P9-5 依赖包 8 的 `steps.json` 接线先提交。
+- 承诺：必须｜验收要能证明原始问题被解决，不只看结构或指针｜用户 2026-11-25。
+- 承诺：必须｜证据落点必须可打开，打不开记 incomplete 并写 owner｜R-012。
+- 承诺：必须｜11 个指定步未完成不得收口（硬门）｜用户 2026-11-25 确认（原件见第 9 项未决）。
+- 承诺：允许｜替代证据（读者动作、用户观察、下游开工）在不适合真跑的任务里使用，但必须写「不能证明什么」与残余。
+- 承诺：本次不做｜不统一 AC 与命令，不要求所有任务都有命令。
+- 承诺：本次不做｜不写六个 `p9-*-target` 夹具。
+- 承诺：待定｜`specs/…/step-consumer-design.md` 的义务列（human＋program 对 RED 步永不可能 completed）｜未答：该文件 owner 未批；负责人：`step-consumer-design.md` 维护者；恢复条件：义务列改动通过独立审。
+- 派生建议：把 11 步的单步判定命令固化成 `record-step-evidence` 子命令（作者推断，不支撑承诺）。
+- 被否方案：只改技能、不碰权威源（理由见第 3 项 B）。
+
+#### 6. 完整方案
+- 接口/行为：
+  - `appendStepEvidence(taskRoot,{taskId,stage,stepSlug,source,ref,command,exitCode,failureSignature,sha256})` 写一条 `evidence.value[]`，键固定 `kind:"task_original_ref"`、`source`、`step_slug`、`ref`、`command`、`exit_code`、`failure_signature`；同槽同内容幂等，不同 ref 抛 `EVIDENCE_SLOT_CONFLICT`，同槽多条抛 `EVIDENCE_SLOT_AMBIGUOUS`；`task-store.mjs` 现有「证据必须带 command/exit_code/failure_signature」校验不放宽。
+  - `node tools/cli/record-step-evidence.mjs --task-path=<任务> --stage=<stage> --step=<n> --ref=<原件> --command=<命令> --exit-code=<0|1> --failure-signature=<具名串>` 是唯一写入口。
+  - `stepCoverageExit` 新增派生：读 `workflows/<stage>/steps.json`，取有 `skill` 字段的步骤（当前 11 步）；任一对应 `workflow_steps` 行的 `state` 不是 `completed`/`not_applicable` 则 `exit_code=1`，并把该步写进 `missing_steps`；`definition_status==="unreadable"` 的行走既有 `definition_unavailable` 分支，不计入缺步。
+- 数据与状态：`facts.jsonl` 仍每 stage 一行；`evidence.value[]` 只追加；`phase_progress` 不动；不新增持久字段。
+- 依赖与顺序：P9-3 生产者 → P9-4 断言 → P9-5 硬门 → P9-1/P9-2 句子（可并行）。P9-5 依赖包 8 的 `steps.json` 提交；`workflows/build-plan/steps.json` 归包 8，P9 不写。
+- 唯一 writer：P9 实现者；`specs/archive/**`、`tests/contract/unit-kernel-wiring.test.mjs` 只读。
+- 写集（指针模式，摘要待索引行建立后写；下表为预期内容）：
+
+| 文件 | 改什么 | 工作包 | 决定 |
+| --- | --- | --- | --- |
+| `skills/spec-prd/SKILL.md` | :79 四行句加「证据落点／真跑或替代」 | P9 | P9-1 |
+| `skills/spec-prd/templates/prd-template.md` | :48 同句（TCR＋独立审查后） | P9 | P9-1 |
+| `skills/task-maker/SKILL.md` | :47 检查项同步加同句 | P9 | P9-1 |
+| `skills/spec-plan/templates/phase-template.md` | 「这一 Phase 怎么验收」末加「证据落点必须打开并读回」 | P9 | P9-2 |
+| `skills/phase-maker/SKILL.md` | 「六件验收与三账」末加同句 | P9 | P9-2 |
+| `runtime/task/task-store.mjs` | 新增 `appendStepEvidence`（紧接 `writeStageRow`） | P9 | P9-3 |
+| `tools/cli/record-step-evidence.mjs` | 新建 CLI，唯一写入口 | P9 | P9-3 |
+| `workflows/build-prd/steps.json` | 第 4 步补 `material prd.md#任务` 具名项 | P9 | P9-3 |
+| `workflows/build-code/steps.json` | 第 2–9 步每步一个 `facts.jsonl#<slug>` 槽（已具名，本包补生产者接线） | P9 | P9-3 |
+| `workflows/make-decision/steps.json` | 第 9 步死锚改 `decision-log.md#包级收敛台账`；删裸目录项 `quality/evidence/decision-log-refs/talk/` | P9 | P9-3 |
+| `tools/cli/run-checks.mjs` | `stepCoverageExit` 派生 11 步，任一步未完成退 1 | P9 | P9-5 |
+| `core/task-close.mjs` | 收口前消费同一判定，指定步未完成不写 close 成功 | P9 | P9-5 |
+| `tests/contract/four-skill-wiring.test.mjs` | 加三条断言（present true/false、阶段正文含技能串、删索引判不了完成） | P9 | P9-4 |
+| `tests/contract/skill-usage-negative.test.mjs` | 默认路径改 `mkdtemp` 隔离根，加反向断言 | P9 | P9-4 |
+| `tests/contract/phase-author-first-card.test.mjs` | 同上 | P9 | P9-4 |
+| `tests/contract/phase-index-write-authority.test.mjs` | 同上 | P9 | P9-4 |
+
+#### 7. 验收
+- 判据 AC-P9-001（四行第 4 行有落点）：来源 R-012。检查：打开一份新 PRD 任务节第 4 行，读「证据落点」与「真跑或替代」两样；替代必须写「不能证明什么」与 owner。期望：两样都在；反例：只写「测试会过」「检查通过」。谁验何时验：独立读者，build-prd 第 4 步后。证据：`quality/tests/p9-four-row.md`。不检查：不判落点命令对不对。
+- 判据 AC-P9-002（六件落点能打开）：来源 R-011。检查：phase 卡「这一 Phase 怎么验收」每条落点逐条打开。期望：全部可读且是原件不是目录；反例：落点写 `quality/tests/`（目录）。证据同 `p9-four-row.md` 末节。不检查：不判落点证明力（见 AC-P9-005）。
+- 判据 AC-P9-003（生产者可判单步）：来源 R-011、审计 A1。命令：先 `node tools/cli/record-step-evidence.mjs --task-path=<任务> --stage=build-code --step=2 --ref=<RED 捕获> --command="<原命令>" --exit-code=1 --failure-signature=<具名串>`，再 `node tools/cli/check-stage-steps.mjs --stage=build-code --step=2 --task-path=<任务> --material-root=<材料根> --current-read-receipt=<回执> --json`。期望：`judgment:"已完成"`；反例：从 `facts.jsonl` 删该条后同命令 `judgment:"未留痕"`。谁验何时验：独立执行者，P9-3 提交后。证据：`quality/tests/p9-step-evidence.json`。不检查：不判该步业务质量。
+- 判据 AC-P9-004（接线断言会红）：来源任务三需求 24、审计 A3。命令 `node --test tests/contract/four-skill-wiring.test.mjs`；反例一：删 `phases/index.md` 后 `check-stage-steps --stage=build-plan --step=6` 不得判完成并点名缺件；反例二：三门测试在任意 HEAD（含归档后）各退 0，且反向断言各红一次（把被检字段改坏必须非 0）。谁验何时验：独立执行者，P9-4 提交后。证据：`quality/tests/p9-wiring-assertions.output`。不检查：不证明 four-skill-wiring 之外的其他契约。
+- 判据 AC-P9-005（硬门）：来源用户 2026-11-25 确认、审计 B1。命令 `node tools/cli/run-checks.mjs --task-path=<任务根>`。期望：指定 11 步中任一步未完成时退 1 并列缺步；补完成后同命令退 0；反例：未声明 `skill` 的步骤缺口仍只报告、不改变退出码（不误伤）。谁验何时验：独立执行者，P9-5 提交后。证据：`quality/tests/p9-hard-gate.output`。不检查：不判各步业务质量，也不判 closeout 报告文字。
+- 命令或检查：上面四条命令；`node tools/cli/check-delivery-claims.mjs --task-path=<任务>` 在收口时配合跑一次（P11 定义）。
+- 谁验、何时验：实现提交后由独立执行者跑；TCR 由独立审查者批。
+- 证据放哪：`quality/tests/p9-*`、`quality/reviews/p9-tcr.md`（尚未产生 → 未取得，原因：P9 未开工、TCR 未提）。
+- 这条不检查什么：不检查文档/设计/决策任务有没有命令；不检查历史任务的 11 步；不改 `Done` 的 8 值档位语义。
+
+#### 8. 风险/回退
+- 触发：硬门把历史任务三的再收口挡住。后果：归档任务若重收口会被拒。缓解：硬门只读本次 `--task-path` 的当前事实；任务三已归档不再收口，其红不阻断当前任务；确需重收口时先按第 9 项未决补生产者与义务列。
+- 触发：`step-consumer-design.md` 义务列未批，RED 步永远 completed 不了。后果：硬门一直红。缓解：P9-3 先落 human 通道并留 `unavailable` 如实记；义务列改动独立审通过前不声称 11 步全绿。
+- 触发：TCR 未批就改 `prd-template.md:48`。后果：改判据无授权。缓解：P9-1 先只改 `spec-prd:79`；模板句等 TCR 批准同批落，未批则模板句挂起并写缺口。
+- 回滚：`stepCoverageExit` 一处派生逻辑可单独回退（回退后回到「只 make-decision 具名缺口退 1」）；`appendStepEvidence`/`record-step-evidence` 只新增，删掉即回退；三门测试改动可回退到 `WORKFLOWHUB_P*_TASK_ROOT` 环境变量注入。
+
+#### 9. 未决/消费者/证据
+- 未决：硬门的用户确认原件未取得。现状只有 `final-p8-p13-design.md:35` 的作者转写「用户已确认」，没有用户原话或 Talk 编号。谁定：make-decision 主会话；何时定：P9 提交前补一份 `quality/evidence/decision-log-refs/talk/2026-11-25-003-hard-gate.md`（原话＋时间＋选项）；不补后果：该条按「待定」处理，不得作为已封判据对外引用。
+- 未决：`step-consumer-design.md` 义务列（谁定：该文件维护者；何时定：P9-3 提交前；不补后果：11 步里 RED 相关步仍判不了 completed）。
+- 消费者：build-code 执行者读第 6 项 `record-step-evidence` 用法与 AC-P9-003；收口读 P9-5 退出码与 P11 命令；包 13 读 P9-3 生产者做端到端；包 8 读 P9-1 的模板句先后。
+- 证据：`quality/evidence/decision-maker/p9/design-field.md` sha256 `2a3dfd2de3bf1703e31dd1340a413e6d1c0328e37950cbe62f2eefd47475d2c8`；`quality/evidence/decision-maker/p9/design-concrete.md` sha256 `c7c5c0220c8edbee54c41deb6840bdad0e7306ce6cdc35da92439ddd51ea115b`；`final-p8-p13-design.md` sha256 `ba467d66…`（同包 8）；审计 005 sha256 `32665ad7…`（同包 8）。
+- 未取得：TCR 批件、`p9-*` 回执，原因：P9 未开工、TCR 未提；审计 005 的实读红未在本稿复跑，原因：本稿只写材料、不执行命令。
+
+#### 10. 配套与影响
+- 配套调整：`tests/contract/test-entry-grouping.test.mjs:42` 曾因 004 改过 `scripts.check` 整串；P9 不改 `scripts.check`（理由：004 已挂 `four-skill-wiring`，三门测试仍由各自证据命令跑），若后续要挂 `record-step-evidence` 的冒烟则同批改该期望串。
+- 配套迁移：三门测试默认路径改隔离根后，旧默认（任务三路径与 `/Users/Hugh/...`）删除；历史回执只读保留，不改字节。
+- 配套移除：`make-decision/steps.json` 第 9 步的裸目录项 `quality/evidence/decision-log-refs/talk/` 删除（理由：目录不满足完成声明）；「重复模块 WPxx」旧 gap 保留。
+- 影响范围：11 步、4 份测试、3 份 `steps.json`、2 份 CLI/运行时、2 份技能/模板；`specs/archive/**` 与两份冻结卡测试不动。
+
+### 包 10：真实使用者与首用
+
+#### 1. 原始需求
+- 问题：任务一二三的交付里，真实下游材料多未发生——任务三 AC-020 缺「首卡端到端持久与消费者读回」、AC-022 缺「真实首读回执」、AC-016 缺审查者会话 id／同卡节 sha256／逐字 findings；任务二 9 条 AC 的真实材料未发生、答复仍 `{ans}` 占位；任务一实施与接续合同 12 步 0 可读、160 对象仅文本。
+- 来源①用户 2026-11-25：不能只交付方法文本和登记；要真实解决问题、真实验收（`p10/context.md`「原始需求与来源」）。
+- 来源②审计与盘点：`2026-11-25-005-task3-root-cause-audit.md` §二 #11/#13；`p12/context.md:7-10`（任务一二三盘点）。
+- 来源③`p10/design-field.md`（三处字段级改动）与 `p9/design-adaptive-p9-p11.md` §4（真实使用者按载体分写）。
+- 对应 R：R-011（真实入口验证、前置一起验收）、R-027、R-012。
+- 用户可观察的坏处：决策日志十项齐、下一包作者说「清楚」，但没人拿卡做出第一个动作；收口报告里「已通知下游」被当成下游用过。
+
+#### 2. 最初方案
+- 一开始想怎么做：给每个交付加一个「使用者签名」字段，让校验器查签名是否存在（`p10/design-field.md` 前的草案）。
+- 谁否：设计角色自查否——新字段等于第二套登记，签名可以代签；用户 2026-11-25 否「只登记」（同第 1 项来源①）。
+- 为什么否：签名只能证明有人写了名字，不能证明有人用了卡；校验器只能查字段存在，查不出「只复述」。
+- 次初：用「受控替身」模拟下游读回（同一主会话换个角色）。否者与理由：`p10/design-field.md:23` 边界「受控替身不算真实使用者；没有就 blocked」，替身产生的「读回」与作者自述无法区分。
+
+#### 3. 发散与被否
+- 备选 A（选）：三处加句（decision-maker「真实原答承接」、phase-maker「回读契约」、stage-handoff「交接必须写明什么」）＋任务一二三 blocked 全列。代价＝改 3 份技能正文、材料里加一张 24 行 blocked 表。选，理由：三处是三种载体（决策卡、Phase 卡、阶段交接）的真实下游入口，句子落在读者已经在读的位置。
+- 备选 B（否）：加「使用者签名」字段＋校验器。代价＝改卡模板、加校验器、迁移历史卡。否，理由：签名可代签；新字段违反「不新增字段」；校验器只能查存在。
+- 备选 C（否）：用受控替身或同会话换角色模拟下游。代价＝最省、随时可做。否，理由：替身的「读回」与作者自述无法区分；用户要真实使用；`p10/design-field.md:23` 已定不算。
+- 备选 D（否）：只改审查问句（冷读问「有没有真实使用者」）。代价＝只改两行。否，理由：事后问句补不回没发生的事，且写者能自答；任务三 9 项 incomplete 里多条正是作者自己写的。
+- 被否完整理由：`p10/design-field.md`「例子」「边界」两节；主文一句：签名字段、受控替身、只改问句三条都不成立。
+
+#### 4. 调研
+- 事实：任务三 25 项判据里 9 项 incomplete、1 项 inconclusive、2 项 deferred，缺口逐条是真实材料未发生（`specs/archive/delivery-quality-plan-20261123/closeout-report.md` 逐条表；第 9 项按条列出）。
+- 事实：任务一 12 项：9 pass、AC-EVID-001 未完成、AC-MAT-001 与 AC-CLOSE-001 未达成；AC-CLOSE-001 的缺口原文是「160 个对象仅文本、无路径级哈希」（`specs/archive/delivery-quality-foundation-20261122/closeout-report.md:720-735`）。
+- 事实：任务二 12 项 AC（AC-P1-001、AC-P2-001、AC-P3-001/002、AC-P4-001/002、AC-P5-001、AC-P6-001/002、AC-P7-001/002/003）只有 2 项 pass、9 项 incomplete，close 被拒签、无 closeout-report（`p12/context.md:8`；归档目录只有 `decision-log.md`/`spec.md`/`phases/`/`step-consumer-design.md`）。
+- 事实：`skills/decision-maker/SKILL.md`「真实原答承接」现有四条只要求「指针与原话」，没有「谁拿卡做了什么」；`skills/phase-maker/SKILL.md`「回读契约」六条输出都是「说出」，没有「做」。
+- 事实：`skills/stage-handoff/SKILL.md`「交接必须写明什么」只有四类（真实验过／只是缺件／没有做／下一步），没有「谁用了」。
+- 事实：写者集合的判定口已有——`runtime/task/delivery-claims.mjs:514-516` 用 facts 与提交 author 判 signer 是否属实现作者。
+- 假设 H1：加一句「谁拿卡做了什么」就会真去做。推翻条件：下一包作者仍只写「已读、清楚」而审查判过。
+- 假设 H2：没有真实下游时可以用「下一包作者自己」当使用者。推翻条件：同一人既写卡又用卡，读回退化成自述（写者＝使用者）。
+- 哪些事实改变了方向：①「受控替身不算」→ 删掉替身路线，blocked 改为正式出口；②「任务二没有 closeout」→ blocked 清单不能只抄 closeout，要按 12 条 AC 逐条列；③「stage-handoff 是四阶段交接唯一去处」→ 四阶段不各写一份句，只在交接方法写一处。
+- 原始材料：`p10/design-field.md`、`p9/design-adaptive-p9-p11.md` §4、`p12/context.md`、审计 005（sha256 见第 9 项）。
+
+#### 5. 最终决定
+- 选了什么：备选 A，三条 P10-1…P10-3。
+  - P10-1 `skills/decision-maker/SKILL.md`「真实原答承接」加一句：`谁拿卡做了什么：<人>；原件路径+行位；记录者≠写者。`
+  - P10-2 `skills/phase-maker/SKILL.md`「## 回读契约」加第 7 条：`真实消费者读回：<谁、用什么命令/动作、读回什么>；没有真实下游记 blocked/unavailable。`
+  - P10-3 `skills/stage-handoff/SKILL.md`「交接必须写明什么」在「下一步」段后加一行：`接手动作另起一行写「真实使用者动作：<谁、做了什么、留下什么>」；只写「已通知／已说明」不算。` 四阶段共用这一处，不各写一份。
+- 为什么：三种载体的下游入口各一句，读者不必翻第二份方法；「记录者≠写者」把「作者自述」挡在门外，判定口沿用既有写者集合（`delivery-claims.mjs:514-516`）；没有下游时 blocked 是合法出口，不冒充绿。
+- 代价：改 3 份技能正文；blocked 清单常驻材料（24 行），每次收口要复核一遍。
+- 跨包编号：P10-1/P10-2 与包 8、包 9、包 11 共碰 `skills/decision-maker/SKILL.md`、`skills/phase-maker/SKILL.md`；P10-3 与包 11 共碰 `skills/stage-handoff/SKILL.md`、`skills/stage-close/SKILL.md`。串行顺序 P8→P9→P10→P11。
+- 承诺：必须｜真实使用者用过一次并留下可读记录；只复述、只登记、替身都不算｜用户 2026-11-25。
+- 承诺：必须｜没有真实下游记 blocked 并写恢复条件，不冒充绿｜R-011。
+- 承诺：必须｜记录者不得是本包的写者｜R-011、`runtime/task/delivery-claims.mjs:514-516` 同口径。
+- 承诺：允许｜非代码任务用「下一包作者写出第一步」「读者试拆」「用户使用一次」作为使用记录，不要求命令。
+- 承诺：本次不做｜不新增使用者签名字段，不改卡模板形状。
+- 承诺：本次不做｜不用受控替身或同会话换角色。
+- 承诺：待定｜任务二 2 项 pass 的名单｜未答：任务二无 closeout，盘点只记 2 pass/9 incomplete；负责人：任务二 owner；恢复条件：任务二重收口时出逐条结论；不补后果：blocked 表只能按「9 条 incomplete」列，不逐条点名哪两项 pass。
+- 派生建议：把 blocked 表同时抄进本任务决策日志第 5 段「全局未决」（作者推断，不支撑承诺）。
+- 被否方案：受控替身（理由见第 3 项 C）。
+
+#### 6. 完整方案
+- 接口/行为（三句写到位置）：
+  - `skills/decision-maker/SKILL.md`「真实原答承接」第 2 条后插一句：`谁拿卡做了什么：<人>；原件路径+行位；记录者≠写者。`；缺这行的包按未收敛记，不写「已确认」。
+  - `skills/phase-maker/SKILL.md`「## 回读契约」第 6 条后加第 7 条：`真实消费者读回：<谁、用什么命令/动作、读回什么>；没有真实下游记 blocked/unavailable，不写「已说明」。`
+  - `skills/stage-handoff/SKILL.md`「### 交接必须写明什么」在「下一步」行段后加一段：`接手动作另起一行写「真实使用者动作：<谁、做了什么、留下什么>」；只写「已通知／已说明」不算。`
+- 数据与状态：不新增字段；blocked 清单在本包第 9 项（材料正文）与决策日志第 5 段同步引用，不建第二份台账；判词口径归包 11。
+- 依赖与顺序：三条句可并行；blocked 清单在 P10 提交时定稿，包 11 的判词与包 12 的 D1 消费它。
+- 唯一 writer：P10 实现者；`runtime/task/delivery-claims.mjs` 只读。
+- 写集（指针模式，摘要待索引行建立后写）：
+
+| 文件 | 改什么 | 工作包 | 决定 |
+| --- | --- | --- | --- |
+| `skills/decision-maker/SKILL.md` | 「真实原答承接」加「谁拿卡做了什么」一句 | P10 | P10-1 |
+| `skills/phase-maker/SKILL.md` | 「回读契约」加第 7 条「真实消费者读回」 | P10 | P10-2 |
+| `skills/stage-handoff/SKILL.md` | 「交接必须写明什么」加「真实使用者动作」一行 | P10 | P10-3 |
+| `specs/delivery-quality-code-20261124/decision-log.md` | 第 5 段「全局未决」并入 24 行 blocked 表（由包 13 重写时落） | P13 | P13-1 |
+
+#### 7. 验收
+- 判据 AC-P10-001（下一包作者真开工，决策类）：来源 R-027。检查：下一包作者不看写作会话，只凭卡与指针写出首个决定或首处改动，并留下开工记录（做了什么、结果、卡在哪）。期望：有记录且不是复述；反例：只写「清楚／已读」。谁验何时验：独立审查者核记录来源（记录者≠写者），下一包开工后。证据：`quality/tests/p10-next-package-first-step.md`。不检查：不判他写得对不对。
+- 判据 AC-P10-002（接手实施者走到第一处改动，Phase 类）：来源 R-011。检查：按卡打开文件、写下第一处改动前的读回，含首读符号与首改路径。期望：两样都有且指向真实符号；反例：照抄卡面六件。证据同 `p10-next-package-first-step.md` 末节。不检查：不判改动质量。
+- 判据 AC-P10-003（交接有真实使用者动作）：来源 R-011。检查：新交接在「关键事实与数据状态」之外有一行「真实使用者动作：<谁、做了什么、留下什么>」。期望：有且是动作不是通知；反例：写「已通知下游」。证据：`quality/tests/p10-handoff-user-action.md`。
+- 判据 AC-P10-004（blocked 全列且不冒充绿）：来源 R-011、R-027。检查：任务一二三 24 条 blocked 逐条有「缺什么＋恢复条件」；对照三份归档原件抽三条复核。期望：无一条写成 pass、无一条漏列；反例：把 AC-015 inconclusive 写成 pass。谁验何时验：独立读者，P10 提交后。证据：本包第 9 项＋`quality/tests/p10-blocked-ledger.md`。
+- 命令或检查：非代码判据，检查方式是「读者按记录复读」；可用 `grep -n "真实使用者动作" <交接件>` 辅助，不作为通过门。
+- 谁验、何时验：独立审查者与独立读者，P10 合并前。
+- 证据放哪：`quality/tests/p10-*`（尚未产生 → 未取得，原因：P10 未开工）。
+- 这条不检查什么：不检查使用者喜不喜欢；不检查任务一二三的历史实现；不要求每条交付都有真实下游（缺了就 blocked）。
+
+#### 8. 风险/回退
+- 触发：把「使用者动作」写成新字段或新门。后果：回到登记。缓解：只落散文；验收靠「记录者≠写者」与记录来源核对。
+- 触发：没有真实下游时用同一人自用自记。后果：读回退化成自述。缓解：AC-P10-001 要求「不看写作会话」；写者集合沿用 `delivery-claims.mjs:514-516` 口径。
+- 触发：blocked 表被当成「已知缺口」而不再处理。后果：24 条永久挂着。缓解：每条带恢复条件与 owner；包 11 收口时逐条判 open/关闭，关闭必须有原件。
+- 回滚：三处句一次回退；blocked 表只影响材料，不影响代码；不改历史回执。
+
+#### 9. 未决/消费者/证据
+- blocked 全列（24 条，来源：任务三 closeout 逐条表、任务一 closeout `:720-735`、任务二 12 条 AC 与 `p12/context.md:8`）：
+
+| 任务 | 判据 | 缺什么 | 恢复条件 |
+| --- | --- | --- | --- |
+| 任务三 | AC-007 | 未知影响未点名卡号/验收号；开工表缺首卡行 | P4 卡作者下次真实开工带具名卡号与首卡行现场取件 |
+| 任务三 | AC-008 | 无真实新同仓卡回执 | 未来同仓任务第 6 步生成唯一索引、第 7 步只核时取真卡回执 |
+| 任务三 | AC-009 | 缺认证规划试用任务的真实首用与独立读回 | 该任务规划稿首用发生并留独立读回 |
+| 任务三 | AC-011（deferred） | 缺真实短期限、受控争用、约定超时三组读数 | 真实业务期限出现（恢复条件见 P5 卡 :174、:177） |
+| 任务三 | AC-013（deferred） | 缺两份合法装配与各自原契约预期 | 同仓出现第二种合法装配 |
+| 任务三 | AC-015（inconclusive） | 用户同次看过同版卡的原件未取得 | 用户本人同次查看并留原件 |
+| 任务三 | AC-016 | 缺审查者会话 id、同卡节 sha256、逐字 findings、一路不可用回放 | 原决定人决定是否以转录取代原件（B2） |
+| 任务三 | AC-019 | 缺真实 PRD 同次两路原件与一次处置、全文跨卡原件 | 真实 PRD 第二次内容调用发生 |
+| 任务三 | AC-020 | 缺首卡端到端持久与消费者读回 | 真实代码阶段第 2→3 步同会话＋持久首卡＋原消费者定位 |
+| 任务三 | AC-021 | 缺审查侧 finding 原文入库、外审不可用对照（②审后提交身份已补 `cb89011a`） | 原会话可取或批准转录（B2） |
+| 任务三 | AC-022 | 缺原答时点、包 4/5 直接指针、U-012 双指针消歧、真实首读回执 | 真实包交付时补齐 |
+| 任务三 | AC-023 | 缺真实包两路与异源人工读原件、真实首读回执、wh-review detail 与 dispatch 同步 | 方向作者＋wh-review 合同 owner（B4） |
+| 任务二 | AC-P1-001、AC-P2-001、AC-P3-001、AC-P3-002、AC-P4-001、AC-P4-002、AC-P5-001、AC-P6-001、AC-P6-002、AC-P7-001、AC-P7-002、AC-P7-003（12 条中 9 条 incomplete） | 真实材料未发生、答复仍 `{ans}` 占位；pass 两项名单未取得（原因：任务二无 closeout） | 任务二重收口时逐条补真实材料；名单由任务二 owner 出 |
+| 任务一 | AC-MAT-001（未达成） | 真实方向材料缺唯一收敛清单 | 真实方向材料收敛 |
+| 任务一 | AC-EVID-001（未完成） | accepted_risk 绑定字段已接，缺真实风险答复原件 | 用户真实风险答复（包 12 C1 修好后可验） |
+| 任务一 | AC-CLOSE-001（未达成） | 160 个对象仅文本、无路径级哈希 | 用户批准只向前建路径级哈希（P12 blocked B1） |
+
+- 未决：任务二 2 项 pass 名单（谁定：任务二 owner；何时定：任务二重收口前；不补后果：blocked 表只能按 9 条列）。
+- 未决：blocked 表是否进决策日志第 5 段（谁定：make-decision 主会话；何时定：包 13 重写材料时；不补后果：两处清单可能不同步，以本项为唯一正文）。
+- 消费者：包 11 的独立判词读本表；包 12 的 D1 读任务三 AC-001/AC-020 条；包 13 的盲评读「旧版在哪些包失败」；收口读者读整表。
+- 证据：`quality/evidence/decision-maker/p10/design-field.md` sha256 `5756f48bed070e236e7e1ef62520c13909738ef23b518a552d8c1e2f949daeba`；`quality/evidence/decision-maker/p12/context.md` sha256 `f59ee45a0148d93980f73ea54401d123da296e85bb002d652b53615f233cc4c0`；`quality/evidence/build-plan/2026-11-25-005-task3-root-cause-audit.md` sha256 `32665ad7…`（同包 8）；任务三 closeout `specs/archive/delivery-quality-plan-20261123/closeout-report.md`（归档只读，sha256 未取得，原因：本稿只读未计算）。
+- 未取得：`quality/tests/p10-*`（P10 未开工）；任务二 pass 名单（无 closeout）。
+
+#### 10. 配套与影响
+- 配套调整：`skills/stage-handoff/SKILL.md` 的四类表不新增第五类（理由：表被多处引用，改表形状会连带既有交接格式与契约测试；用散文行）；`runtime/task/delivery-claims.mjs` 不改（只引用其写者集合口径）。
+- 配套迁移：无持久字段、无旧材料迁移；历史交接与回执只读。
+- 配套移除：无。理由：本包只加句与清单，不删旧节；受控替身的旧写法不删，只在新句里判不算。
+- 影响范围：三个技能、四阶段交接、本任务材料第 5 段；任务一二三归档只读；包 11 判词与包 12 D1 依赖本表。
+
+### 包 11：残余清单与独立收口
+
+#### 1. 原始需求
+- 问题：任务三 9 项 incomplete 仍收口，AC-001 由唯一写者自判 pass（`closeout-report.md:7-8`、`:248`），交接清单漏 AC-016（同件自陈）；同一份收口里「尚未整体达成」与 13 项 pass 并列，读者无法判断哪条算数；`run-checks` 在 `chain_state=unverified`、`completion=3/10` 时仍退 0。
+- 来源①用户 2026-11-25：不能只交付登记；要真正验收（`p11/context.md`「原始需求与来源」）。
+- 来源②审计：`2026-11-25-005-task3-root-cause-audit.md` §3.4（收口把「没做成」记成「待补」）、§4 B2。
+- 来源③`p11/design-field.md`（残余清单与独立判词两句）。
+- 对应 R：R-011、R-012、R-027。
+- 用户可观察的坏处：收口报告读三遍也说不出「哪条已经真的完成」。
+
+#### 2. 最初方案
+- 一开始想怎么做：在收口报告里加一张「残余清单」表，并让 `check-stage-steps` 扫这张表（新机检）。谁否：设计角色自查否（报告是自由文本，扫表只能靠关键词，等于关键词门）；用户 2026-11-25 否「只登记」（同第 1 项来源①）。为什么否：语义判断做不成表扫描，且「全 incomplete」要人读才知道哪些算 incomplete。
+- 次初：新建一个 `verdict.json` 判决器。查到仓库已有 `runtime/task/delivery-claims.mjs`（`VERDICT_REF = quality/evidence/verdict.json`，schema `delivery-verdict.v1`，signer≠author、材料指纹、gate ref、下游 close readback），遂不新建（第 4 项事实）。
+
+#### 3. 发散与被否
+- 备选 A（选）：残余清单三字段落 `phase-template.md`；`Done` 两禁语；收口检查引用既有 `check-delivery-claims`；B1–B4 回原决定人。代价＝改 3 份技能/模板、加一条收口命令。
+- 备选 B（否）：新写判决器扫 closeout 的 AC 表，全 incomplete 自动拒。代价＝新 CLI＋新表格式＋历史报告迁移。否，理由：closeout 是自由文本，扫表只能靠关键词；「全 incomplete」是语义判断（哪条算 incomplete 要人读）。
+- 备选 C（否）：把残余清单做成 `residuals.json` 台账。代价＝新持久对象＋迁移＋第二账本。否，理由：AGENTS 禁新增第二账本；残余是每 Phase 卡的字段，不是全局台账。
+- 备选 D（否）：只改审查问句「有没有残余」。代价＝两行。否，理由：任务三 9 项 incomplete 是作者自己写的，问句不缺，缺的是「写了 incomplete 也能收口」的代价。
+- 被否完整理由：`p11/design-field.md`「验收」「边界」；主文一句：扫描判决器、残余台账、只改问句三条都不成立。
+
+#### 4. 调研
+- 事实：`quality/evidence/verdict.json` 已是收口的第三种交付声明，schema `delivery-verdict.v1`，字段 `task_id`/`stage`/`conclusion`/`signer.identity`/`reviewed.material_sha256`/`reviewed.gate_ref{ref,sha256}`（`runtime/task/delivery-claims.mjs:499-521`）。
+- 事实：signer 属实现作者时拒（`:514-516`，authors 集合取自 facts 与提交 author）；签后材料字节变化拒（`:512`）；没有下游 close readback 拒（`:383`）。
+- 事实：`tools/cli/check-delivery-claims.mjs` 是只读入口，退 1 条件正是上面三类，命令形如 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。
+- 事实：`skills/stage-close/SKILL.md` 收口前从 `quality/evidence/gate-results/` 读三种交付声明，`DELIVERY_CLAIMS_REJECTED` 拒绝本次收口（该文件收口段原文）。
+- 事实：`skills/spec-plan/templates/phase-template.md` 的「覆盖上限／显式不覆盖」与契约头 `Done` 目前没有残余清单字段（:516-517、:132）。
+- 假设 H1：加残余三字段就会写。推翻条件：三张真卡只写「无」而无到期与关闭动作。
+- 假设 H2：全 incomplete 收口能被机检。推翻条件：closeout 报告不是结构化材料，机检要么建表要么扫关键词（两条都被第 3 项否掉）。
+- 哪些事实改变了方向：①「已有 verdict.json 与 check-delivery-claims」→ 不新建判词权威，只引用；②「全 incomplete 只能人读」→ 落文本判据＋独立判词，不造机器门；③「任务一二三冻结」→ B1–B4 只回原决定人，不在本包自决。
+- 原始材料：`p11/design-field.md`、`p9/design-adaptive-p9-p11.md` §5、`final-p8-p13-design.md`、审计 005（sha256 见第 9 项）。
+
+#### 5. 最终决定
+- 选了什么：备选 A，三条 P11-1…P11-3。
+  - P11-1 `skills/spec-plan/templates/phase-template.md`：「覆盖上限」段后加 `残余清单：<剩余失败｜owner｜到期或关闭动作>`（一行一条，三条齐）；契约头 `Done` 定义处加 `残余未闭合不得写 done；全 incomplete 不得收口成 pass。`
+  - P11-2 `skills/phase-maker/SKILL.md`「失败与边界」加同一句；`skills/stage-close/SKILL.md` 收口段加：收口前跑 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`，退 1 不得收口；全 incomplete 由独立判词判不成立，不写 pass。
+  - P11-3 判词口径：沿用 `quality/evidence/verdict.json` 的 `delivery-verdict.v1`，不新建字段；AC 改判只认 `signer.identity` 不在写者集合、`reviewed.material_sha256` 等于当前材料、`reviewed.gate_ref` 指向当前 gate 原件的判词；自判报告降级为历史记录。
+- 为什么：残余三字段让「还剩什么、谁接、何时关」有固定位置；两条禁语把「写了 incomplete 也能收口」这条路堵上；判词不新建权威，直接消费已有 `verdict.json` 与只读入口，机器能拦的三类（无判词、判者＝写者、材料字节变）已经现成。
+- 代价：改 3 份技能/模板、加一条收口命令；任务三归档若再收口会被拒（它的自判不作为通过依据）；本任务自己收口也必须先有独立判词。
+- 跨包编号：P11-1/P11-2 与包 8、包 10 共碰 `phase-template.md`、`phase-maker/SKILL.md`；P11-3 被包 12 D1 与包 13 盲评消费；B1–B4 与包 9 未决（用户确认原件）、包 12 blocked 共用同一批决定人。
+- 承诺：必须｜AC 改判只认署名独立判词，判者≠写者，带原件与 sha256；自判不作通过依据｜R-011。
+- 承诺：必须｜全 incomplete 不得收口成 pass；残余未闭合不得写 done｜用户 2026-11-25。
+- 承诺：必须｜任务一二三冻结缺口保持 open，不冒充 pass｜R-027。
+- 承诺：允许｜残余清单写「无」但必须附理由（例如「本 Phase 无未闭环项，原因：所有判据均有原件」）。
+- 承诺：本次不做｜不新建判词 schema、判决器或残余台账。
+- 承诺：本次不做｜不改 `specs/archive/**` 的归档字节（任务三 closeout 的自判行只读保留，只标记不作通过依据）。
+- 承诺：待定｜B1 回执硬门、B2 AC 改判与签字人、B3 真实周期取证、B4 wh-review detail 同步｜未答：原决定人未答；负责人：`docs/standard-workflow.md` 质量段 owner、用户、各任务 owner、wh-review 合同 owner；恢复条件：四项各自答复原件到位（B1 另见包 9 未决）。
+- 派生建议：残余清单可与包 10 的 blocked 表用同一套 owner 名字（作者推断，不支撑承诺）。
+- 被否方案：新判决器扫 AC 表（理由见第 3 项 B）。
+
+#### 6. 完整方案
+- 接口/行为：
+  - 残余清单固定三行格式：`残余：<剩余失败>`、`owner：<谁>`、`到期或关闭动作：<何时、什么条件下复核，满足什么转 pass 或转 deferred>`；缺任一判未完成。
+  - `Done` 三态：可写 done（无残余或残余有到期且不影响本 Phase 判据）；不得写 done（仍有本 Phase 自己的 incomplete）；写 done 但列残余（残余属下一 Phase 或跨包，逐条给 owner）。
+  - 判词文件路径固定 `quality/evidence/verdict.json`；命令 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`；退 1 三类原因原文见第 4 项事实。
+- 数据与状态：残余清单是卡内三行散文，不落 JSON；`verdict.json` 已存在，本包不改 schema、不改字段；不新增第二账本。
+- 依赖与顺序：P11-1/P11-2 文本可并行 → P11-3 判词（依赖包 10 blocked 表与包 12 D1 的独立原件）→ 收口命令接线。
+- 唯一 writer：P11 实现者；`runtime/task/delivery-claims.mjs` 与 `tools/cli/check-delivery-claims.mjs` 只读。
+- 写集（指针模式，摘要待索引行建立后写）：
+
+| 文件 | 改什么 | 工作包 | 决定 |
+| --- | --- | --- | --- |
+| `skills/spec-plan/templates/phase-template.md` | 「覆盖上限」后加残余三行；`Done` 定义处加两条禁语 | P11 | P11-1 |
+| `skills/phase-maker/SKILL.md` | 「失败与边界」加同一句禁语与残余要求 | P11 | P11-2 |
+| `skills/stage-close/SKILL.md` | 收口段加 `check-delivery-claims` 命令与「退 1 不得收口」 | P11 | P11-2 |
+| `skills/decision-log/templates/decision-log-template-v2.md` | 本包不改（理由：P1–P7 十项正文已按现模板写，改模板会连带既有正文与解析器） | P11 | — |
+
+#### 7. 验收
+- 判据 AC-P11-001（残余三字段）：来源 R-011。检查：打开一张新 Phase 卡「覆盖上限」后的残余清单，每行有剩余失败、owner、到期或关闭动作。期望：三条齐；反例：写「无」但没有理由。谁验何时验：独立读者，新卡出卡后。证据：`quality/tests/p11-residual.md`。不检查：旧卡（只对 P11 之后新写的卡要求）。
+- 判据 AC-P11-002（Done 禁语）：来源用户 2026-11-25。检查：仍有本 Phase incomplete 的卡 `Done` 写 done → 判失败；全 incomplete 的收口判 pass → 判失败。期望：两条都拦下；反例：任务三现状（9 项 incomplete 收口）即反例。谁验何时验：独立读者对照任务三 closeout 真实件。证据：`quality/tests/p11-done-negative.md`。不检查：不重判任务三每条 AC。
+- 判据 AC-P11-003（判词可拦自判）：来源 R-011、审计 B2。命令 `node tools/cli/check-delivery-claims.mjs --task-path=<任务三任务根>`，期望退 1 并报 `accepted: no independent signature original exists at quality/evidence/verdict.json`；再造一份 signer＝写者的 `verdict.json` → 退 1 报 `the signer is one of the implementation authors`；反例（必须也退 1）：signer 独立但材料字节变 → 报材料指纹不符。谁验何时验：独立执行者，P11 提交后。证据：`quality/tests/p11-verdict-negative.output`。不检查：不判判词内容对不对（人读）。
+- 判据 AC-P11-004（冻结缺口保持 open）：来源 R-027。检查：本决策日志与收口报告不把任务一二三任一条 incomplete 写成 pass；B1–B4 逐条有 owner 与恢复条件。期望：无一条改判无判词；反例：任一条改判无判词。谁验何时验：独立读者，P11 提交后。证据：`quality/tests/p11-frozen-gaps.md`。
+- 命令或检查：`node tools/cli/check-delivery-claims.mjs --task-path=<任务>`（三类退 1 各跑一次）。
+- 谁验、何时验：独立执行者跑命令；独立读者判 Done 与残余；时点在包 12 的 D1 之前。
+- 证据放哪：`quality/tests/p11-*`（尚未产生 → 未取得，原因：P11 未开工）。
+- 这条不检查什么：不检查残余清单写得是否深刻；不检查任务一二三历史收口的文字对错；不要求每张旧卡补残余。
+
+#### 8. 风险/回退
+- 触发：把「全 incomplete 不得 pass」当成机器门去改 closeout 解析。后果：要建 AC 表结构，等于新增材料格式。缓解：只落文本判据＋既有 verdict 机制；机器部分只跑 `check-delivery-claims`。
+- 触发：残余清单变成新的必填字段，旧卡全红。后果：历史卡被判不完整。缓解：只对 P11 之后新写的卡要求；旧卡保持只读（AC-P11-001 只判新卡）。
+- 触发：判词成为新的签字仪式（有人代签）。后果：又回到自判。缓解：signer 必须不在写者集合（`delivery-claims.mjs:514-516` 已机器判），且材料字节变化即失效（`:512`）。
+- 回滚：三处文本一次回退；`verdict.json` 机制本就在，无需回退；收口命令可单独去掉。
+
+#### 9. 未决/消费者/证据
+- 未决 B1–B4（回原决定人，逐条见第 5 项承诺待定）；其中 B1 的用户确认原件与包 9 未决同源，未取得原因相同。
+- 未决：任务三 closeout 的自判行是否标注「只读、不作通过依据」——谁定：任务三 owner 与用户；何时定：本任务收口前；不补后果：读者仍可能引用 `:8` 的「本报告重判」。
+- 消费者：build-code 收口读 P11-2 命令；独立判词读者读 P11-3 口径；包 12 D1 读同一口径写新独立原件；包 13 盲评读「全 incomplete 不得 pass」判旧版。
+- 证据：`quality/evidence/decision-maker/p11/design-field.md` sha256 `b802cc142e74e7ac2c5230d03559a4e06cd98a0335c5baeba8d83d82946ef63e`；`final-p8-p13-design.md` sha256 `ba467d66…`（同包 8）；审计 005 sha256 `32665ad7…`（同包 8）；`runtime/task/delivery-claims.mjs` 的字段与行位为本稿实读（未计 sha256）。
+- 未取得：任务三的独立 `verdict.json`（从未产生，原因：写者自判）；`quality/tests/p11-*`（P11 未开工）。
+
+#### 10. 配套与影响
+- 配套调整：`skills/stage-close/SKILL.md` 收口段加一条命令与一句话；`docs/standard-workflow.md` 质量段（B1 owner）本包不改，等答复；`skills/decision-log/templates/decision-log-template-v2.md` 不改（理由见写集表）。
+- 配套迁移：无持久 schema 变更；任务三归档字节不动。
+- 配套移除：无。理由：不删任务三 closeout 的自判行（归档冻结），只标记不作通过依据。
+- 影响范围：所有新 Phase 卡的 `Done` 与残余、四阶段收口命令、独立判词口径；包 12 的 D1 与包 13 的盲评依赖本包口径。
+
+### 包 12：任务一二三低质量交付修复（P12a／P12b／P12c 三个子 Phase）
+
+#### 1. 原始需求
+- 问题（六条真实缺陷，各自有复现）：C1 风险接受缺 `reply_ref` 时 close 路由不拒；C2 wh-review detail 轨缺必需要件仍 `status:"available"`；C3 收敛清单只抓重复模块 id、不抓重复正文，原失败原件记「放入重复正文后仍 14 pass/0 fail」；B2 `write_set_reconciliation` 在无 `phase_id` 时早退为 `unavailable`，登记在但没消费；B3 三项迁移只登记、调用点仍指旧技能，悬空 pointer 无人拦；D1 AC-001 由唯一写者自判 pass。
+- 来源①`p12/context.md`「已有盘点」与「目标」：先把三条低质量交付的每条调研成可独立修复的条目，再按失败模式拆子 Phase，每个子 Phase 目标单一、能独立交付与验收。
+- 来源②`p12/design-6-fixes.md` 逐条（文件/函数、红、绿、负控、真实消费者、残余、顺序）。
+- 来源③审计：`2026-11-25-005-task3-root-cause-audit.md` §3.2/§3.4、§4 B1–B4。
+- 对应 R：R-011（真实入口、边做边验）、R-012、R-021（迁移同批退出旧实现）、R-027。
+- 用户可观察的坏处：登记了「已迁移／已修复」，真实消费者还是旧行为；门禁绿而真错误照样进清单。
+
+#### 2. 最初方案
+- 一开始想怎么做：一个 Phase 全包六条修复，同时把调研与补全做在同一 Phase 里（`p12/context.md`「目标」原话否的就是这个）。
+- 谁否：设计角色（`p12/context.md`「目标」段）——「不是让一个 Phase 包办调研+补全」。
+- 为什么否：六条失败模式不同（门禁证伪、登记→真实消费、独立验收），混在一个 Phase 无法独立验收，任一条红都拖住其余；也无法说清哪条先修。
+
+#### 3. 发散与被否
+- 备选 A（选）：拆三个子 Phase——P12a 门禁证伪（C1/C2/C3）、P12b 登记→真实消费（B2/B3）、P12c 独立验收（D1）。代价＝三次提交、三份验收。
+- 备选 B（否）：按文件拆（`runtime/`／`tools/`／`skills/` 三组）。代价＝写集不重叠、可并行。否，理由：同一文件跨条（`tools/cli/stage-runtime.mjs` 被 B2/C1 共碰），按文件拆会把一条失败拆到两个 Phase，验收对象说不清。
+- 备选 C（否）：只修三条可复现门禁（C1/C2/C3），B2/B3/D1 留后续任务。代价＝最小、最快。否，理由：B2/B3 与 C 组是同一失败模式（登记代替真实消费），留着等于继续冒充；D1 不修则前面全白做。
+- 备选 D（否）：六条合成一个「修复包」，一个 Phase 顺序做完。代价＝一次交付 6 条。否，理由：无法独立验收，任一条红拖住其余。
+- 被否完整理由：`p12/context.md`「目标」与「待调研」；主文一句：按文件拆、只修三条、合成一包三条都不成立。
+
+#### 4. 调研
+- 事实 C1：`runtime/review/stage-review-disposition.mjs` 的 `accepted_risk` 分支把「缺授权／缺 reply／reply 空／缺 `reply_ref`」合并成一条普通 `missing_items` 字符串，不抛码；`core/task-close.mjs` 的 `closeDelivery`(:1253) 与 `executeClosePlan`(:917) 从不读 `finding_dispositions`；`validateReportableFindingDispositions` 无任何非测试 consumer（设计原件记 `grep` 只剩定义）。真校验只存在 `tools/cli/stage-runtime.mjs` 的 `terminalAssessmentQuality`：读 `risk_acceptances[]`、要求 `reply_ref` 前缀 `quality/evidence/human-confirmations/`、打开原件并核 verbatim 答复。
+- 事实 C1 更正：设计原件提的 `risk_acceptance_reply_ref` 行字段当前不被接受——`runtime/task/task-store.mjs:10-13` 的 `STAGE_ROW_KEYS` 没有它，`:67` 对未知字段抛 `task row contains unsupported fields`。故改为「抽一处校验、两入口共用」，不新增行字段。
+- 事实 C2：`skills/wh-review/scripts/review-materials.mjs:793` 算 `missing`，`:816` 只在 `review-instructions.md` 末尾追加「Supplied material is incomplete …」，仍返回完整 bundle；detail 轨 required＝`raw_requirement`/`approved_direction`；`simple-review-runner.mjs` 的 `shouldRunMaterialPreflight`(:882) 对只有未知键的 materials 返回 false，跳过 preflight → `status:"available"`。
+- 事实 C3：`tools/cli/check-stage-steps.mjs:2433` 的 `duplicate` 只按模块 id；`:2471` 只把「重复模块」推进 `gaps`；退出码只认「未收敛：」前缀与 `isConvergenceEvidenceFailure`（`:936` 的 `CONVERGENCE_FAILURE_PATTERNS` 无「重复正文」）；`packageBlock`(:626) 能取正文，但没有一处比较两段正文。原失败原件：`tasks/delivery-quality-plan-20261123/quality/tests/2026-11-24-055-p01-neg2-case2-duplicate-body.output`。
+- 事实 B2：`reconcileWriteSetDiff`(`runtime/stage/stage-content-contracts.mjs:578`) 无 phase 即 `unavailable`；`tools/cli/stage-runtime.mjs:645` 在 `request.phase_id == null` 早退返回占位 `write_set_reconciliation:null`；`:681` 已能从 facts 读 `phase_progress`。
+- 事实 B3：三项迁移只登记在 `specs/archive/delivery-quality-plan-20261123/closeout-report.md:157-163`；调用点仍在 `workflows/build-code/skill-deps.yaml:28-30`、`workflows/build-plan/skill-deps.yaml:27-28,51-53`、`workflows/make-decision/skill-deps.yaml:57-59`；`tools/cli/build-skill-manifests.mjs` 只读 catalog/registry/manifest，从不读 skill-deps，`--check` 对悬空 pointer 退 0。
+- 事实 D1：`specs/archive/delivery-quality-plan-20261123/closeout-report.md:7` 判定者＝P12 实施者（唯一写者），`:8` AC-001 由本报告重判改 pass，`:248` 再写一次；独立读者原件 `quality/tests/p01-independent-readback.md:38` 判 pass，但 `:30`、`:50` 记「坏例 2 未抓到，14 pass/0 fail」；`specs/archive/**` 冻结（`p12/context.md:13`）。
+- 假设 H1：C1 只要抛码就够。推翻条件：close 根本不调用它（已成立）→ 必须接 close 路由。
+- 假设 H2：C3 加失败模式就够。推翻条件：正文比较本身没人做，得先写比较。
+- 假设 H3：B2 只要给 `phase_id`。推翻条件：`:681` 只在 cursor 有 `phase_id` 时可用，且 `selectedPhaseScopeValid` 还要索引命中。
+- 哪些事实改变了方向：①C1 从「新增行字段」改成「抽一处校验、两入口共用」；②C3 从「加失败模式」改成「先写正文比较再挂退出码」；③D1 从「改归档」改成「当前任务新独立原件＋归档只读」；④B3 从「删旧技能目录」改成「先切调用点、目录后删」。
+- 原始材料：`p12/design-6-fixes.md`、`p12/context.md`、审计 005（sha256 见第 9 项）。
+
+#### 5. 最终决定
+- 选了什么：备选 A，三个子 Phase、六个决定。
+  - P12a 门禁证伪（C1/C2/C3）：C1 抽 `assertRiskAcceptanceReplyRefs` 到 `runtime/review/stage-review-disposition.mjs` 并让 `task-close` 两个入口调用；C2 在 `buildReviewMaterials` 的 detail 轨缺件时抛 `MATERIAL_INCOMPLETE`；C3 在 `check-stage-steps` 加包正文比较并挂 `重复正文` 失败模式。
+  - P12b 登记→真实消费（B2/B3）：B2 从 facts 的 `phase_progress.phase_id` 解析当前 Phase 再判早退；B3 切四个 skill-deps 调用点并给 `build-skill-manifests --check` 加指针校验。
+  - P12c 独立验收（D1）：当前任务新出独立读回原件判 AC-001，归档自判降为历史记录。
+- 为什么：三条低质量交付的失败模式分别是「门禁抓不到」「登记没消费」「自判」，正好三组；每组有自己的红→绿→负控，能独立验收。
+- 代价：三次提交、三份验收；C1 要抽一处共用校验（删 stage-runtime 内联，避免双写）；D1 的归档改写被冻结挡住，只能交当前任务独立原件。
+- 跨包编号：P12-1…P12-6。P12 依赖包 9 的生产者与包 11 的判词口径；包 13 的端到端依赖 P12 修完（否则会撞同一批旧缺陷）。
+- 承诺：必须｜每条修复先复现原失败，再证明消失（红→绿），并有负控｜R-011。
+- 承诺：必须｜迁移同批退出旧实现（调用点切换与校验同批）｜R-021。
+- 承诺：必须｜AC 改判只认独立判词，自判不作通过依据｜R-011。
+- 承诺：允许｜归档侧不改字节，只交当前任务独立原件（D1 的冻结边界）。
+- 承诺：本次不做｜不改 `specs/archive/**` 字节；不改冻结测试 `unit-kernel-wiring`／`convergence-card`／`module-convergence-card`。
+- 承诺：待定｜A1–A4 与 B1 五条 blocked 的恢复时点（见第 9 项）。
+- 派生建议：P12a 三条可并行、P12b 两条可并行（写集不重叠），P12c 必须最后（它消费 C3 的负控）。
+- 被否方案：按文件拆、只修三条、合成一包（理由见第 3 项）。
+
+#### 6. 完整方案
+- 接口/行为：六条各自的对外形状——①`assertRiskAcceptanceReplyRefs({dispositions,riskAcceptances,readOriginal,taskId})` 在缺 `reply_ref`、原件不可读、答复不一致时抛 `RISK_ACCEPTANCE_REPLY_REF_MISSING`；②`buildReviewMaterials` 在 `stage==="make-decision" && reviewTrack==="detail"` 且缺 required 时抛 `MATERIAL_INCOMPLETE: detail review requires <缺键>`；③`check-stage-steps` 的收敛报告新增 `重复正文：包 X 与 包 Y 正文相同` 并让退出码为 1；④`resolveCurrentPhaseId(context)` 返回当前 `phase_id` 或 `null`，两个入口先补再判早退；⑤`build-skill-manifests --check` 对悬空 skill-deps pointer 非 0 并点名；⑥AC-001 的通过依据只能指向 `quality/tests/p01-independent-readback.superseding.md`。
+- 数据与状态：C1 不新增行字段（`STAGE_ROW_KEYS` 不变）；B2 不改 `reconcileWriteSetDiff` 的默认语义；C3 只加报告项与退出码，不改收敛清单格式；B3 只切调用点、不删目录；D1 不改归档字节，只新增当前任务原件。
+- 依赖与顺序：B2 → C1（同碰 `tools/cli/stage-runtime.mjs` 的阶段行读取，先落 phase 解析再让 close 读该行）；C3 → D1（C3 是 `check-stage-steps` 与新增用例的唯一写主，D1 只读它的负控原件）；C2 独立；B3 独立（与 C1/B2 不同文件，可并行）。
+- 唯一 writer：C1／C2／C3 归 P12a 实现者，B2／B3 归 P12b 实现者，D1 归 P12c 的独立执行者（不属实施写者集合）；`specs/archive/**`、两份冻结卡测试、`unit-kernel-wiring.test.mjs` 只读。
+
+六条修复逐条写文件、函数、红、绿、负控、消费者。
+
+- **C1 风险接受缺 `reply_ref` → close 路由具名拒绝**（决定 P12-1）
+  - 文件/函数：`runtime/review/stage-review-disposition.mjs`（`accepted_risk` 分支）；`tools/cli/stage-runtime.mjs`（`terminalAssessmentQuality` 的内联校验改为调同一导出）；`core/task-close.mjs`（`closeDelivery` 与 `executeClosePlan` 入口）。
+  - 改动：①`accepted_risk` 分支拆四段，缺 `reply_ref` 抛 `RISK_ACCEPTANCE_REPLY_REF_MISSING`；②把「`reply_ref` 前缀必须是 `quality/evidence/human-confirmations/`、原件可读、`original.reply` 含 verbatim 答复」抽成导出 `assertRiskAcceptanceReplyRefs({dispositions,riskAcceptances,readOriginal,taskId})`，stage-runtime 改调它；③`task-close` 两个入口在写 close 证据前调用；不新增行字段。
+  - 红：`node --input-type=module -e 'import {validateReportableFindingDispositions as v} from "./runtime/review/stage-review-disposition.mjs"; const r={status:"available",findings:[{id:"F1",severity:"major",issue:"x",path:"a.mjs",evidence_kind:"direct",evidence_status:"direct"}]}; const d=[{finding_id:"F1",status:"accepted_risk",original_fact:"a",source:"review",consequence:"b",next_action:"c"}]; console.log(JSON.stringify(v({result:r,dispositions:d,authorizedRiskFindingIds:["F1"],userReply:{finding_id:"F1",reply:"ok"}})))'` → 当前退 0、stdout 含 `"status":"incomplete"` 与 `accepted_risk requires a real user risk reply for F1`，无错误码；close 对带 `accepted_risk` 缺 `reply_ref` 的任务当前不拒（`grep -n "risk" core/task-close.mjs` 无命中，设计原件记）。
+  - 绿：同命令非 0、`error.code === "RISK_ACCEPTANCE_REPLY_REF_MISSING"`；`node tools/cli/task-close.mjs close …` 对缺 `reply_ref` 的任务 stderr JSON `code` 同名、exit 1；给合法 `reply_ref`（原件含 verbatim 答复）时 close exit 0。
+  - 负控：`reply_ref` 指向不存在原件 → 同码；`reply` 与原件不一致 → 同码；只改 disposition 不改 reply → 同码。
+  - 消费者：`tools/cli/task-close.mjs close` → `closeDelivery`；build-code 终末收口。
+- **C2 wh-review detail 缺键 → `MATERIAL_INCOMPLETE`**（决定 P12-2）
+  - 文件/函数：`skills/wh-review/scripts/review-materials.mjs`（`buildReviewMaterials`，`missing` 计算与 instructions 追加之间）；`skills/wh-review/scripts/simple-review-runner.mjs`（`normalizeProviderError` 透传 code，必要时在 `buildBundle` 的 catch 前加分支）。
+  - 改动：`stage==="make-decision" && reviewTrack==="detail" && missing.length` 时在创建 `bundleRoot` 之前抛 `MATERIAL_INCOMPLETE: detail review requires <缺键>`；runner 侧保留该 code 并返回 `blockedPreflight`。
+  - 红：`buildReviewMaterials({stage:"make-decision",reviewTrack:"detail",materials:{raw_requirement:"R"}})` 当前返回 bundle、`review-instructions.md` 含 `Supplied material is incomplete: approved_direction`（设计原件记实读）；dispatch 层对 `{decision:"only an unknown key"}` 当前 `status:"available"`。
+  - 绿：低层抛错、message 以 `MATERIAL_INCOMPLETE: detail review requires approved_direction` 开头；`node skills/wh-review/scripts/wh-review-cli.mjs run <input.json>` 对 detail 缺键 exit 1、`error.code==="MATERIAL_INCOMPLETE"`。
+  - 负控：只给未知键（两个 required 都缺）→ 同码；`approved_direction:""` → 同码；direction 轨不受影响（跑一次仍 available）。
+  - 消费者：`skills/wh-review/scripts/wh-review-cli.mjs run`；make-decision detail 审查派发。
+- **C3 重复正文不捕获 → fail**（决定 P12-3，唯一写主）
+  - 文件/函数：`tools/cli/check-stage-steps.mjs`（`packageBlock:626`、`duplicate:2433`、`gaps:2471`、`CONVERGENCE_FAILURE_PATTERNS:936`、退出码分支）；`tests/contract/check-stage-steps.test.mjs`（新增用例）。
+  - 改动：新增 `duplicateBodyGaps`：逐包取 `packageBlock`，去标题行、空白归一、`<40` 字跳过，命中写 `重复正文：包 X 与 包 Y 正文相同`；并入 `gaps`；`CONVERGENCE_FAILURE_PATTERNS` 加 `/重复正文/`；`重复模块 WPxx` 旧 gap 保留。
+  - 红：新用例（两个不同 id 包正文相同只改标题）→ 当前 `gaps` 不含「重复正文」、`process.exitCode===0`（等价既有原件 14 pass/0 fail）。
+  - 绿：同用例 `gaps` 含具名行、exit 1、`--json` 的 `convergence.complete=false`。
+  - 负控：两包正文不同 → 不出现、exit 0（不误杀）；正文 `<40` 字 → 不判重（口径）。
+  - 消费者：`node tools/cli/check-stage-steps.mjs --stage=make-decision --json`；make-decision 第 9 步 `module-convergence`。
+- **B2 write_set 对账 `unavailable` → `recorded`**（决定 P12-4）
+  - 文件/函数：`tools/cli/stage-runtime.mjs`（`phaseReviewSourceProjection` 的早退、`captureScopedReviewSource` 的相位分支、`:681` 既有 cursor 读取）。
+  - 改动：新增 `resolveCurrentPhaseId(context)`，从 facts 的 `phase_progress.phase_id` 解析；两个入口先把 `request.phase_id` 补成解析值再判早退，解析不到才回占位；`reconcileWriteSetDiff` 不加默认。
+  - 红：新用例（request 不带 `phase_id`，facts 有 `phase_progress:{phase_id:"P1"}`）→ 当前 `captureContractFacts` 为 `null`（占位早退）。
+  - 绿：同用例 `{"status":"recorded","phase_id":"P1","out_of_scope":["outside.mjs"],"matched":["src/owned.mjs"]}`；`run --action=execute` 的 `write_set_reconciliation.status === "recorded"`。
+  - 负控：facts 清空 `phase_progress` 且 request 无 `phase_id` → `unavailable`、`matched:[]`、reason 含 `phase_id`，退出码不变（事实非门）；`phase_id` 不在索引 → `unavailable`（不退化成空 match）。
+  - 消费者：`tools/cli/stage-runtime.mjs run --action=execute`；`tools/cli/check-stage-quality.mjs --report`。
+- **B3 三项迁移只登记 → 切调用者＋悬空 pointer 具名**（决定 P12-5）
+  - 文件：`workflows/build-code/skill-deps.yaml:28-30`、`workflows/build-plan/skill-deps.yaml:27-28,51-53`、`workflows/make-decision/skill-deps.yaml:57-59`、`tools/cli/build-skill-manifests.mjs`。
+  - 改动：四个调用点切到承接者（`fullstack-slice-testing`→`backend-testing`；`design-source-readiness`→`project-norm-init`；`plan-eng-review`→`unit-kernel`），trigger 保留；`build-skill-manifests.mjs` 在 external 读取后、check 输出前增 skill-deps 指针校验（复用 `check-skill-consistency` 的解析），悬空即 `skill-deps pointer dangling`；旧技能目录暂不删。
+  - 红：`node tools/cli/build-skill-manifests.mjs --check` 对当前 skill-deps 退 0；用一段 yaml 读脚本打印三份 skill-deps 里的旧名，当前打印三条旧名。
+  - 绿：三条都打印 `[]`；`--check` 通过；在临时副本把某条 `path` 改成 `skills/ghost/SKILL.md` 后 `--check` 非 0 且点名 `skill-deps pointer dangling`。
+  - 负控：`name` 在 catalog 无登记 → `check-skill-consistency` 报 `has no current registration`。
+  - 消费者：`node tools/cli/build-skill-manifests.mjs --check`（CI 守卫与 release 投影）、`check-skill-consistency.mjs`。
+- **D1 AC-001 自判 → 独立读者判 pass**（决定 P12-6）
+  - 文件：当前任务 `quality/tests/p01-independent-readback.superseding.md`（新，独立执行者写）；当前任务收口报告的 AC-001 依据行；`specs/archive/**` 不动。
+  - 改动：新原件按 C3 修复后的重复正文门禁判 AC-001 的实质条件，并引 C3 的负控（重复正文 → exit 1）作为覆盖缺口已闭；收口依据只引新原件，写明 `plan/closeout-report.md:8,53,248` 的自判为历史记录、不作通过依据。
+  - 红：`grep -n "由本报告按当前字节独立重判改 pass" specs/archive/delivery-quality-plan-20261123/closeout-report.md` → 命中 `:8`/`:248`；`quality/tests/p01-independent-readback.md:38` 判 pass 但 `:30,:50` 记未抓坏例。
+  - 绿：当前任务新 closeout 的 AC-001 依据行只含新原件路径，不含「本报告重判」；新原件结论 pass 且附 C3 负控。
+  - 负控：收口草稿写「本报告重判 pass」且不引独立原件 → 断言失败 `SELF_JUDGED_NO_INDEPENDENT_READBACK`；引独立原件但结论非 pass → `INDEPENDENT_VERDICT_NOT_PASS`。
+  - 消费者：收口读者；`tools/cli/check-delivery-claims.mjs` 的 accepted 声明（signer≠author）。
+
+写集（指针模式；三子 Phase 各一次提交）：
+
+| 文件 | 改什么 | 工作包 | 决定 |
+| --- | --- | --- | --- |
+| `runtime/review/stage-review-disposition.mjs` | `accepted_risk` 分支拆段并抛 `RISK_ACCEPTANCE_REPLY_REF_MISSING`；导出 `assertRiskAcceptanceReplyRefs` | P12a | P12-1 |
+| `tools/cli/stage-runtime.mjs` | `terminalAssessmentQuality` 内联校验改调同一导出 | P12a | P12-1 |
+| `core/task-close.mjs` | `closeDelivery`、`executeClosePlan` 入口调用同一校验 | P12a | P12-1 |
+| `skills/wh-review/scripts/review-materials.mjs` | detail 轨缺 required 时抛 `MATERIAL_INCOMPLETE` | P12a | P12-2 |
+| `skills/wh-review/scripts/simple-review-runner.mjs` | 保留 `MATERIAL_INCOMPLETE` code 并返回 `blockedPreflight` | P12a | P12-2 |
+| `tools/cli/check-stage-steps.mjs` | 新增包正文比较、并入 `gaps`、挂 `/重复正文/` 失败模式 | P12a | P12-3 |
+| `tests/contract/check-stage-steps.test.mjs` | 新增重复正文用例与两条负控 | P12a | P12-3 |
+| `tools/cli/stage-runtime.mjs` | 新增 `resolveCurrentPhaseId`，两入口先补 `phase_id` 再判早退 | P12b | P12-4 |
+| `tests/contract/stage-write-set-reconciliation.test.mjs` | 新增「无 `phase_id` 但 facts 有 cursor」用例与两条负控 | P12b | P12-4 |
+| `workflows/build-code/skill-deps.yaml` | 调用点 `fullstack-slice-testing`→`backend-testing` | P12b | P12-5 |
+| `workflows/build-plan/skill-deps.yaml` | `plan-eng-review`→`unit-kernel`；`design-source-readiness`→`project-norm-init` | P12b | P12-5 |
+| `workflows/make-decision/skill-deps.yaml` | `design-source-readiness`→`project-norm-init` | P12b | P12-5 |
+| `tools/cli/build-skill-manifests.mjs` | 增 skill-deps 指针校验，悬空即失败 | P12b | P12-5 |
+| `quality/tests/p01-independent-readback.superseding.md`（任务库） | 新建独立读回，判 AC-001 并附 C3 负控 | P12c | P12-6 |
+| 当前任务 closeout 报告的 AC-001 依据行 | 只引新独立原件，自判降为历史记录 | P12c | P12-6 |
+
+#### 7. 验收
+- 判据 AC-P12-001（C1）：来源 R-011。命令：第 6 项 C1 的红/绿两条命令＋close 路由一次。期望：改前退 0 且无码；改后同码非 0、close 退 1；合法 `reply_ref` 时 close 退 0。反例：`reply_ref` 指向不存在原件仍退 0。谁验何时验：独立执行者，P12a 提交后。证据：`quality/tests/p12-c1.output`。不检查：不判 close 的其它拒绝条件。
+- 判据 AC-P12-002（C2）：来源 R-011。命令：detail 缺键的低层调用与 `wh-review-cli run`。期望：改后 `MATERIAL_INCOMPLETE`、exit 1；改前 available。反例：未知键仍 `status:"available"`。证据：`quality/tests/p12-c2.output`。不检查：不判 direction 轨（只要求它不受影响）。
+- 判据 AC-P12-003（C3）：来源 R-011、R-012。命令：`npx vitest run tests/contract/check-stage-steps.test.mjs -t "duplicate body"`。期望：改后 gaps 含「重复正文：包 1 与 包 2 正文相同」、exit 1；两包正文不同时 exit 0。反例：`<40` 字空正文被判重。证据：`quality/tests/p12-c3.output`。不检查：不判冻结的 `unit-kernel-wiring`（另属残余）。
+- 判据 AC-P12-004（B2）：来源 R-011。命令：新用例 `npx vitest run tests/contract/stage-write-set-reconciliation.test.mjs -t "resolves the current phase_id"`。期望：改后 `recorded`＋`matched:["src/owned.mjs"]`；无 cursor 时 `unavailable` 且 reason 含 `phase_id`。反例：无 phase 时退化成空 match。证据：`quality/tests/p12-b2.output`。不检查：不跑端到端 `run --action=execute`（见第 9 项未取得）。
+- 判据 AC-P12-005（B3）：来源 R-021、R-011。命令：`node tools/cli/build-skill-manifests.mjs --check`；三份 skill-deps 的旧名打印脚本；临时副本注入 `skills/ghost/SKILL.md` 的负控。期望：三条旧名打印 `[]`、`--check` 通过、负控非 0 且点名 dangling。反例：悬空 pointer 仍退 0。证据：`quality/tests/p12-b3.output`。不检查：不判旧技能目录是否该删（属后续清理）。
+- 判据 AC-P12-006（D1）：来源 R-011、审计 B2。命令：`node tools/cli/check-delivery-claims.mjs --task-path=<当前任务>` 与新 closeout 的 AC-001 依据行 grep。期望：依据行只含新独立原件；判词 signer 不在写者集合。反例：依据行出现「本报告重判」。证据：`quality/tests/p12-d1.md`。不检查：不改归档字节。
+- 判据 AC-P12-007（三子 Phase 不冲突）：来源 R-012。检查：三次提交的 `git diff --name-only` 与写集表逐条比对，无跨子 Phase 同文件并发。反例：P12a 与 P12b 同批改 `stage-runtime.mjs` 而没串行。谁验：独立审查者。证据：`quality/reviews/p12-scope.md`。
+- 判据 AC-P12-008（边界不越）：来源 R-027。检查：`git diff` 不含 `specs/archive/**`、两份冻结卡测试、`unit-kernel-wiring.test.mjs`。反例：任一处被改。证据同上。
+- 命令或检查：上面七条。
+- 谁验、何时验：每条由独立执行者在对应子 Phase 提交后跑；AC-P12-006 由独立读者判。
+- 证据放哪：`quality/tests/p12-*`、`quality/reviews/p12-*`（尚未产生 → 未取得，原因：P12 未开工）。
+- 这条不检查什么：不检查六条之外的历史缺陷；不检查任务一二三其它 AC；不判 close 的 Git 授权流程。
+
+#### 8. 风险/回退
+- 触发：C1 抽函数时 stage-runtime 内联未删。后果：两处判定不同步。缓解：一次提交内删内联；负控两条入口各跑一次。
+- 触发：C2 改动溢出到 direction 轨。后果：合法 direction 请求被拒。缓解：条件只认 `stage==="make-decision" && reviewTrack==="detail"`；负控跑一次 direction 仍 available。
+- 触发：C3 误杀模板化卡（去标题后正文相同）。后果：合法卡被判重复。缓解：`<40` 字跳过；报告里同时写两个包号供人工复核；两包正文不同的负控必须绿。
+- 触发：B2 把无 phase 冒充 match。后果：对账变假绿。缓解：解析不到保持 `unavailable`；负控明确。
+- 触发：B3 切调用点后旧技能仍被别处引用。后果：`check-skill-consistency` 报 mandatory mismatch。缓解：`skills/wh-review/manifest.json` 的 `plan-eng-review` 引用同批核；`tests/fixtures/n10-method-readback.json` 的旧 trigger 文案按需同批更新。
+- 回滚：三子 Phase 各一次提交，可独立回退；B3 回退＝四个调用点改回旧名；C1 回退＝恢复内联并删导出（但 close 又回到不拒）；D1 只影响当前任务材料，归档不动。
+
+#### 9. 未决/消费者/证据
+- blocked 五条（逐条写恢复条件）：
+  - A1 真实 build-code 周期：缺真实小型任务的首卡端到端（同会话第 2→3 步、持久首卡、原消费者定位）。恢复条件：有真实任务带真实 diff 与首卡；owner：该任务 build-code 执行者。
+  - A2 下一阶段交接：缺 P12 修完后 build-code 真开工一次。恢复条件：任务四设计合并后按新卡开工；owner：build-plan/build-code 主会话。
+  - A3 用户逐包答复：缺用户对 P8–P13 每包十项的逐包回复原件。恢复条件：用户逐包回复并留 Talk 原件；owner：用户＋make-decision 主会话。
+  - A4 真实 review-record 与三链：缺审查侧 finding 原文入库与三链原件。恢复条件：原会话可取，或用户批准以转录取代（B2）；owner：任务三 owner＋原决定人。
+  - B1 归档 160 条只向前建：AC-CLOSE-001 的 160 对象仅文本、无路径级哈希；只向前建需用户批准，不重建历史。恢复条件：用户批准对归档建路径级哈希（只向前）；owner：用户＋任务一 owner。
+- 未决：C1 的 close 拒绝是否算「改判据」（把报告项变阻断项）——谁定：`docs/standard-workflow.md` 质量段 owner；何时定：P12a 提交前；不答后果：C1 只能停在纯函数抛码，close 仍放行。
+- 未决：`skills/wh-review/manifest.json` 的 `plan-eng-review` 必读引用是否同批切——谁定：wh-review manifest owner；何时定：P12b 提交前；不补后果：`check-skill-consistency` 的 compare 段报 mandatory mismatch。
+- 消费者：build-code 终末收口读 C1；make-decision detail 派发读 C2；make-decision 第 9 步读 C3；phase 审查材料与 readiness 读 B2；CI 守卫与 release 投影读 B3；收口读者与 `check-delivery-claims` 读 D1。
+- 证据：`quality/evidence/decision-maker/p12/design-6-fixes.md` sha256 `1344deb8348e240649c6b6d586074090ecf07703c792aaf026e365e53d5dc254`；`quality/evidence/decision-maker/p12/context.md` sha256 `f59ee45a0148d93980f73ea54401d123da296e85bb002d652b53615f233cc4c0`；审计 005 sha256 `32665ad7…`（同包 8）。
+- 未取得：C1 的 close 端到端红（需真实任务库与已授权 close 计划）、B2 的端到端 `run --action=execute` 绿（需真实 worktree 与 `phase_progress` 事实）、C3 的 14/0 原始红复跑（冻结测试，未重跑）、D1 的归档改写（冻结挡住）。原因均为缺真实环境或冻结边界，已在第 6 项逐条写明替代证据。
+
+#### 10. 配套与影响
+- 配套调整：`tests/contract/check-stage-steps.test.mjs`（C3 用例）；`tests/contract/stage-write-set-reconciliation.test.mjs`（B2 用例）；`skills/wh-review/manifest.json` 的 `plan-eng-review` 引用同批核；`tests/fixtures/n10-method-readback.json` 的旧 trigger 文案若被逐字断言需同批更新。
+- 配套迁移：B3 的四个调用点切换即迁移本体，旧技能目录保留；迁移失败回退＝一次提交改回旧名。C1 不新增行字段，故无 facts 迁移。
+- 配套移除：`重复模块 WPxx` 旧 gap 保留；`make-decision` 第 9 步裸目录项归包 9 删；本包不删任何技能目录、不改归档。
+- 影响范围：close 路由、wh-review detail 轨、收敛清单门禁、phase 审查材料、skill 依赖清单、AC-001 判词；`specs/archive/**`、两份冻结卡测试、`unit-kernel-wiring.test.mjs` 不动。
+
+### 包 13：当前任务重写与独立任务端到端
+
+#### 1. 原始需求
+- 问题：当前 `specs/delivery-quality-code-20261124/spec.md` 是旧标准的中间产物——1583 行、八阶段大纲（「八个阶段，前七个对应七个包，第八个是唯一末验」）、`phases/` 目录不存在、`git ls-files` 不含该文件（工作区未跟踪）；材料检查唯一剩余红是 `phases/index.md content is required`。用当前任务自己当实验，等于写者验写者，无法证明新标准更好。
+- 来源①用户 2026-11-25：P13 不要用当前任务做测试；当前任务必须按新标准写 spec/phases；另选其他任务做端到端；要能证明和比较新版比旧版质量高（`p13/context.md`「原始需求与来源」）。
+- 来源②`p13/context.md`「已有事实」（spec 现状、任务一二三归档冻结）。
+- 来源③任务三 P4/P8 的失败形态（旧卡顶新卡、门绿而核心 AC 未完成），是新旧对比的现成对照。
+- 对应 R：R-027、R-011（真实入口、边做边验）、R-012。
+- 用户可观察的坏处：重写完成后没人能说清「新版哪里比旧版强」，只有作者自称；端到端没有真实使用者，退化成演练。
+
+#### 2. 最初方案
+- 一开始想怎么做：把当前任务当端到端试验田——用新标准重写自己的 spec/phases，再让 build-code 按新卡开工，用自己的交付证明新标准有效。
+- 谁否：用户 2026-11-25 明确否（原文见第 1 项来源①）。
+- 为什么否：写者＝被验者，任何结论都是自证；当前任务的材料已被写作过程污染（本决策日志本身就是在旧标准下写的），拿它当样本分不清「标准好」还是「作者熟」。
+
+#### 3. 发散与被否
+- 备选 A（选）：当前任务只重写自己的 spec/phases（不拿自己当实验）＋另选一个小型真实任务做端到端＋新旧盲评五问。代价＝多一个任务、两份证据。
+- 备选 B（否）：只重写当前任务，不做独立任务。代价＝省一个任务。否，理由：无法回答「新版更好」，重写质量仍由写者自评。
+- 备选 C（否）：拿任务一二三归档当端到端对象。代价＝现成材料、范围已知。否，理由：归档冻结、不能改；重跑等于改历史判据。
+- 备选 D（否）：新建一个纯造的小任务。代价＝可控、快。否，理由：没有真实使用者与真实下游，端到端退化成演练（包 10 已定替身不算）。
+- 被否完整理由：`p13/context.md`「前序决定与边界」；主文一句：只重写自己、拿归档、纯造任务三条都不成立。
+
+#### 4. 调研
+- 事实：当前 `spec.md` 1583 行、八阶段大纲；`specs/delivery-quality-code-20261124/` 下只有 `decision-log.md`、`spec.md`、`step-consumer-design.md`，无 `phases/`。
+- 事实：`spec.md` 未被 git 跟踪（`git ls-files --error-unmatch` 退 1），当前 sha256 `70a08b4c20be879e5fb55b4091fd988947621408fb56e68dc367b45d17b21ee5`。
+- 事实：材料检查唯一剩余红是 `phases/index.md content is required`（`2026-11-25-007-coverage-gap-remediation.md`「现状态」），该文自述「这条红是 build-plan 未完成的正常状态」。
+- 事实：任务一二三在 `specs/archive/` 且冻结（`p12/context.md:13`）。
+- 事实：候选小型任务尚未定，是 `p13/context.md`「开放问题」第一条。
+- 假设 H1：重写自己的 spec 就能达到新标准。推翻条件：独立读者按新卡仍写不出首改路径。
+- 假设 H2：新旧对比可以只比字数与字段数。推翻条件：任务三字段齐全却 9 项 incomplete——对比必须用五问答不答得出。
+- 哪些事实改变了方向：①「当前 spec 未跟踪」→ 重写前先入版本，否则新材料没有版本事实；②「材料检查红是正常状态」→ 重写验收要把这条红转绿；③「归档冻结」→ 端到端只能另选任务；④「盲评必须未参与写作」→ 盲评者不能是本任务任何一包的写者。
+- 原始材料：`p13/context.md`、`2026-11-25-007-coverage-gap-remediation.md`、`final-p8-p13-design.md`、当前 `spec.md` 字节（sha256 见第 9 项）。
+
+#### 5. 最终决定
+- 选了什么：备选 A，四条 P13-1…P13-4。
+  - P13-1 当前任务重写：按 P8–P11 的新标准重写 `spec.md`（八阶段大纲换成按能独立验收的结果切 Phase），每张 Phase 卡走 phase-maker 八步，落 `phases/index.md` 与 `phases/P<n>-*.md`；重写前把旧字节存一份副本，重写后 `git add` 并入版本。
+  - P13-2 另选小型真实任务：范围小（1–3 个 Phase）、有真实使用者与真实下游、能跑新旧对比；候选与选择理由写进材料；不碰任务一二三归档与任务五至八。
+  - P13-3 端到端：在该任务上真跑一次 make-decision→build-prd→build-plan→build-code（至少到第 3 步最小实现），原失败红→绿，phase-maker 真调用（有 `--read-step-skill` 回执），无抽象 Phase。
+  - P13-4 新旧盲评五问：同一任务的旧版与新版，由未参与写作者盲评五问（根因落在哪处真实证据／根因→改动→判据是否一一对应／判据全绿但原问题还在的反例／每条判据回指哪句原始需求原话／被否替代在什么条件下更对）；证据落 `quality/tests/p13-blind-review.md`；不看字数与字段数。
+- 为什么：当前任务重写解决「材料还是旧标准」；独立任务解决「谁来证明新版更好」；盲评五问解决「证明方式不能是作者自述」。
+- 代价：多一个任务的材料与执行；当前 spec 需整体重写（旧字节留副本）；盲评要等两位未参与写作者。
+- 跨包编号：P13-1 消费包 8 的五句与七步、包 9 的生产者、包 10 的 blocked 表、包 11 的判词口径；P13-3 依赖包 12 修完（否则端到端会撞同一批旧缺陷）；P13-4 与包 11 的「全 incomplete 不得 pass」共用判据。
+- 承诺：必须｜当前任务按新标准重写 spec/phases，不拿自己当实验｜用户 2026-11-25。
+- 承诺：必须｜另选小型真实任务端到端，原失败红→绿，phase-maker 真调用｜用户 2026-11-25、R-011。
+- 承诺：必须｜新旧盲评五问由未参与写作者判，不看字数与字段数｜R-011、R-012。
+- 承诺：允许｜端到端只到 build-code 第 3 步（最小实现），不要求跑完整阶段。
+- 承诺：本次不做｜不拿任务一二三归档当实验对象，不改归档字节。
+- 承诺：本次不做｜不用当前任务做端到端实验对象。
+- 承诺：待定｜端到端用哪个任务｜未答：候选未定；负责人：make-decision 主会话＋用户；恢复条件：候选满足「1–3 个 Phase、有真实使用者与真实下游」并被用户确认。
+- 派生建议：盲评五问的答案可由两位盲评者各写一份，分歧处单列（作者推断，不支撑承诺）。
+- 被否方案：拿当前任务当试验田、拿归档当对象、纯造任务（理由见第 3 项）。
+
+#### 6. 完整方案
+- 接口/行为：
+  - 新 `spec.md` 结构固定：需求→FR→AC→Phase→oracle 追踪表；每 Phase 一节「这一 Phase 交出什么」（含 P8-2 的两句）、「这一 Phase 怎么验收」（六件＋P9-2 的落点句）、「每个文件由谁改」（NEW/MODIFY/DO NOT TOUCH）、「下一消费者拿什么继续」（含 P8-2 的残余句）、「覆盖上限＋残余清单」（P11-1）。
+  - `phases/index.md` 纯指针：只导航、不承载正文、命令、验收或进度权威；每行写 Phase 名、写集、依赖、下游读者。
+  - 端到端四阶段的产物按各阶段既有要求，不新增材料格式；每步落 `facts.jsonl#<slot>`（P9-3 生产者）。
+  - 盲评记录格式：五问各一段，每段写「新版怎么答／旧版怎么答／证据在哪」，末段写「新版在哪个包能具体回答、旧版在哪个包失败、死在第几问」。
+- 数据与状态：旧 `spec.md` 字节存一份副本（同字节即同一事实，不存目录快照）；新 spec 入 git；`phases/` 新建；端到端任务的材料归该任务自己的 writer。
+- 依赖与顺序：P13-1 依赖 P8/P9/P10/P11 的句与生产者先落地；P13-2 依赖候选确认；P13-3 依赖 P12 修完；P13-4 在 P13-3 之后。
+- 唯一 writer：P13 实现者写本任务材料与证据；端到端任务的材料由该任务的 make-decision/build-plan writer 写，P13 只写自己的证据，不改对方材料。
+- 写集（指针模式；材料写集按 `phases/index.md` 的 Execution Index 行）：
+
+| 文件 | 改什么 | 工作包 | 决定 |
+| --- | --- | --- | --- |
+| `specs/delivery-quality-code-20261124/spec.md` | 按新标准整体重写（八阶段大纲换成按可独立验收的结果切 Phase） | P13 | P13-1 |
+| `specs/delivery-quality-code-20261124/phases/index.md` | 新建纯指针索引 | P13 | P13-1 |
+| `specs/delivery-quality-code-20261124/phases/P<n>-*.md` | 新建 Phase 卡，每张走 phase-maker 八步 | P13 | P13-1 |
+| `quality/evidence/p13/spec-before-rewrite.md` | 重写前旧 spec 同字节副本＋sha256 | P13 | P13-1 |
+| 端到端任务的材料（该任务 `specs/<task-id>/`） | 由该任务 writer 按四阶段写，P13 只读 | 端到端任务 | P13-2、P13-3 |
+| `quality/tests/p13-blind-review.md` | 两位盲评者的五问记录 | P13 | P13-4 |
+| `quality/tests/p13-e2e-red-green.output` | 端到端原失败与修复后的命令输出 | P13 | P13-3 |
+
+#### 7. 验收
+- 判据 AC-P13-001（当前任务 spec 按新标准重写）：来源 R-027、用户 2026-11-25。检查：新 spec 有 FR→AC→Phase→oracle 追踪；每个 Phase 卡有「交出什么／怎么验收／谁改／下一消费者／覆盖上限＋残余」；索引非空且每行可回读。期望：五项都在；反例：仍是八阶段大纲，或卡里写「见 spec」。谁验何时验：没参与写作的读者，P13-1 提交前。证据：`quality/tests/p13-spec-rewrite.md`。不检查：不判设计好坏（P13-4 判）。
+- 判据 AC-P13-002（材料检查红转绿）：来源 R-012。命令 `node tools/cli/run-checks.mjs --task-path=<当前任务根>` 与 `node tools/cli/check-stage-steps.mjs --stage=build-plan --step=11 --task-path=<当前任务根> --material-root=<材料根> --json`。期望：`phases/index.md content is required` 消失；反例：索引是空文件。谁验何时验：独立执行者，P13-1 提交后。证据：`quality/tests/p13-materials-check.output`。不检查：不判内容深度。
+- 判据 AC-P13-003（端到端原失败红→绿）：来源用户 2026-11-25、R-011。检查：在端到端任务上先复现一个具名原失败（命令＋退出码＋原输出），修后同一命令绿；`--read-step-skill` 回执存在。期望：红绿两态都有原件；反例：只跑单测，或红是导入/环境错。谁验何时验：独立执行者，P13-3 完成后。证据：`quality/tests/p13-e2e-red-green.output`。不检查：不判该任务业务价值。
+- 判据 AC-P13-004（盲评五问）：来源 R-011、R-012。检查：五问逐条有答案；末段点名「新版在哪个包能具体回答、旧版在哪个包失败、死在第几问」。期望：结论可指到包与问；反例：盲评者参与过任一包写作。谁验何时验：两位未参与写作者，P13-4。证据：`quality/tests/p13-blind-review.md`。不检查：不统计字数或字段数。
+- 判据 AC-P13-005（下游真开工一次）：来源 R-011。检查：端到端任务的 build-code 执行者按新卡开工，留首读符号与首改路径回执。期望：回执由执行者本人留；反例：作者自己演示。证据：该任务 `quality/tests/`。不检查：不判该 Phase 全部完成。
+- 判据 AC-P13-006（不拿归档与自己当实验）：来源用户 2026-11-25。检查：端到端对象既不是任务一二三，也不是当前任务。期望：对象是第三个任务；反例：任一即失败。证据：`p13-blind-review.md` 首段。
+- 命令或检查：上面两条命令＋grep 检查（`git ls-files --error-unmatch specs/delivery-quality-code-20261124/spec.md` 应退 0）。
+- 谁验、何时验：P13-1 由独立读者、P13-2/003/005 由独立执行者、P13-4 由两位盲评者。
+- 证据放哪：`quality/tests/p13-*`、`quality/evidence/p13/`（尚未产生 → 未取得，原因：P13 未开工）。
+- 这条不检查什么：不检查端到端任务的实现质量；不检查本任务历史材料；不新建判据表。
+
+#### 8. 风险/回退
+- 触发：重写后旧 spec 字节丢失。后果：无法对比新旧。缓解：重写前存副本并记 sha256；副本只存一份，不存目录快照。
+- 触发：端到端任务选大。后果：跑不完，又变成 partially。缓解：候选判定「1–3 个 Phase、有真实使用者与下游」；选不出就记 blocked，不硬造。
+- 触发：盲评者看过写作会话或参与过任一包。后果：盲评失效。缓解：只给两份材料与五问，不给会话指针；记录盲评者身份与未参与声明。
+- 触发：端到端撞上 P12 未修完的缺陷。后果：红不是目标失败。缓解：P13-3 依赖 P12 先提交；若撞上，按真实原因记并回 P12，不把装置错当目标红。
+- 回滚：P13-1 可回退到旧 spec 副本；P13-3 失败保留原失败，不冒充绿；端到端任务材料由该任务 owner 处置，P13 不删不改。
+
+#### 9. 未决/消费者/证据
+- 未决：端到端用哪个任务——谁定：make-decision 主会话＋用户；何时定：P13-2 开工前；不答后果：P13-3、AC-P13-004/005/006 停在 blocked。
+- 未决：旧 spec 副本是否算新证据件——已按 AGENTS「证据只留原始件」定：只存一份同字节副本并记 sha256，不存目录快照；此条记录以防重复询问。
+- 未决：盲评者人选——谁定：用户；何时定：P13-4 前；不补后果：盲评只能由作者做，AC-P13-004 判不成立。
+- 消费者：build-plan 读 P13-1 的新 spec/phases；build-code 读 P13-3 的端到端回执；独立读者读 P13-4 盲评；收口读 P13-2 的选择理由。
+- 证据：`quality/evidence/decision-maker/p13/context.md` sha256 `59731e43083bec91038593159f9ac263d81ccbb00cfeddcb3dc489d5c149edfd`；当前 `spec.md` sha256 `70a08b4c20be879e5fb55b4091fd988947621408fb56e68dc367b45d17b21ee5`（未跟踪，`git ls-files --error-unmatch` 退 1）；`quality/evidence/build-plan/2026-11-25-007-coverage-gap-remediation.md` sha256 `7fbbe37deffcf57fef1bc3ea3f26401ae5ef1504ed3147d29d40bee73dca259d`。
+- 未取得：盲评原件、端到端红绿回执（原因：未开工）；P13 的 `phases/index.md` 与卡（尚未写）。
+
+#### 10. 配套与影响
+- 配套调整：`git add specs/delivery-quality-code-20261124/spec.md`（新材料入版本）；`quality/evidence/p13/spec-before-rewrite.md` 同字节副本；`phases/index.md` 与 `phases/P<n>-*.md` 新建；决策日志第 3 段包目录与第 5 段跨包共享在重写时同步（由 make-decision 主会话写）。
+- 配套迁移：旧八阶段大纲不迁移（被新 Phase 取代），旧字节留副本；`step-consumer-design.md` 继续作为义务声明，不删不改。
+- 配套移除：旧八阶段大纲文本从 spec 正文移除（保留在副本）；不删任何历史任务材料。
+- 影响范围：当前任务全部材料、端到端任务的四阶段、任务一二三归档保持只读；包 8–包 12 的句与机制在重写时被真实消费，是它们的第一个消费者。
+
 ## 5. 跨包共享
 
 ### 共享接口
@@ -952,5 +1679,7 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | 退役范围批准 | `quality/evidence/decision-log-refs/talk/2026-11-24-004-retirement.md` | `c21b7e9daecccb1f05f03be05de4407eee0d694142ae7d3f8175700c1226da97` | 核 8 条退役时 | 8 条与决定人 |
 | 范围缩减与复发口径 | `quality/evidence/decision-log-refs/talk/2026-11-24-005-scope-and-memory.md` | `91510881ee205a1db4fa727772c774379a3c0a54592d900e6bbc7fc348a99f4d` | 核 P4/P5 口径时 | U-026/U-027 |
 | R-027 范围更正 | `quality/evidence/decision-log-refs/talk/2026-11-25-002-r027-scope.md` | `ce061c2ac7024247092f9c1274197bb604a1be4c12907acc3d95cf3adc9ffc6c` | 核四载体范围时 | 用户原话 |
+| P8–P13 十项正文 | `quality/evidence/decision-log-refs/p8-p13-ten-items.md` | `b08c6434dd621b615542c584b515b09de30d2016a3fb8537773883779ef080ea` | build-plan 读 P8–P13 时 | 六包十项 |
+| P8–P13 最终设计 | `quality/evidence/decision-maker/final-p8-p13-design.md` | `ba467d665956b39105a6da8b27dd4f2f244d79e4b420ef1418c69e9062e70c0c` | 核字段级改动时 | 设计总表 |
 - 一件原件一行，只写一条路径；已有原件不复制、不搬移。
 - 原件缺失写清缺什么、影响哪项、谁补；安全工作继续。
