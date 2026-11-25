@@ -10808,6 +10808,28 @@
       ],
       "delete_condition": "R8 的角色与归并说明由经独立验证的替代正文完整承接，且四个阶段的真实读者改接后，由内核 owner 删除。",
       "retention_basis": "delivery-quality-plan-20261123 包 3 / AC-QUAL-016、AC-QUAL-017；只证协议正文与真实文件存在，审查独立性仍由实际执行原件与人读判断。"
+    },
+    {
+      "source": "tools/cli/rule-tables.mjs",
+      "destination": "tools/cli/rule-tables.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "规则表的建、锚点唯一、逐字副本检测；不写规则正文，不另立规范根。",
+      "owner": "规范结构维护者（P6 起承接）",
+      "consumer": "`skills/project-norm-init/SKILL.md`「规则的建与读」、`skills/norm-sync/SKILL.md` 第 4 步与 build-plan/build-code/build-prd 四个读点；`tools/cli/verify-structure.mjs` 导入 `deriveSlug` 作为仓内唯一 slug 算法。",
+      "module_consumers": [
+        "tools/cli/verify-structure.mjs"
+      ],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/norm-sync/SKILL.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/build-prd/SKILL.md",
+        "tests/contract/rule-tables.test.mjs"
+      ],
+      "delete_condition": "五列表不再是规则归属判据、四个读点与 norm-sync 改接其它已验证结构后，由规范结构维护者删除；不因当前无表而提前删。",
+      "retention_basis": "delivery-quality-code-20261124 P1 / AC-P1-001..007；只证建表、报缺、查重、参数守卫的能力，不证本仓域文件已建（P6）。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

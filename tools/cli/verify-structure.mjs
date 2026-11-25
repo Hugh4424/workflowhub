@@ -2,14 +2,11 @@
 // 结构验收脚本：机器校验 M1 交付物是否满足验收（F9 可证伪——故意删一条宪法/漏一个 checklist 项会真报错）。
 // 纳入 npm run check，与 markdownlint 一起构成"克隆后最小检查命令"。
 import { readFileSync, existsSync } from "node:fs";
+import { githubAnchorSlug } from "./rule-tables.mjs";
 
 const errors = [];
 const fail = (m) => errors.push(m);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
-
-// GitHub slug 规则：小写 → 删标点 → 空格转连字符（保留中文/字母数字/连字符）
-const ghSlug = (t) =>
-  t.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
 
 const EXPECTED_ARTICLES = 22;
 const DENYLIST = ["Wish","Dispatcher","harness","host","checkpoint","runtime","metering","observability","email-reply"];
@@ -34,7 +31,7 @@ else {
   const gotIds = new Set(titles.map((t)=>t.split(/\s/)[0]));
   for (const id of EXPECTED_IDS) if (!gotIds.has(id)) fail(`宪法缺编号 ${id}`);
   for (const id of gotIds) if (!EXPECTED_IDS.has(id)) fail(`宪法出现非预期编号 ${id}`);
-  titles.forEach((t) => slugSet.add(ghSlug(t)));
+  titles.forEach((t) => slugSet.add(githubAnchorSlug(t)));
   // split bodies
   const parts = con.split(/^### [FQS]\d+ .+$/m).slice(1);
   titles.forEach((t, i) => {
@@ -53,7 +50,7 @@ const chk = read("constitution-checklist.md");
 if (!chk) fail("constitution-checklist.md 不存在");
 else {
   // 按 checklist item 行逐条解析：每条恰好 1 个 CONSTITUTION.md 锚点，
-  // 且该锚点 === 该条标题的 ghSlug（逐条身份绑定，防 F1↔F2 互链仍集合相等的假绿）
+  // 且该锚点 === 该条标题的 githubAnchorSlug（GitHub 精确规则：不合并连续连字符）（逐条身份绑定，防 F1↔F2 互链仍集合相等的假绿）
   // Only the primary 22-item checklist is identity-checked here. The close
   // interpretation section intentionally repeats four constitutional items
   // as explanatory bullets and must not be counted as additional bindings.
@@ -70,7 +67,7 @@ else {
     if (!title) { fail(`checklist 某条无法解析标题：${line.slice(0, 30)}`); continue; }
     if (anchorsInLine.length !== 1)
       fail(`checklist [${title}] 须恰好 1 个宪法锚点，实际 ${anchorsInLine.length} 个`);
-    const want = ghSlug(title);
+    const want = githubAnchorSlug(title);
     if (anchorsInLine[0] !== want)
       fail(`checklist [${title}] 锚点应为 #${want}，实际 #${anchorsInLine[0]}（逐条对应错）`);
     if (!slugSet.has(want))
