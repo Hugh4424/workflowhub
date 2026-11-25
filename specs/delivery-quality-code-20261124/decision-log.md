@@ -1172,101 +1172,57 @@
 - 配套移除：无。理由：本包只加句与清单，不删旧节；受控替身的旧写法不删，只在新句里判不算。
 - 影响范围：三个技能、四阶段交接、本任务材料第 5 段；任务一二三归档只读；包 11 判词与包 12 D1 依赖本表。
 
-### 包 11：残余清单与独立收口
+### 包 11：残余与独立收口
 
 #### 1. 原始需求
-- 问题：任务三 9 项 incomplete 仍收口，AC-001 由唯一写者自判 pass（`closeout-report.md:7-8`、`:248`），交接清单漏 AC-016（同件自陈）；同一份收口里「尚未整体达成」与 13 项 pass 并列，读者无法判断哪条算数；`run-checks` 在 `chain_state=unverified`、`completion=3/10` 时仍退 0。
-- 来源①用户 2026-11-25：不能只交付登记；要真正验收（`p11/context.md`「原始需求与来源」）。
-- 来源②审计：`2026-11-25-005-task3-root-cause-audit.md` §3.4（收口把「没做成」记成「待补」）、§4 B2。
-- 来源③`p11/design-field.md`（残余清单与独立判词两句）。
-- 对应 R：R-011、R-012、R-027。
-- 用户可观察的坏处：收口报告读三遍也说不出「哪条已经真的完成」。
+- 问题：任务三收口时结论写“尚未整体达成”，但 close 仍完成；AC-001 由收口作者按当前字节自称“独立重判”改 pass；verdict 同时写 `conclusion:pass` 和 12 项未闭环 gaps，close 只读 pass 不读 gaps。来源：`closeout-report.md:8,15-16,22,248`；任务库 `verdict.json`；`close-claims-readback`。
+- 对应 R：R-032。
+- 坏处：没做完也能收口成完成；AC 改判可以自签；残余写了没人消费。
 
 #### 2. 最初方案
-- 一开始想怎么做：在收口报告里加一张「残余清单」表，并让 `check-stage-steps` 扫这张表（新机检）。谁否：设计角色自查否（报告是自由文本，扫表只能靠关键词，等于关键词门）；用户 2026-11-25 否「只登记」（同第 1 项来源①）。为什么否：语义判断做不成表扫描，且「全 incomplete」要人读才知道哪些算 incomplete。
-- 次初：新建一个 `verdict.json` 判决器。查到仓库已有 `runtime/task/delivery-claims.mjs`（`VERDICT_REF = quality/evidence/verdict.json`，schema `delivery-verdict.v1`，signer≠author、材料指纹、gate ref、下游 close readback），遂不新建（第 4 项事实）。
+- 一开始想在 Phase 卡 Done/覆盖上限加残余清单；被否：卡片不拥有收口语义，且 P8-2 已在“下一消费者”加残余，重复写会双写。
 
 #### 3. 发散与被否
-- 备选 A（选）：残余清单三字段落 `phase-template.md`；`Done` 两禁语；收口检查引用既有 `check-delivery-claims`；B1–B4 回原决定人。代价＝改 3 份技能/模板、加一条收口命令。
-- 备选 B（否）：新写判决器扫 closeout 的 AC 表，全 incomplete 自动拒。代价＝新 CLI＋新表格式＋历史报告迁移。否，理由：closeout 是自由文本，扫表只能靠关键词；「全 incomplete」是语义判断（哪条算 incomplete 要人读）。
-- 备选 C（否）：把残余清单做成 `residuals.json` 台账。代价＝新持久对象＋迁移＋第二账本。否，理由：AGENTS 禁新增第二账本；残余是每 Phase 卡的字段，不是全局台账。
-- 备选 D（否）：只改审查问句「有没有残余」。代价＝两行。否，理由：任务三 9 项 incomplete 是作者自己写的，问句不缺，缺的是「写了 incomplete 也能收口」的代价。
-- 被否完整理由：`p11/design-field.md`「验收」「边界」；主文一句：扫描判决器、残余台账、只改问句三条都不成立。
+- A（选）：收口按“结论未达成或 gaps 非空→拒收”，AC 改判要独立判词且覆盖 closeout/AC 表；残余复用 P8-2 一句。
+- B（否）：只在卡模板加“不得收口”——卡片不拥有收口语义，造第二权威。
+- C（否）：新建 residual 台账——违“不新建账本”。
+- D（否）：靠人读——任务三已证明人读会放行。
 
 #### 4. 调研
-- 事实：`quality/evidence/verdict.json` 已是收口的第三种交付声明，schema `delivery-verdict.v1`，字段 `task_id`/`stage`/`conclusion`/`signer.identity`/`reviewed.material_sha256`/`reviewed.gate_ref{ref,sha256}`（`runtime/task/delivery-claims.mjs:499-521`）。
-- 事实：signer 属实现作者时拒（`:514-516`，authors 集合取自 facts 与提交 author）；签后材料字节变化拒（`:512`）；没有下游 close readback 拒（`:383`）。
-- 事实：`tools/cli/check-delivery-claims.mjs` 是只读入口，退 1 条件正是上面三类，命令形如 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。
-- 事实：`skills/stage-close/SKILL.md` 收口前从 `quality/evidence/gate-results/` 读三种交付声明，`DELIVERY_CLAIMS_REJECTED` 拒绝本次收口（该文件收口段原文）。
-- 事实：`skills/spec-plan/templates/phase-template.md` 的「覆盖上限／显式不覆盖」与契约头 `Done` 目前没有残余清单字段（:516-517、:132）。
-- 假设 H1：加残余三字段就会写。推翻条件：三张真卡只写「无」而无到期与关闭动作。
-- 假设 H2：全 incomplete 收口能被机检。推翻条件：closeout 报告不是结构化材料，机检要么建表要么扫关键词（两条都被第 3 项否掉）。
-- 哪些事实改变了方向：①「已有 verdict.json 与 check-delivery-claims」→ 不新建判词权威，只引用；②「全 incomplete 只能人读」→ 落文本判据＋独立判词，不造机器门；③「任务一二三冻结」→ B1–B4 只回原决定人，不在本包自决。
-- 原始材料：`p11/design-field.md`、`p9/design-adaptive-p9-p11.md` §5、`final-p8-p13-design.md`、审计 005（sha256 见第 9 项）。
+- `runtime/task/delivery-claims.mjs:499-516` 只认 `verdict.conclusion==="pass"`，不读 gaps；`stage-close:120,138` 已要求 close 读 verdict、作者签字即拒；`core/task-close.mjs:937` 在 Git 动作前跑。
+- `verdict.material_sha256` 只覆盖 spec/index/phases，不覆盖 closeout-report 和 AC 表。
+- 任务三 13 pass/9 incomplete/1 inconclusive/2 deferred，结论“尚未整体达成”，close 仍完成。
 
 #### 5. 最终决定
-- 选了什么：备选 A，三条 P11-1…P11-3。
-  - P11-1 `skills/spec-plan/templates/phase-template.md`：「覆盖上限」段后加 `残余清单：<剩余失败｜owner｜到期或关闭动作>`（一行一条，三条齐）；契约头 `Done` 定义处加 `残余未闭合不得写 done；全 incomplete 不得收口成 pass。`
-  - P11-2 `skills/phase-maker/SKILL.md`「失败与边界」加同一句；`skills/stage-close/SKILL.md` 收口段加：收口前跑 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`，退 1 不得收口；全 incomplete 由独立判词判不成立，不写 pass。
-  - P11-3 判词口径：沿用 `quality/evidence/verdict.json` 的 `delivery-verdict.v1`，不新建字段；AC 改判只认 `signer.identity` 不在写者集合、`reviewed.material_sha256` 等于当前材料、`reviewed.gate_ref` 指向当前 gate 原件的判词；自判报告降级为历史记录。
-- 为什么：残余三字段让「还剩什么、谁接、何时关」有固定位置；两条禁语把「写了 incomplete 也能收口」这条路堵上；判词不新建权威，直接消费已有 `verdict.json` 与只读入口，机器能拦的三类（无判词、判者＝写者、材料字节变）已经现成。
-- 代价：改 3 份技能/模板、加一条收口命令；任务三归档若再收口会被拒（它的自判不作为通过依据）；本任务自己收口也必须先有独立判词。
-- 跨包编号：P11-1/P11-2 与包 8、包 10 共碰 `phase-template.md`、`phase-maker/SKILL.md`；P11-3 被包 12 D1 与包 13 盲评消费；B1–B4 与包 9 未决（用户确认原件）、包 12 blocked 共用同一批决定人。
-- 承诺：必须｜AC 改判只认署名独立判词，判者≠写者，带原件与 sha256；自判不作通过依据｜R-011。
-- 承诺：必须｜全 incomplete 不得收口成 pass；残余未闭合不得写 done｜用户 2026-11-25。
-- 承诺：必须｜任务一二三冻结缺口保持 open，不冒充 pass｜R-027。
-- 承诺：允许｜残余清单写「无」但必须附理由（例如「本 Phase 无未闭环项，原因：所有判据均有原件」）。
-- 承诺：本次不做｜不新建判词 schema、判决器或残余台账。
-- 承诺：本次不做｜不改 `specs/archive/**` 的归档字节（任务三 closeout 的自判行只读保留，只标记不作通过依据）。
-- 承诺：待定｜B1 回执硬门、B2 AC 改判与签字人、B3 真实周期取证、B4 wh-review detail 同步｜未答：原决定人未答；负责人：`docs/standard-workflow.md` 质量段 owner、用户、各任务 owner、wh-review 合同 owner；恢复条件：四项各自答复原件到位（B1 另见包 9 未决）。
-- 派生建议：残余清单可与包 10 的 blocked 表用同一套 owner 名字（作者推断，不支撑承诺）。
-- 被否方案：新判决器扫 AC 表（理由见第 3 项 B）。
+- P11-1：`stage-close` 收口条件加“conclusion 必须是达成、gaps 必须为空；否则拒收，不进入物理收口”。
+- P11-2：AC 改判的独立判词必须带 `material_sha256` 覆盖 closeout-report 与 AC 表；判者≠写者；自判报告不作依据。
+- P11-3：残余复用 P8-2 的“下一消费者”句，不另写一份。
+- 承诺：必须｜结论未达成或 gaps 非空不得收口｜R-032；必须｜AC 改判只认署名独立判词｜R-032；本次不做｜不新建 residual 台账；待定｜B1–B4 回原决定人。
 
 #### 6. 完整方案
-- 接口/行为：
-  - 残余清单固定三行格式：`残余：<剩余失败>`、`owner：<谁>`、`到期或关闭动作：<何时、什么条件下复核，满足什么转 pass 或转 deferred>`；缺任一判未完成。
-  - `Done` 三态：可写 done（无残余或残余有到期且不影响本 Phase 判据）；不得写 done（仍有本 Phase 自己的 incomplete）；写 done 但列残余（残余属下一 Phase 或跨包，逐条给 owner）。
-  - 判词文件路径固定 `quality/evidence/verdict.json`；命令 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`；退 1 三类原因原文见第 4 项事实。
-- 数据与状态：残余清单是卡内三行散文，不落 JSON；`verdict.json` 已存在，本包不改 schema、不改字段；不新增第二账本。
-- 依赖与顺序：P11-1/P11-2 文本可并行 → P11-3 判词（依赖包 10 blocked 表与包 12 D1 的独立原件）→ 收口命令接线。
-- 唯一 writer：P11 实现者；`runtime/task/delivery-claims.mjs` 与 `tools/cli/check-delivery-claims.mjs` 只读。
-- 写集（指针模式，摘要待索引行建立后写）：
-
-| 文件 | 改什么 | 工作包 | 决定 |
-| --- | --- | --- | --- |
-| `skills/spec-plan/templates/phase-template.md` | 「覆盖上限」后加残余三行；`Done` 定义处加两条禁语 | P11 | P11-1 |
-| `skills/phase-maker/SKILL.md` | 「失败与边界」加同一句禁语与残余要求 | P11 | P11-2 |
-| `skills/stage-close/SKILL.md` | 收口段加 `check-delivery-claims` 命令与「退 1 不得收口」 | P11 | P11-2 |
-| `skills/decision-log/templates/decision-log-template-v2.md` | 本包不改（理由：P1–P7 十项正文已按现模板写，改模板会连带既有正文与解析器） | P11 | — |
+- 接口：`stage-close` 读 `verdict.conclusion` 与 `gaps`；`delivery-claims` 增“conclusion≠达成或 gaps 非空→DELIVERY_CLAIMS_REJECTED”；AC 表 hash 进 `material_sha256`。
+- 数据与状态：不新增 schema；复用现有 verdict/gaps。
+- 依赖与顺序：P8 先写残余句；P11 只改 close/claims。
+- 唯一 writer：P11 实现者。
+- 写集：`skills/stage-close/SKILL.md`、`runtime/task/delivery-claims.mjs`、`core/task-close.mjs`、`tests/contract/delivery-claims-gaps.test.mjs`。
 
 #### 7. 验收
-- 判据 AC-P11-001（残余三字段）：来源 R-011。检查：打开一张新 Phase 卡「覆盖上限」后的残余清单，每行有剩余失败、owner、到期或关闭动作。期望：三条齐；反例：写「无」但没有理由。谁验何时验：独立读者，新卡出卡后。证据：`quality/tests/p11-residual.md`。不检查：旧卡（只对 P11 之后新写的卡要求）。
-- 判据 AC-P11-002（Done 禁语）：来源用户 2026-11-25。检查：仍有本 Phase incomplete 的卡 `Done` 写 done → 判失败；全 incomplete 的收口判 pass → 判失败。期望：两条都拦下；反例：任务三现状（9 项 incomplete 收口）即反例。谁验何时验：独立读者对照任务三 closeout 真实件。证据：`quality/tests/p11-done-negative.md`。不检查：不重判任务三每条 AC。
-- 判据 AC-P11-003（判词可拦自判）：来源 R-011、审计 B2。命令 `node tools/cli/check-delivery-claims.mjs --task-path=<任务三任务根>`，期望退 1 并报 `accepted: no independent signature original exists at quality/evidence/verdict.json`；再造一份 signer＝写者的 `verdict.json` → 退 1 报 `the signer is one of the implementation authors`；反例（必须也退 1）：signer 独立但材料字节变 → 报材料指纹不符。谁验何时验：独立执行者，P11 提交后。证据：`quality/tests/p11-verdict-negative.output`。不检查：不判判词内容对不对（人读）。
-- 判据 AC-P11-004（冻结缺口保持 open）：来源 R-027。检查：本决策日志与收口报告不把任务一二三任一条 incomplete 写成 pass；B1–B4 逐条有 owner 与恢复条件。期望：无一条改判无判词；反例：任一条改判无判词。谁验何时验：独立读者，P11 提交后。证据：`quality/tests/p11-frozen-gaps.md`。
-- 命令或检查：`node tools/cli/check-delivery-claims.mjs --task-path=<任务>`（三类退 1 各跑一次）。
-- 谁验、何时验：独立执行者跑命令；独立读者判 Done 与残余；时点在包 12 的 D1 之前。
-- 证据放哪：`quality/tests/p11-*`（尚未产生 → 未取得，原因：P11 未开工）。
-- 这条不检查什么：不检查残余清单写得是否深刻；不检查任务一二三历史收口的文字对错；不要求每张旧卡补残余。
+- AC-P11-001：任务三“结论未达成仍收口”回放，close 必须拒收；反例：只看物理范围。
+- AC-P11-002：AC-001 自判报告必须拒；独立判词且 sha 覆盖 closeout/AC 表才过。
+- AC-P11-003：残余只存在 P8-2 一处；Phase 卡不再重复。
+- 证据：`quality/tests/p11-close-gaps.output`、`p11-ac-signature.md`。
 
 #### 8. 风险/回退
-- 触发：把「全 incomplete 不得 pass」当成机器门去改 closeout 解析。后果：要建 AC 表结构，等于新增材料格式。缓解：只落文本判据＋既有 verdict 机制；机器部分只跑 `check-delivery-claims`。
-- 触发：残余清单变成新的必填字段，旧卡全红。后果：历史卡被判不完整。缓解：只对 P11 之后新写的卡要求；旧卡保持只读（AC-P11-001 只判新卡）。
-- 触发：判词成为新的签字仪式（有人代签）。后果：又回到自判。缓解：signer 必须不在写者集合（`delivery-claims.mjs:514-516` 已机器判），且材料字节变化即失效（`:512`）。
-- 回滚：三处文本一次回退；`verdict.json` 机制本就在，无需回退；收口命令可单独去掉。
+- 触发：close 误拒；缓解：只用 conclusion/gaps 两个既有事实；回滚：还原 stage-close/claims 一处。
 
 #### 9. 未决/消费者/证据
-- 未决 B1–B4（回原决定人，逐条见第 5 项承诺待定）；其中 B1 的用户确认原件与包 9 未决同源，未取得原因相同。
-- 未决：任务三 closeout 的自判行是否标注「只读、不作通过依据」——谁定：任务三 owner 与用户；何时定：本任务收口前；不补后果：读者仍可能引用 `:8` 的「本报告重判」。
-- 消费者：build-code 收口读 P11-2 命令；独立判词读者读 P11-3 口径；包 12 D1 读同一口径写新独立原件；包 13 盲评读「全 incomplete 不得 pass」判旧版。
-- 证据：`quality/evidence/decision-maker/p11/design-field.md` sha256 `b802cc142e74e7ac2c5230d03559a4e06cd98a0335c5baeba8d83d82946ef63e`；`final-p8-p13-design.md` sha256 `ba467d66…`（同包 8）；审计 005 sha256 `32665ad7…`（同包 8）；`runtime/task/delivery-claims.mjs` 的字段与行位为本稿实读（未计 sha256）。
-- 未取得：任务三的独立 `verdict.json`（从未产生，原因：写者自判）；`quality/tests/p11-*`（P11 未开工）。
+- 未决：B1–B4 回原决定人。
+- 消费者：stage-close、delivery-claims、独立签字人。
+- 证据：closeout/verdict/readback refs；未取得：独立签字人名单。
 
 #### 10. 配套与影响
-- 配套调整：`skills/stage-close/SKILL.md` 收口段加一条命令与一句话；`docs/standard-workflow.md` 质量段（B1 owner）本包不改，等答复；`skills/decision-log/templates/decision-log-template-v2.md` 不改（理由见写集表）。
-- 配套迁移：无持久 schema 变更；任务三归档字节不动。
-- 配套移除：无。理由：不删任务三 closeout 的自判行（归档冻结），只标记不作通过依据。
-- 影响范围：所有新 Phase 卡的 `Done` 与残余、四阶段收口命令、独立判词口径；包 12 的 D1 与包 13 的盲评依赖本包口径。
+- 配套调整：stage-close、delivery-claims、task-close、契约测试。
+- 迁移：无；移除：无；影响：收口执行者、独立签字人、任务一二三复核。
 
 ### 包 12：任务一二三低质量交付修复（P12a／P12b／P12c 三个子 Phase）
 
@@ -1436,108 +1392,56 @@
 ### 包 13：当前任务重写与独立任务端到端设计（真实执行归 build-code）
 
 #### 1. 原始需求
-- 问题：当前 `specs/delivery-quality-code-20261124/spec.md` 是旧标准的中间产物——1583 行、八阶段大纲（「八个阶段，前七个对应七个包，第八个是唯一末验」）、`phases/` 目录不存在、`git ls-files` 不含该文件（工作区未跟踪）；材料检查唯一剩余红是 `phases/index.md content is required`。用当前任务自己当实验，等于写者验写者，无法证明新标准更好。
-- 来源①用户 2026-11-25：P13 不要用当前任务做测试；当前任务必须按新标准写 spec/phases；另选其他任务做端到端；要能证明和比较新版比旧版质量高（`p13/context.md`「原始需求与来源」）。
-- 来源②`p13/context.md`「已有事实」（spec 现状、任务一二三归档冻结）。
-- 来源③任务三 P4/P8 的失败形态（旧卡顶新卡、门绿而核心 AC 未完成），是新旧对比的现成对照。
-- 对应 R：R-027、R-011（真实入口、边做边验）、R-012。
-- 用户可观察的坏处：重写完成后没人能说清「新版哪里比旧版强」，只有作者自称；端到端没有真实使用者，退化成演练。
+- 问题：当前 spec 是旧标准中间产物（1583 行、八阶段大纲、无 phases）；任务一二三归档冻结，不能当实验；端到端任务未选。用户 2026-11-25：当前是决策阶段，不直接测试，build-code 再真实执行。来源：`p13/context.md`；用户原话。
+- 对应 R：R-033、R-027、R-011、R-012。
+- 坏处：拿当前任务当实验是写者验写者；现在跑端到端会假装已验。
 
 #### 2. 最初方案
-- 一开始想怎么做：把当前任务当端到端试验田——用新标准重写自己的 spec/phases，再让 build-code 按新卡开工，用自己的交付证明新标准有效。
-- 谁否：用户 2026-11-25 明确否（原文见第 1 项来源①）。
-- 为什么否：写者＝被验者，任何结论都是自证；当前任务的材料已被写作过程污染（本决策日志本身就是在旧标准下写的），拿它当样本分不清「标准好」还是「作者熟」。
+- 一开始想现在重写当前 spec、跑端到端、做盲评；被用户否：阶段错，真实执行归 build-code。
 
 #### 3. 发散与被否
-- 备选 A（选）：当前任务只重写自己的 spec/phases（不拿自己当实验）＋另选一个小型真实任务做端到端＋新旧盲评五问。代价＝多一个任务、两份证据。
-- 备选 B（否）：只重写当前任务，不做独立任务。代价＝省一个任务。否，理由：无法回答「新版更好」，重写质量仍由写者自评。
-- 备选 C（否）：拿任务一二三归档当端到端对象。代价＝现成材料、范围已知。否，理由：归档冻结、不能改；重跑等于改历史判据。
-- 备选 D（否）：新建一个纯造的小任务。代价＝可控、快。否，理由：没有真实使用者与真实下游，端到端退化成演练（包 10 已定替身不算）。
-- 被否完整理由：`p13/context.md`「前序决定与边界」；主文一句：只重写自己、拿归档、纯造任务三条都不成立。
+- A（选）：只做设计——当前任务重写方案、独立任务选择标准、build-code 执行计划、盲评计划。
+- B（否）：现在重写 spec/phases——build-plan 的活，不是 make-decision。
+- C（否）：现在跑端到端/盲评——build-code 的活。
+- D（否）：拿当前任务/归档当实验——写者验写者/冻结。
 
 #### 4. 调研
-- 事实：当前 `spec.md` 1583 行、八阶段大纲；`specs/delivery-quality-code-20261124/` 下只有 `decision-log.md`、`spec.md`、`step-consumer-design.md`，无 `phases/`。
-- 事实：`spec.md` 未被 git 跟踪（`git ls-files --error-unmatch` 退 1），当前 sha256 `70a08b4c20be879e5fb55b4091fd988947621408fb56e68dc367b45d17b21ee5`。
-- 事实：材料检查唯一剩余红是 `phases/index.md content is required`（`2026-11-25-007-coverage-gap-remediation.md`「现状态」），该文自述「这条红是 build-plan 未完成的正常状态」。
-- 事实：任务一二三在 `specs/archive/` 且冻结（`p12/context.md:13`）。
-- 事实：候选小型任务尚未定，是 `p13/context.md`「开放问题」第一条。
-- 假设 H1：重写自己的 spec 就能达到新标准。推翻条件：独立读者按新卡仍写不出首改路径。
-- 假设 H2：新旧对比可以只比字数与字段数。推翻条件：任务三字段齐全却 9 项 incomplete——对比必须用五问答不答得出。
-- 哪些事实改变了方向：①「当前 spec 未跟踪」→ 重写前先入版本，否则新材料没有版本事实；②「材料检查红是正常状态」→ 重写验收要把这条红转绿；③「归档冻结」→ 端到端只能另选任务；④「盲评必须未参与写作」→ 盲评者不能是本任务任何一包的写者。
-- 原始材料：`p13/context.md`、`2026-11-25-007-coverage-gap-remediation.md`、`final-p8-p13-design.md`、当前 `spec.md` 字节（sha256 见第 9 项）。
+- 当前 spec 1583 行、sha256 `70a08b4c…`、未跟踪、无 phases；材料检查红 `phases/index.md content is required`。
+- 任务一二三归档冻结；候选小型任务未定；P8–P12 尚未实施，P13-3 依赖它们。
+- 五问原文需进 P13 正文（根因/映射/反例/需求回指/被否替代）。
 
 #### 5. 最终决定
-- 选了什么：备选 A，四条 P13-1…P13-4。
-  - P13-1 当前任务重写：按 P8–P11 的新标准重写 `spec.md`（八阶段大纲换成按能独立验收的结果切 Phase），每张 Phase 卡走 phase-maker 八步，落 `phases/index.md` 与 `phases/P<n>-*.md`；重写前把旧字节存一份副本，重写后 `git add` 并入版本。
-  - P13-2 另选小型真实任务：范围小（1–3 个 Phase）、有真实使用者与真实下游、能跑新旧对比；候选与选择理由写进材料；不碰任务一二三归档与任务五至八。
-  - P13-3 端到端执行设计：本阶段不真跑；写清 build-code 要跑的四阶段命令、原失败复现、红→绿期望、证据路径、执行者、时点；真实执行归 build-code，make-decision 不冒充已验。
-  - P13-4 新旧盲评设计：本阶段不真盲评；写清盲评者条件（未参与写作）、五问、旧版/新版材料、证据路径、执行时点；真实盲评在 build-code 后执行。
-- 为什么：当前任务重写解决「材料还是旧标准」；独立任务解决「谁来证明新版更好」；盲评五问解决「证明方式不能是作者自述」。
-- 代价：多一个任务的材料与执行；当前 spec 需整体重写（旧字节留副本）；盲评要等两位未参与写作者。
-- 跨包编号：P13-1 消费包 8 的五句与七步、包 9 的生产者、包 10 的 blocked 表、包 11 的判词口径；P13-3 依赖包 12 修完（否则端到端会撞同一批旧缺陷）；P13-4 与包 11 的「全 incomplete 不得 pass」共用判据。
-- 承诺：必须｜当前任务按新标准重写 spec/phases，不拿自己当实验｜用户 2026-11-25。
-- 承诺：必须｜另选小型真实任务并写清端到端执行计划（命令/原失败/红绿期望/证据/执行者/时点）；真实执行归 build-code｜用户 2026-11-25、R-011。
-- 承诺：必须｜新旧盲评五问由未参与写作者判，不看字数与字段数｜R-011、R-012。
-- 承诺：允许｜端到端只到 build-code 第 3 步（最小实现），不要求跑完整阶段。
-- 承诺：本次不做｜不拿任务一二三归档当实验对象，不改归档字节；不在 make-decision 真跑端到端或真盲评。
-- 承诺：本次不做｜不用当前任务做端到端实验对象。
-- 承诺：待定｜端到端用哪个任务｜未答：候选未定；负责人：make-decision 主会话＋用户；恢复条件：候选满足「1–3 个 Phase、有真实使用者与真实下游」并被用户确认。
-- 派生建议：盲评五问的答案可由两位盲评者各写一份，分歧处单列（作者推断，不支撑承诺）。
-- 被否方案：拿当前任务当试验田、拿归档当对象、纯造任务（理由见第 3 项）。
+- P13-1 当前任务重写设计：写清目标结构（FR→AC→Phase→oracle）、每张 Phase 卡五节、phase-maker 八步、旧 spec 副本；**不现在写 spec/phases**。
+- P13-2 独立任务选择：1–3 个 Phase、有真实使用者证据（谁用、怎么用）、能新旧对比；候选未定写未决+owner，不自选。
+- P13-3 build-code 执行计划：六项模板（命令/原失败/红绿期望/证据/执行者/时点）；任务未定则内容留空并标 blocked，不冒充。
+- P13-4 盲评计划：五问原文、盲评者条件、旧/新版本、证据、时点；现在不盲评。
+- 承诺：本次不做｜不重写 spec/phases、不跑端到端、不盲评；必须｜计划可交接；待定｜独立任务候选。
 
 #### 6. 完整方案
-- 接口/行为：
-  - 新 `spec.md` 结构固定：需求→FR→AC→Phase→oracle 追踪表；每 Phase 一节「这一 Phase 交出什么」（含 P8-2 的两句）、「这一 Phase 怎么验收」（六件＋P9-2 的落点句）、「每个文件由谁改」（NEW/MODIFY/DO NOT TOUCH）、「下一消费者拿什么继续」（含 P8-2 的残余句）、「覆盖上限＋残余清单」（P11-1）。
-  - `phases/index.md` 纯指针：只导航、不承载正文、命令、验收或进度权威；每行写 Phase 名、写集、依赖、下游读者。
-  - 端到端四阶段的产物按各阶段既有要求，不新增材料格式；每步落 `facts.jsonl#<slot>`（P9-3 生产者）。
-  - 盲评记录格式：五问各一段，每段写「新版怎么答／旧版怎么答／证据在哪」，末段写「新版在哪个包能具体回答、旧版在哪个包失败、死在第几问」。
-- 数据与状态：旧 `spec.md` 字节存一份副本（同字节即同一事实，不存目录快照）；新 spec 入 git；`phases/` 新建；端到端任务的材料归该任务自己的 writer。
-- 依赖与顺序：P13-1 依赖 P8/P9/P10/P11 的句与生产者先落地；P13-2 依赖候选确认；P13-3 依赖 P12 修完；P13-4 在 P13-3 之后。
-- 唯一 writer：P13 实现者写本任务材料与证据；端到端任务的材料由该任务的 make-decision/build-plan writer 写，P13 只写自己的证据，不改对方材料。
-- 写集（指针模式；材料写集按 `phases/index.md` 的 Execution Index 行）：
-
-| 文件 | 改什么 | 工作包 | 决定 |
-| --- | --- | --- | --- |
-| `specs/delivery-quality-code-20261124/spec.md` | 按新标准整体重写（八阶段大纲换成按可独立验收的结果切 Phase） | P13 | P13-1 |
-| `specs/delivery-quality-code-20261124/phases/index.md` | 新建纯指针索引 | P13 | P13-1 |
-| `specs/delivery-quality-code-20261124/phases/P<n>-*.md` | 新建 Phase 卡，每张走 phase-maker 八步 | P13 | P13-1 |
-| `quality/evidence/p13/spec-before-rewrite.md` | 重写前旧 spec 同字节副本＋sha256 | P13 | P13-1 |
-| 端到端任务的材料（该任务 `specs/<task-id>/`） | 由该任务 writer 按四阶段写，P13 只读 | 端到端任务 | P13-2、P13-3 |
-| `quality/tests/p13-blind-review.md` | 两位盲评者的五问记录 | P13 | P13-4 |
-| `quality/tests/p13-e2e-red-green.output` | 端到端原失败与修复后的命令输出 | P13 | P13-3 |
+- 写集只含设计件：`quality/evidence/p13/rewrite-plan.md`、`candidate-research.md`、`e2e-plan.md`、`blind-plan.md`；不含 spec/phases/e2e 输出。
+- 数据：旧 spec 副本只作设计输入；不新增 schema。
+- 依赖：P13-3 依赖 P8–P12 落地；未落地写 blocked+恢复条件。
+- 唯一 writer：P13 作者。
 
 #### 7. 验收
-- 判据 AC-P13-001（当前任务 spec 按新标准重写）：来源 R-027、用户 2026-11-25。检查：新 spec 有 FR→AC→Phase→oracle 追踪；每个 Phase 卡有「交出什么／怎么验收／谁改／下一消费者／覆盖上限＋残余」；索引非空且每行可回读。期望：五项都在；反例：仍是八阶段大纲，或卡里写「见 spec」。谁验何时验：没参与写作的读者，P13-1 提交前。证据：`quality/tests/p13-spec-rewrite.md`。不检查：不判设计好坏（P13-4 判）。
-- 判据 AC-P13-002（材料检查红转绿）：来源 R-012。命令 `node tools/cli/run-checks.mjs --task-path=<当前任务根>` 与 `node tools/cli/check-stage-steps.mjs --stage=build-plan --step=11 --task-path=<当前任务根> --material-root=<材料根> --json`。期望：`phases/index.md content is required` 消失；反例：索引是空文件。谁验何时验：独立执行者，P13-1 提交后。证据：`quality/tests/p13-materials-check.output`。不检查：不判内容深度。
-- 判据 AC-P13-003（端到端执行计划完整，不要求现在红绿）：来源用户 2026-11-25、R-011。检查：计划写清 build-code 要跑的命令、原失败复现、红→绿期望、证据路径、执行者、时点；`--read-step-skill` 何时取也写清。期望：六项都在；反例：只写“到时跑一下”。谁验何时验：独立读者，P13 设计提交前。证据：`quality/tests/p13-e2e-plan.md`。不检查：不要求现在真跑，不判业务价值。
-- 判据 AC-P13-004（盲评计划完整）：来源 R-011、R-012。检查：计划写清盲评者条件、五问、旧版/新版材料、证据路径、执行时点。期望：五项都在；反例：只写“找两个人看”。谁验何时验：独立读者，P13 设计提交前。证据：`quality/tests/p13-blind-plan.md`。不检查：不要求现在盲评，不统计字数/字段数。
-- 判据 AC-P13-005（下游首用计划完整）：来源 R-011。检查：计划写清 build-code 哪个执行者、按哪张卡、第一步读什么/改什么、留什么回执。期望：四项都在；反例：写“由下游自行开工”。谁验何时验：独立读者，P13 设计提交前。证据：`quality/tests/p13-first-use-plan.md`。不检查：不要求现在真开工。
-- 判据 AC-P13-006（不拿归档与自己当实验）：来源用户 2026-11-25。检查：端到端对象既不是任务一二三，也不是当前任务。期望：对象是第三个任务；反例：任一即失败。证据：`p13-blind-review.md` 首段。
-- 命令或检查：上面两条命令＋grep 检查（`git ls-files --error-unmatch specs/delivery-quality-code-20261124/spec.md` 应退 0）。
-- 谁验、何时验：P13-1 由独立读者、P13-2/003/005 由独立执行者、P13-4 由两位盲评者。
-- 证据放哪：`quality/tests/p13-*`、`quality/evidence/p13/`（尚未产生 → 未取得，原因：P13 未开工）。
-- 这条不检查什么：不检查端到端任务的实现质量；不检查本任务历史材料；不新建判据表。
+- AC-P13-001：重写设计完整（目标结构/五节/八步/旧副本路径）；不要求现在写。
+- AC-P13-002：独立任务选定，或未决+owner+恢复条件；候选标准可核。
+- AC-P13-003：执行计划六项模板齐；未选任务时标 blocked，不写假命令。
+- AC-P13-004：盲评计划五项齐、五问原文在正文；不要求现在盲评。
+- AC-P13-005：写集只有设计件，无 spec/phases/e2e 输出。
+- 证据：`quality/tests/p13-plan-review.md`。
 
 #### 8. 风险/回退
-- 触发：重写后旧 spec 字节丢失。后果：无法对比新旧。缓解：重写前存副本并记 sha256；副本只存一份，不存目录快照。
-- 触发：端到端任务选大。后果：跑不完，又变成 partially。缓解：候选判定「1–3 个 Phase、有真实使用者与下游」；选不出就记 blocked，不硬造。
-- 触发：盲评者看过写作会话或参与过任一包。后果：盲评失效。缓解：只给两份材料与五问，不给会话指针；记录盲评者身份与未参与声明。
-- 触发：端到端撞上 P12 未修完的缺陷。后果：红不是目标失败。缓解：P13-3 依赖 P12 先提交；若撞上，按真实原因记并回 P12，不把装置错当目标红。
-- 回滚：P13-1 可回退到旧 spec 副本；P13-3 失败保留原失败，不冒充绿；端到端任务材料由该任务 owner 处置，P13 不删不改。
+- 把“计划完整”当已验；用 build-code 回执/盲评结果才最终通过；现在只判可交接。
 
 #### 9. 未决/消费者/证据
-- 未决：端到端用哪个任务——谁定：make-decision 主会话＋用户；何时定：P13-2 开工前；不答后果：P13-3、AC-P13-004/005/006 停在 blocked。
-- 未决：旧 spec 副本是否算新证据件——已按 AGENTS「证据只留原始件」定：只存一份同字节副本并记 sha256，不存目录快照；此条记录以防重复询问。
-- 未决：盲评者人选——谁定：用户；何时定：P13-4 前；不补后果：盲评只能由作者做，AC-P13-004 判不成立。
-- 消费者：build-plan 读 P13-1 的新 spec/phases；build-code 读 P13-3 的端到端回执；独立读者读 P13-4 盲评；收口读 P13-2 的选择理由。
-- 证据：`quality/evidence/decision-maker/p13/context.md` sha256 `59731e43083bec91038593159f9ac263d81ccbb00cfeddcb3dc489d5c149edfd`；当前 `spec.md` sha256 `70a08b4c20be879e5fb55b4091fd988947621408fb56e68dc367b45d17b21ee5`（未跟踪，`git ls-files --error-unmatch` 退 1）；`quality/evidence/build-plan/2026-11-25-007-coverage-gap-remediation.md` sha256 `7fbbe37deffcf57fef1bc3ea3f26401ae5ef1504ed3147d29d40bee73dca259d`。
-- 未取得：盲评原件、端到端红绿回执（原因：未开工）；P13 的 `phases/index.md` 与卡（尚未写）。
+- 未决：独立任务候选、盲评者、执行时点；owner=主会话+用户。
+- 消费者：build-plan/build-code 执行者。
+- 证据：p13 context/当前 spec；未取得：候选任务、盲评者。
 
 #### 10. 配套与影响
-- 配套调整：`git add specs/delivery-quality-code-20261124/spec.md`（新材料入版本）；`quality/evidence/p13/spec-before-rewrite.md` 同字节副本；`phases/index.md` 与 `phases/P<n>-*.md` 新建；决策日志第 3 段包目录与第 5 段跨包共享在重写时同步（由 make-decision 主会话写）。
-- 配套迁移：旧八阶段大纲不迁移（被新 Phase 取代），旧字节留副本；`step-consumer-design.md` 继续作为义务声明，不删不改。
-- 配套移除：旧八阶段大纲文本从 spec 正文移除（保留在副本）；不删任何历史任务材料。
-- 影响范围：当前任务全部材料、端到端任务的四阶段、任务一二三归档保持只读；包 8–包 12 的句与机制在重写时被真实消费，是它们的第一个消费者。
+- 配套：当前 spec/phases（未来 build-plan 写）、独立任务材料（未来 build-code 写）、计划件。
+- 迁移/移除：无；影响：build-plan/build-code 执行者。
 
 ## 5. 跨包共享
 
