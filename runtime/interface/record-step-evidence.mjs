@@ -145,7 +145,11 @@ function definition(stepId, stage) {
   const manifest = readJson(path, `步骤定义 ${source}`);
   const step = (Array.isArray(manifest?.steps) ? manifest.steps : []).find(item => item?.step_id === stepId);
   if (!step) throw fail(`${source} 不存在第 ${stepId} 步`);
-  if (typeof step.skill !== "string" || !step.skill.trim()) throw fail(`${source} 第 ${stepId} 步没有 skill 声明；本入口只服务声明了技能的步骤`);
+  // Decoupled (P9 follow-up): step evidence binds to the declared step slug, not
+  // to whether that step happens to delegate to a named skill. A step with no
+  // `skill` field is still a declared step and can carry real evidence; the
+  // "current skill read" obligation stays a separate check in
+  // check-stage-steps (`--read-step-skill`), never a write-entry gate here.
   if (manifest.stage_slug !== stage) throw fail(`${source} 的 stage_slug 不是 ${stage}`);
   return { source, step };
 }

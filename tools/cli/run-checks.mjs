@@ -35,7 +35,8 @@ import { GAP, SIX_KEYS, validateExecutionRecord } from "../../metrics/execution-
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
 import { resolve, dirname, isAbsolute, basename, sep, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { declaredStepCoverage } from "../../runtime/task/step-coverage.mjs";
+import { declaredStepCoverage, applyRecordModelExclusions } from "../../runtime/task/step-coverage.mjs";
+import { readinessFingerprint, legacyReadinessChanges } from "../../runtime/stage/stage-content-contracts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -552,6 +553,14 @@ function runFailureRecordChecks(root, facts, recordRoot) {
   return errors;
 }
 
+// The readiness probes run at the workspace root, which owns the relative path
+// tokens in their argv. A material root under .../specs/<task> names it; other
+// roots keep the diagnostic path and never invent a working directory.
+function readinessProbeWorktree(materialRoot) {
+  const absolute = resolve(materialRoot), marker = `${sep}specs${sep}`, at = absolute.lastIndexOf(marker);
+  return at > 0 ? absolute.slice(0, at) : null;
+}
+
 async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = false } = {}) {
   const phases = facts?.readiness?.phases ?? [];
   if (phases.length === 0) return [];
@@ -597,9 +606,37 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
     let stored;
     try { stored = JSON.parse(readFileSync(ref, "utf8")); }
     catch (error) { fail(`${root} readiness original is not readable: ${ref} (${error.code ?? error.message})`); continue; }
-    if (stored.status === "stale" || stored.material_sha256 !== facts.material_sha256) {
-      fail(`${root} readiness stale: stored result ${ref} is bound to material_sha256 `
-        + `${stored.material_sha256 ?? "unknown"}, current ${facts.material_sha256}`);
+    // 2026-11-26 方案 C: compare this Phase's judged objects (its readiness rows
+    // and the real state of its probe targets), never the whole material set.
+    const probeCwd = readinessProbeWorktree(root)
+      ?? (typeof stored.cwd === "string" && existsSync(stored.cwd) ? stored.cwd : null);
+    const currentReadiness = probeCwd
+      ? readinessFingerprint({ phasePath: phase.path, rows: phase.rows, cwd: probeCwd }) : null;
+    if (stored.status === "stale") {
+      fail(`${root} readiness stale: stored result ${ref} is itself a stale refusal `
+        + `(${stored.stale_reason ?? "reason unavailable"}); rerun the build-code entry to recover`);
+      continue;
+    }
+    const legacy = stored.schema_version !== "readiness.v2" || typeof stored.readiness_sha256 !== "string";
+    if (legacy) {
+      // A v1 original has no per-phase key. Its own probes and outputs still
+      // name the judged objects, so the reader names what actually changed.
+      const changes = currentReadiness === null
+        ? ["probe working directory is unavailable"]
+        : legacyReadinessChanges({ record: stored, rows: phase.rows, cwd: probeCwd });
+      if (changes.length) {
+        fail(`${root} readiness stale (legacy ${stored.schema_version ?? "unknown"}): judged objects changed: `
+          + `${changes.join("; ")}; current ${currentReadiness ?? "unknown"} (original ${ref})`);
+        continue;
+      }
+      console.log(`[run-checks][material] readiness phase=${phase.phase_id} legacy ${stored.schema_version ?? "unknown"}: `
+        + `fingerprint scheme changed; recorded rows and probe targets unchanged; rerun the entry to record readiness.v2 (original ${ref})`);
+    } else if (currentReadiness === null) {
+      fail(`${root} readiness stale: cannot resolve the probe working directory for ${ref}`);
+      continue;
+    } else if (stored.readiness_sha256 !== currentReadiness) {
+      fail(`${root} readiness stale: stored result ${ref} is bound to readiness_sha256 `
+        + `${stored.readiness_sha256}, current ${currentReadiness}`);
       continue;
     }
     if (stored.status !== "pass") {
@@ -645,7 +682,7 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
       console.log(`[run-checks][material] readiness phase=${phase.phase_id} status=pass `
         + `machine=${phase.rows.filter((row) => row.kind === "machine").length} human=${human.length} `
         + `human_unverified=${humanUnverified} (人判未验证＝${humanUnverified}) `
-        + `material_sha256=${facts.material_sha256} original=${ref}`);
+        + `readiness_sha256=${currentReadiness ?? "unknown"} original=${ref}`);
     }
   }
   return errors;
@@ -823,6 +860,9 @@ async function main() {
       taskPath: resolve(options.taskPath),
       ...(options.workflowRoot === undefined ? {} : { workflowRoot: options.workflowRoot }),
     });
+    // Record-model boundary: the single decision lives in step-coverage; this
+    // call only makes the printed coverage metrics use the same denominator.
+    applyRecordModelExclusions(report);
     const { exit_code, ...coverage } = stepCoverageExit(report);
     let convergenceExit = exit_code;
     let convergenceChecked = false;

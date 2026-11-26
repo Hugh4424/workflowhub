@@ -13,16 +13,18 @@
 再按包号读第 4 段每包十项：前五项讲为什么，第六到九项讲做什么、怎么验、怎么退、谁没定，第十项讲还要动别处什么。
 第 5 段看包与包之间的接口、顺序和共同风险；第 6 段按 ref 回读原件，主文不复制原件正文。
 
-### 级别与路线
+## 级别与路线
+
+> 订正说明（2026-11-26，计划负责人席位由主会话代行）：本节原为 `### 级别与路线`（挂在「1. 入口」下的子节），而 `final-chain`／`run-checks` 的解析器按 `^## 级别与路线` 取节，导致级别与七项判级事实全部读不到（`chain_state=unverified`、`level.source=fallback-complex`）。提升为二级标题，内容一字未改。
 - **推荐级别**：复杂。
 - **推荐理由**：本任务涉及公共入口、检查身份、开工就绪条件、自动作业接线、错误默认与旧路退役多处，并含权限与迁移风险；入口评估返回 paused（major_architecture、migration、permission），按入口路由第 3 条风险硬覆盖推荐复杂。
 - **实际调用命令**：`node --input-type=module -e '<调用 workflows/make-decision/scripts/entry-evaluation.mjs 的 evaluateEntryRoute(input)>'`，输入同原件 `quality/evidence/entry-evaluation/2026-11-24-001-entry-evaluation.json` 的 input 字段。
-- **返回原 ref**：`quality/evidence/entry-evaluation/2026-11-24-001-entry-evaluation.json`
+- 入口返回原 ref：quality/evidence/entry-evaluation/2026-11-24-001-entry-evaluation.json
 - **真实返回**：status=`paused`；reason=`mini-task scope includes materially expanded risks: major_architecture, migration, permission; an explicit route choice is required`；expanded_risks=`major_architecture,migration,permission`；choices=`shrink-scope`、`create-ordinary-five-stage-task`。
 - **承诺的独立可交付验收单元数**：1；结果是“一条业务规则在人工与自动入口得到一致可见行为”。
 - **是否含需要用户在场或真实凭证的动作**：需要用户作骨架、逐包与最终确认；不需要真实外部服务凭证，只用受控接收方与隔离环境。
 - **可选拆分路线**：只做规则归属与错误默认，把自动作业接线、检查身份、就绪读取另立任务；这会改变验收范围，须用户重新决定。
-- **用户选择**：复杂（2026-11-24，选项采纳；原 ref：`quality/evidence/decision-log-refs/talk/2026-11-24-001-level-research.md`）。
+- 用户选择：复杂；原 ref：quality/evidence/decision-log-refs/talk/2026-11-24-001-level-research.md
 - **调研范围**：内部（2026-11-24，选项采纳；同一问答原件）。复用父 PRD 已归档的外部研究，另外按需查了 pstack 原文；不新做广泛外部检索。
 - **大纲确认**：2026-11-24 用户选择“确认，按这个往下走”；原 ref：`quality/evidence/decision-log-refs/talk/2026-11-24-002-outline-confirm.md`。
 
@@ -1569,3 +1571,5 @@ P5 单元复盘先行 → P1 → P3 → P2 → P4 → P6 → P7 收口。
 | 包 13 重写设计 | 部分 | 四份设计件；独立读者判部分可用 | AC-P13-002 两块 blocked（owner＝build-plan 重写者） |
 
 **读法**：达成 4、部分 9、未达成 0。本表与 `spec.md` 的 78 条 AC 档位一致；改任一包状态须同批改对应阶段卡与本节。
+
+**收敛清单指针**：`quality/evidence/decision-log-refs/convergence-checklist.md`。该文件由 build-code 收口期事后重建，**不是** make-decision 期原件；其首部有性质声明与 8 项证据的取得状态（多数**未取得**）。它只证明包级状态视图存在，不证明决策期逐包收敛已完成——后者是决策阶段缺口，owner＝决策阶段作者。
