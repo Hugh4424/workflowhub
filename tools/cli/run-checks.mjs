@@ -782,9 +782,13 @@ function triageSkipReasons(phases) {
 
 // The declared-step decision lives in the runtime module; this CLI only adapts
 // its report input and keeps the historical `stepCoverageExit` report shape.
+// TCR-2 (decision-log 2026-11-26 裁决三, P11/C4): the report face was the one
+// open face -- an unreadable step definition kept exit 0 here while the close
+// face (core/task-close.mjs) already refused it. This adapter is the report
+// face, so it passes the same `failClosed: true` the close face uses.
 export { declaredStepCoverage } from "../../runtime/task/step-coverage.mjs";
 export function stepCoverageExit(report) {
-  const { declared, evaluable, named_evidence_gap, ...coverage } = declaredStepCoverage(report);
+  const { declared, evaluable, named_evidence_gap, ...coverage } = declaredStepCoverage(report, { failClosed: true });
   return coverage;
 }
 async function main() {

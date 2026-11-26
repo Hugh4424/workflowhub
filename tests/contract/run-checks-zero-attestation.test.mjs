@@ -35,12 +35,28 @@ describe('ORACLE-P1-STAGE-STEPS zero attestation', () => {
       const steps = slugs.map((slug, index) => ({ step_id: index + 1, step_slug: slug, observable_result: 'Read the exact controlled observation. 判定消费：SKILL.md#方法；原件：controlled human record', completion_evidence: [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }] }));
       put(repo, source, { schema_version: '2.0.0', stage_slug: 'make-decision', steps });
       put(repo, 'workflows/make-decision/SKILL.md', '# Controlled method\n## 方法\nRead the controlled observation.\n');
-      put(materials, 'step-consumer-design.md', slugs.map(slug => `| [controlled](../../${source}#L1) \`${slug}\` | observation | human | owner |`).join('\n'));
       const entries = slugs.map(slug => {
         const ref = `quality/evidence/${slug}.json`;
         put(task, ref, { source, step_slug: slug, reader: 'controlled fixture reader', inputs: ['controlled observation'], observation: 'The named controlled output was read.', criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [] });
         return { ref, source, step_slug: slug };
       });
+      // TCR-2 (decision-log 2026-11-26 裁决三): the report face refuses an
+      // unreadable step definition, so a complex fixture must ship readable
+      // definitions for every stage its report covers. These two stages stay
+      // report-only (no `skill`) and their single step is attested, which keeps
+      // this test on its own subject: an unattested step, not a missing manifest.
+      const designRows = slugs.map(slug => `| [controlled](../../${source}#L1) \`${slug}\` | observation | human | owner |`);
+      for (const stage of ['build-plan', 'build-code']) {
+        const stageSource = `workflows/${stage}/steps.json`;
+        const stageSlug = `${stage}-owned-step`;
+        put(repo, stageSource, { schema_version: '2.0.0', stage_slug: stage, steps: [{ step_id: 1, step_slug: stageSlug, observable_result: 'Read the exact controlled observation. 判定消费：SKILL.md#方法；原件：controlled human record', completion_evidence: [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }] }] });
+        put(repo, `workflows/${stage}/SKILL.md`, `# Controlled ${stage} method\n## 方法\nRead the controlled observation.\n`);
+        designRows.push(`| [controlled](../../${stageSource}#L1) \`${stageSlug}\` | observation | human | owner |`);
+        const ref = `quality/evidence/${stage}-${stageSlug}.json`;
+        put(task, ref, { source: stageSource, step_slug: stageSlug, reader: 'controlled fixture reader', inputs: ['controlled observation'], observation: 'The named controlled output was read.', criteria_ref: `workflows/${stage}/SKILL.md#方法`, conclusion: 'completed', limits: [] });
+        entries.push({ ref, source: stageSource, step_slug: stageSlug });
+      }
+      put(materials, 'step-consumer-design.md', designRows.join('\n'));
       put(task, 'facts.jsonl', JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test inputs, not real user approval', evidence: { value: entries } }) + '\n');
       const result = spawnSync(process.execPath, [resolve('tools/cli/run-checks.mjs'), '--task-path', task, '--workflow-root', repo], { cwd: repo, encoding: 'utf8' });
       expect(result.stderr).toBe('');

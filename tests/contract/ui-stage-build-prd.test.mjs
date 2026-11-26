@@ -44,6 +44,11 @@ const stepSection = (text, id) => {
 const templateAnchor =
   '- **风险与没定**：[已接受风险/未知/待定/可后置，每条带触发与接管者]\n';
 
+// The one sentence approved by TCR-1 (decision-log 2026-11-26 裁决三). It is the
+// same string the PRD method and task-maker check item carry.
+const approvedEvidenceSentence =
+  '证据落点：<原件路径+行位>；真跑或替代：<命令与退出码／读者动作／替代理由>。替代只限真跑不可能，并写原因、owner、不能证明什么与残余。';
+
 const stepResult = (steps, id) =>
   steps.steps.find(step => step.step_id === id)?.observable_result ?? '';
 
@@ -152,14 +157,23 @@ function checkBuildPrdUi({ method, steps, template, deps, baselineMethod, baseli
 
   // Template: only one UI-only block may be inserted after the six empty-card
   // fields; everything before and after it must keep the baseline bytes.
+  // TCR-1 (decision-log 2026-11-26 裁决三): the four-row acceptance field may
+  // carry exactly this one approved sentence and nothing else. Remove at most
+  // one copy before the byte comparison; a second copy is a gap, and every
+  // other byte still has to match the baseline.
+  const sentenceCopies = template.split(approvedEvidenceSentence).length - 1;
+  if (sentenceCopies > 1) gaps.push('模板证据落点句重复：批件只放行一句');
+  const comparableTemplate = sentenceCopies === 1
+    ? template.replace(approvedEvidenceSentence, '')
+    : template;
   const anchorAt = baselineTemplate.indexOf(templateAnchor);
   if (anchorAt < 0) gaps.push('模板空卡锚点读不到');
   else {
     const head = baselineTemplate.slice(0, anchorAt + templateAnchor.length);
     const rest = baselineTemplate.slice(anchorAt + templateAnchor.length);
-    if (!template.startsWith(head)) gaps.push('模板空卡六字段与原字节不同');
-    if (!template.endsWith(rest)) gaps.push('模板四行验收与原字节不同');
-    const middle = template.slice(head.length, template.length - rest.length).trim();
+    if (!comparableTemplate.startsWith(head)) gaps.push('模板空卡六字段与原字节不同');
+    if (!comparableTemplate.endsWith(rest)) gaps.push('模板四行验收与原字节不同');
+    const middle = comparableTemplate.slice(head.length, comparableTemplate.length - rest.length).trim();
     if (!middle) gaps.push('模板缺 UI 任务三段');
     else {
       for (const token of ['接线', '视觉', '组件']) {
