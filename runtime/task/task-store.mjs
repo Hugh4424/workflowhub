@@ -147,8 +147,7 @@ export async function appendStepEvidence(taskRoot,input,options={}) {
     const stageIndex=prior.findIndex(({value})=>value.record_kind==="stage"&&value.stage===input.stage);
     if(stageIndex<0)throw stepEvidenceError("STEP_EVIDENCE_STAGE_ROW_MISSING",`facts.jsonl has no ${input.stage} stage row; run the stage entry first`);
     const stageRow=prior[stageIndex].value;
-    const slot=prior.flatMap(({value},lineIndex)=>Array.isArray(value.evidence?.value)?value.evidence.value.map((existing,index)=>({existing,lineIndex,index})):[]
-      .filter(item=>item.existing&&item.existing.source===input.source&&item.existing.step_slug===input.stepSlug));
+    const slot=prior.flatMap(({value},lineIndex)=>Array.isArray(value.evidence?.value)?value.evidence.value.map((existing,index)=>({existing,lineIndex,index})).filter(item=>item.existing&&item.existing.source===input.source&&item.existing.step_slug===input.stepSlug):[]);
     if(slot.length>1)throw stepEvidenceError("EVIDENCE_SLOT_AMBIGUOUS",`${input.source}#${input.stepSlug} has ${slot.length} quality evidence entries; fix the facts slot before writing`,{slot_count:slot.length});
     if(slot.length===1){
       const current=slot[0].existing;
