@@ -14,6 +14,26 @@ const cli = fileURLToPath(new URL('tools/cli/stage-runtime.mjs', rootUrl));
 const roots = [];
 const env = () => { const e = { ...process.env }; for (const k of Object.keys(e)) if (k.startsWith('GIT_')) delete e[k]; return e; };
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, env: env(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this file keeps
+// judging its own subject instead of tripping the gate. Evidence shape follows
+// the P9 hard-gate sample; no assertion or expectation is relaxed.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],["build-code","write-red-tests"],["build-code","implement-change"],["build-code","inspect-and-route-actual-tests"],["build-code","run-tests"],["build-code","inspect-acceptance-and-ui"],["build-code","scan-diff"],["build-code","review-change"],["build-code","analyze-review-findings"]];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),`${JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})}\n`);
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const path=join(taskDir,"facts.jsonl"),raw=existsSync(path)?readFileSync(path,"utf8"):"";
+  const rows=raw.trim()?raw.trim().split("\n").map(line=>JSON.parse(line)):[];
+  rows.push({record_kind:"step_claims",task_id:id,created_at:"2026-10-20T00:00:00Z",evidence:{value:claims}});
+  writeFileSync(path,rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'card05-runtime-target-')));
   roots.push({ root, identity: lstatSync(root) });
@@ -29,6 +49,7 @@ function fixture() {
   git(wt, 'add', 'specs'); git(wt, 'commit', '-qm', 'materials');
   writeFileSync(join(taskDir, 'task.json'), JSON.stringify({ schema_version: '1.0.0', project_name: 'workflowhub', task_id: 'card05-owned', created_at: '2026-10-12T00:00:00Z', target_repo_root: repo, record_model: 'vnext-single-write', activation_cohort: 'post', workspace_mode: 'existing', workspace_root: wt }));
   writeFileSync(join(taskDir, 'facts.jsonl'), '');
+  seedStepEvidence(taskDir, materials, 'card05-owned');
   return { root, repo, wt, taskDir, branch, dir: join(taskDir, 'quality', 'evidence', 'git-authorizations') };
 }
 afterEach(() => {
@@ -84,6 +105,7 @@ test('N12 target: explicit until=commit returns partial without executing later 
   const f = fixture(), bare = join(f.root, 'origin.git'); mkdirSync(bare); git(bare, 'init', '--bare', '-q'); git(f.repo, 'remote', 'add', 'origin', bare); git(f.repo, 'push', '-q', 'origin', 'main');
   // TCR-P8-6 / independent250: actual close identity needs an owned stage fact.
   writeFileSync(join(f.taskDir,'facts.jsonl'),JSON.stringify({record_kind:'stage',task_id:'card05-owned',stage:'verify-code',source:'owned-test',created_at:'2026-10-20T00:00:00Z'})+'\n');
+  seedStepEvidence(f.taskDir, join(f.wt, 'specs', 'card05-owned'), 'card05-owned');
   const p = await prepareDeliveryClosePlan({ taskDir: f.taskDir }); const c = await confirmClosePlan({ taskDir: f.taskDir, planRef: p.plan_ref, replyText: 'Owned local fixture close actions only.' });
   await authorizeClosePlan({ taskDir: f.taskDir, planRef: p.plan_ref, confirmationRef: c.confirmation_ref });
   const out = await executeClosePlan({ taskDir: f.taskDir, planRef: p.plan_ref, confirmationRef: c.confirmation_ref, until: 'commit' });

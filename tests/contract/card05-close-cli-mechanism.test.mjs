@@ -16,6 +16,26 @@ const sha = text => createHash('sha256').update(text).digest('hex');
 function environment(f) { const e = { ...saved }; for (const k of Object.keys(e)) if (k.startsWith('GIT_')) delete e[k]; if (f) Object.assign(e, { WORKFLOWHUB_TASK_DIR: f.storage, HOME: f.home, XDG_CONFIG_HOME: join(f.home, '.config') }); return e; }
 const realGit = execFileSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).trim();
 const git = (cwd, ...args) => execFileSync(realGit, args, { cwd, env: environment(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this case keeps
+// judging its own subject instead of tripping the gate. Evidence shape follows
+// the P9 hard-gate sample; no assertion or expectation is relaxed.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],["build-code","write-red-tests"],["build-code","implement-change"],["build-code","inspect-and-route-actual-tests"],["build-code","run-tests"],["build-code","inspect-acceptance-and-ui"],["build-code","scan-diff"],["build-code","review-change"],["build-code","analyze-review-findings"]];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),`${JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})}\n`);
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const path=join(taskDir,"facts.jsonl"),raw=existsSync(path)?readFileSync(path,"utf8"):"";
+  const rows=raw.trim()?raw.trim().split("\n").map(line=>JSON.parse(line)):[];
+  rows.push({record_kind:"step_claims",task_id:id,created_at:"2026-10-20T00:00:00Z",evidence:{value:claims}});
+  writeFileSync(path,rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'card05-plan-gap-'))); roots.push({ root, identity: lstatSync(root) });
   const repo = join(root, 'repo'), wt = join(root, 'worktree'), storage = join(root, 'storage'), home = join(root, 'home'), id = 'gap-owned', taskDir = join(storage, 'Projects/workflowhub/tasks', id), bare = join(root, 'origin.git');
@@ -27,6 +47,7 @@ function fixture() {
   writeFileSync(join(materials, 'decision-log.md'), decision); writeFileSync(join(materials, 'spec.md'), '# Owned visible result\nFull source for close fixture.\n'); git(wt, 'add', 'specs'); git(wt, 'commit', '-qm', 'owned task materials');
   writeFileSync(join(taskDir, 'task.json'), JSON.stringify({ schema_version: '1.0.0', project_name: 'workflowhub', task_id: id, target_repo_root: repo, record_model: 'vnext-single-write', activation_cohort: 'post', workspace_mode: 'existing', workspace_root: wt })); writeFileSync(join(taskDir, 'facts.jsonl'), JSON.stringify({ record_kind: 'stage', task_id: id, stage: 'verify-code', source: 'owned-close-fixture', created_at: '2026-10-20T00:00:00Z' }) + '\n');
   const original = '# 外置原文\r\n用户真实要求 COMPLETE-ORIGINAL\n末尾 END-ORIGINAL\n'; mkdirSync(join(taskDir, 'quality/evidence'), { recursive: true }); writeFileSync(join(taskDir, 'quality/evidence/original.md'), original);
+  seedStepEvidence(taskDir, materials, id);
   return { root, repo, wt, storage, home, id, taskDir, branch, bare, decision, original, dir: join(taskDir, 'quality/evidence/git-authorizations') };
 }
 afterEach(() => { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); for (const { root, identity } of roots.splice(0)) { expect(realpathSync(root)).toBe(resolve(root)); expect(dirname(root)).toBe(realpathSync(tmpdir())); expect(basename(root).startsWith('card05-plan-gap-')).toBe(true); const now = lstatSync(root); expect([now.dev, now.ino]).toEqual([identity.dev, identity.ino]); rmSync(root, { recursive: true, force: true }); } });

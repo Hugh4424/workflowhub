@@ -261,10 +261,16 @@ function sameTokens(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+// A real capture wraps shell text as ["/bin/sh","-c",<text>], and the declared
+// gate may itself be a `bash -c '…'` command, so the writer and the reader
+// unwrap the same wrapper repeatedly. The cap stops a deeply wrapped command
+// from being unwrapped forever; exceeding it is "未取得", never a silent skip.
+const MAX_COMMAND_UNWRAP = 4;
+
 // argv[0] is compared by program name (the real capture records the resolved
 // absolute interpreter); a `sh -c`/`bash -c` capture is unwrapped to the script
 // text on both sides so the declared `sh -c '…'` gate and its capture agree.
-function canonicalCommand(command) {
+function canonicalCommandDepth(command) {
   const unwrap = (words) => {
     if (words.length === 3 && ["sh", "bash"].includes(basename(words[0])) && words[1] === "-c" && typeof words[2] === "string") {
       const inner = shellWords(words[2]);
@@ -273,14 +279,26 @@ function canonicalCommand(command) {
     return words;
   };
   let words;
-  if (Array.isArray(command.argv)) { if (!command.argv.length || command.argv.some((value) => typeof value !== "string")) return null; words = [...command.argv]; }
-  else if (typeof command.shell === "string") { words = shellWords(command.shell); if (words === null) return null; }
-  else return null;
-  const unwrapped = unwrap(words.map((value) => value));
-  if (unwrapped === null || !unwrapped.length) return null;
-  const normalized = [...unwrapped];
+  if (Array.isArray(command.argv)) { if (!command.argv.length || command.argv.some((value) => typeof value !== "string")) return { words: null, depth: 0, exceeded: false }; words = [...command.argv]; }
+  else if (typeof command.shell === "string") { words = shellWords(command.shell); if (words === null) return { words: null, depth: 0, exceeded: false }; }
+  else return { words: null, depth: 0, exceeded: false };
+  if (!words.length) return { words: null, depth: 0, exceeded: false };
+  let depth = 0;
+  for (;;) {
+    const next = unwrap(words);
+    if (next === words) break;
+    if (next === null || !next.length) return { words: null, depth, exceeded: false };
+    words = next;
+    depth += 1;
+    if (depth === MAX_COMMAND_UNWRAP && unwrap(words) !== words) return { words: null, depth, exceeded: true };
+  }
+  const normalized = [...words];
   normalized[0] = basename(normalized[0]);
-  return normalized;
+  return { words: normalized, depth, exceeded: false };
+}
+
+function canonicalCommand(command) {
+  return canonicalCommandDepth(command).words;
 }
 
 export function declaredPhaseGates(phases) {
@@ -296,20 +314,29 @@ export function declaredPhaseGates(phases) {
   return gates;
 }
 
+// The two named reasons a capture cannot be classified as a declared gate.
+// Both are "未取得": the reader stops at that original instead of treating it as
+// "not a gate" and falling back to an earlier green capture.
+const GATE_UNBOUND = Object.freeze({ UNPARSABLE: "unparsable", DEPTH_EXCEEDED: "depth-exceeded" });
+
 // Gate identity recorded by the real capture. The command itself selects the
 // declared gate (the current-phase gate is preferred when a cursor names it);
-// a capture that is not a declared gate is recorded as unbound, never as a gate.
+// a capture that is not a declared gate records null identity, and a capture
+// that could not be classified records why it is "未取得".
 export function gateIdentityFromCapture({ phases, command, phaseId = null } = {}) {
-  const captured = canonicalCommand(command ?? {});
-  if (captured === null) return null;
+  const parsed = canonicalCommandDepth(command ?? {});
+  if (parsed.words === null) {
+    return Object.freeze({ identity: null, unbound: parsed.exceeded ? GATE_UNBOUND.DEPTH_EXCEEDED : GATE_UNBOUND.UNPARSABLE, depth: parsed.depth });
+  }
+  const captured = parsed.words;
   const matching = declaredPhaseGates(phases).filter((gate) => {
     const declared = canonicalCommand({ shell: gate.gate_cmd });
     return declared !== null && sameTokens(declared, captured);
   });
-  if (!matching.length) return null;
+  if (!matching.length) return Object.freeze({ identity: null, unbound: null, depth: parsed.depth });
   const scoped = phaseId ? matching.filter((gate) => gate.phase_id === phaseId) : matching;
-  if (!scoped.length || (!phaseId && scoped.length > 1)) return null;
-  return Object.freeze({ ...scoped[0] });
+  if (!scoped.length || (!phaseId && scoped.length > 1)) return Object.freeze({ identity: null, unbound: null, depth: parsed.depth });
+  return Object.freeze({ identity: Object.freeze({ ...scoped[0] }), unbound: null, depth: parsed.depth });
 }
 
 function gateMarkers(facts) {
@@ -323,41 +350,64 @@ function gateMarkers(facts) {
   });
 }
 
-// The delivery gate is the latest capture whose actual command is the declared
-// Phase gate for the current phase cursor. Later captures of other commands are
-// not gates; an earlier capture of the very same declared command still counts,
-// so a lawful repair re-run replaces a red capture and nothing else does.
+// The delivery gate is the latest capture whose own `gate_identity` names the
+// declared Phase gate for the current phase cursor. The reader trusts that
+// self-declared identity (user decision 2026-11-24, option D): it never
+// recomputes the captured command, and it stops at every unknown or mismatched
+// original instead of falling back to an earlier green capture. Only two
+// conditions skip an original, and both are known negatives rather than
+// ignorance: the writer recorded it as "not any declared gate" (identity null
+// with no gate_unbound), or it belongs to another declared Phase.
+function gateFailure(code, reason, marker = null) {
+  return { code, reason, evidence: marker ? Object.freeze({ ref: marker.ref, sha256: marker.sha256 }) : null };
+}
+
 function selectDeclaredGate({ taskPath, markers, phases, phaseId }) {
-  if (!markers.length) return { reason: "no gate-results original is recorded in the build-code facts source" };
-  const last = markers.at(-1);
-  if (last.invalid) return { invalid: last.invalid };
+  if (!markers.length) return gateFailure("GATE_ABSENT", "no gate-results original is recorded in the build-code facts source");
   const declared = declaredPhaseGates(phases);
-  if (!declared.length) return { reason: "the current Phase material declares no gate_cmd; the delivery gate identity cannot be bound" };
+  if (!declared.length) return gateFailure("GATE_DECLARED_ABSENT", "the current Phase material declares no gate_cmd; the delivery gate identity cannot be bound");
   const scoped = phaseId ? declared.filter((gate) => gate.phase_id === phaseId) : declared;
-  if (!scoped.length) return { reason: `the current Phase material declares no gate_cmd for ${phaseId}; the delivery gate identity cannot be bound` };
-  let unmatched = 0, identityless = 0;
+  if (!scoped.length) return gateFailure("GATE_DECLARED_ABSENT", `the current Phase material declares no gate_cmd for ${phaseId}; the delivery gate identity cannot be bound`);
+  const notGate = [], otherPhase = [];
   for (let index = markers.length - 1; index >= 0; index -= 1) {
     const marker = markers[index];
-    if (marker.invalid) continue;
+    if (marker.invalid) return gateFailure("GATE_MARKER_INVALID", `the recorded gate pointer is not a task-relative original with a sha256: ${marker.invalid}`);
     let artifact;
-    try { artifact = JSON.parse(readTaskRelative(taskPath, marker.ref).toString("utf8")); } catch { continue; }
-    if (!plain(artifact)) continue;
-    const captured = canonicalCommand({ argv: artifact.argv });
-    const gate = captured === null ? null : scoped.find((candidate) => {
-      const words = canonicalCommand({ shell: candidate.gate_cmd });
-      return words !== null && sameTokens(words, captured);
-    });
-    if (!gate) { unmatched += 1; continue; }
+    try { artifact = JSON.parse(readTaskRelative(taskPath, marker.ref).toString("utf8")); }
+    catch (error) { return gateFailure("GATE_ORIGINAL_UNREADABLE", `gate original unreadable (原件不可读): ${marker.ref} (${error.code ?? error.message})`, marker); }
+    if (!plain(artifact)) return gateFailure("GATE_ORIGINAL_UNREADABLE", `gate original is not a JSON object (原件不可读): ${marker.ref}`, marker);
+    if (!Object.hasOwn(artifact, "gate_identity")) {
+      return gateFailure("GATE_IDENTITY_MISSING", `the recorded gate original declares no gate identity (身份缺失/未取得): ${marker.ref}; a record without identity is never a valid check and never falls back to an earlier capture`, marker);
+    }
     const identity = artifact.gate_identity;
-    if (!plain(identity)
-        || identity.phase_ref !== gate.phase_ref
-        || identity.gate_cmd_sha256 !== gate.gate_cmd_sha256) { identityless += 1; continue; }
-    return { pointer: marker, artifact, declared: gate };
+    if (identity === null) {
+      const unbound = artifact.gate_unbound ?? null;
+      if (unbound === null) {
+        // Known negative A: the writer classified this capture as "not any
+        // declared gate"; it is skipped, not read as a fallback.
+        notGate.push({ ref: marker.ref, command: artifact.command ?? null });
+        continue;
+      }
+      // Any other non-null value is unknown (including a writer reason this
+      // reader does not recognise). It stops here and never falls into the
+      // skip above, so an unrecognised original cannot reach an earlier green
+      // capture. Known and unknown reasons share the named "未取得" failure.
+      return gateFailure("GATE_IDENTITY_UNOBTAINED", `the capture could not be classified as a declared gate (未取得: ${unbound}): ${marker.ref}`, marker);
+    }
+    if (!plain(identity) || !text(identity.phase_ref) || !HEX.test(identity.gate_cmd_sha256 ?? "")) {
+      return gateFailure("GATE_IDENTITY_MALFORMED", `the recorded gate identity is malformed: ${marker.ref}`, marker);
+    }
+    const hit = scoped.find((gate) => gate.phase_ref === identity.phase_ref && gate.gate_cmd_sha256 === identity.gate_cmd_sha256);
+    if (hit) return { pointer: marker, artifact, declared: hit, notGate, otherPhase };
+    const elsewhere = declared.some((gate) => gate.phase_ref === identity.phase_ref && gate.gate_cmd_sha256 === identity.gate_cmd_sha256);
+    if (elsewhere) {
+      // Known negative B: this original is another declared Phase's gate.
+      otherPhase.push({ ref: marker.ref, command: artifact.command ?? null });
+      continue;
+    }
+    return gateFailure("GATE_IDENTITY_MISMATCH", `the recorded gate identity does not match any currently declared gate (身份不符): ${marker.ref}`, marker);
   }
-  if (unmatched === 0 && identityless === 0) return { reason: "no recorded gate original is readable as JSON with an argv" };
-  return { reason: identityless > 0
-    ? `the latest capture of the declared ${phaseId ?? "Phase"} gate records no matching gate_identity (${identityless}); re-run the declared gate through the real verify capture`
-    : `no captured gate matches the declared ${phaseId ?? "Phase"} gate_cmd (${unmatched} recorded capture(s) are not the declared gate)` };
+  return gateFailure("GATE_NOT_CAPTURED", `no recorded capture declares the current ${phaseId ?? "Phase"} gate identity (${notGate.length} capture(s) declare no gate; ${otherPhase.length} declare another Phase's gate)`);
 }
 
 function authorsFor(repo, baseline, head) {
@@ -374,7 +424,7 @@ function authorsFor(repo, baseline, head) {
   return authors;
 }
 
-function claim(status, reasons, evidence = null) { return { status, reasons: [...new Set(reasons)], evidence }; }
+function claim(status, reasons, evidence = null, code = null) { return { status, reasons: [...new Set(reasons)], evidence, code }; }
 
 function readReadback(taskPath, material, gate, verdict) {
   const directory = join(resolve(taskPath), "quality", "evidence", "close");
@@ -406,7 +456,8 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
   const material = materialSnapshot(root);
   const buildCodeRow = facts.find((value) => value?.record_kind === "stage" && value.stage === "build-code") ?? null;
   const markers = gateMarkers(facts);
-  const selection = selectDeclaredGate({ taskPath: root, markers, phases: material.phases, phaseId: buildCodeRow?.phase_progress?.phase_id ?? null });
+  const phaseId = buildCodeRow?.phase_progress?.phase_id ?? null;
+  const selection = selectDeclaredGate({ taskPath: root, markers, phases: material.phases, phaseId });
   const pointer = selection.pointer ?? null;
   let verdictBytes = null;
   try { verdictBytes = readTaskRelative(root, VERDICT_REF); }
@@ -420,13 +471,11 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
 
   const claims = {};
   let gate = null, verdict = null, verdictRef = null;
-  if (selection.invalid) {
-    const reason = `the recorded capture has no bound gate-results original (${selection.invalid}); the declaration is rejected, not treated as "no contract required"`;
-    claims.implemented = claim("fail", [`implemented: ${reason}`]);
-    claims.verified = claim("fail", [`verified: ${reason}`]);
-  } else if (!pointer) {
-    claims.implemented = claim("fail", [`implemented: ${selection.reason}`]);
-    claims.verified = claim("fail", [`verified: ${selection.reason}`]);
+  if (!pointer) {
+    // Every named failure keeps the two-value claim status; "未取得" is carried
+    // by the code and the reason text, never by a third status.
+    claims.implemented = claim("fail", [`implemented: ${selection.reason}`], selection.evidence ?? null, selection.code ?? "GATE_NOT_CAPTURED");
+    claims.verified = claim("fail", [`verified: ${selection.reason}`], selection.evidence ?? null, selection.code ?? "GATE_NOT_CAPTURED");
   } else {
     const read = jsonReference(root, pointer, "gate-results");
     if (read.status === "pass") gate = { ...pointer, artifact: read.value, bytes: read.bytes };
@@ -472,8 +521,10 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
         if (current === null || current.digest !== artifact.pending.digest) reasons.push("gate-results: uncommitted implementation bytes differ from the captured gate");
       }
     }
-    claims.implemented = claim(reasons.length ? "fail" : "pass", reasons, read.evidence);
+    claims.implemented = claim(reasons.length ? "fail" : "pass", reasons, read.evidence, reasons.length ? "GATE_ORIGINAL_INVALID" : null);
     const verifiedReasons = [...reasons];
+    // Failure count fixed before the report-only later-capture line is appended.
+    let verifiedFailures = verifiedReasons.length;
     if (artifact) {
       if (artifact.exit_code !== 0) verifiedReasons.push(`verified: the captured gate exit is ${artifact.exit_code === null ? "unreadable" : artifact.exit_code}, not 0`);
       const receiptRef = { ref: artifact.receipt_ref, sha256: artifact.receipt_sha256 };
@@ -491,8 +542,22 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
           if (absoluteOutput(receipt.output_ref) !== absoluteOutput(artifact.output_ref)) verifiedReasons.push("verified: the capture receipt names a different output original");
         }
       }
+      // Report-only position of every capture that came after the accepted gate:
+      // a later green capture of another command never replaces it, and the
+      // reason names both rounds' commands so the two are distinguishable. The
+      // report never changes the verdict; the failure set below was fixed
+      // before this point, so a green declared gate with later noise still passes.
+      verifiedFailures = verifiedReasons.length;
+      const acceptedIndex = markers.indexOf(pointer);
+      const later = acceptedIndex >= 0 ? markers.slice(acceptedIndex + 1) : [];
+      if (later.length) {
+        const latestLater = later.at(-1);
+        let laterArtifact = null;
+        if (!latestLater.invalid) { try { laterArtifact = JSON.parse(readTaskRelative(root, latestLater.ref).toString("utf8")); } catch { laterArtifact = null; } }
+        verifiedReasons.push(`verified: ${later.length} later capture(s) are not the declared ${phaseId ?? "Phase"} gate and do not replace it; gate command=${JSON.stringify(artifact.command ?? null)}; latest later capture=${JSON.stringify(laterArtifact?.command ?? null)}; latest later original=${latestLater.ref ?? null}`);
+      }
     }
-    claims.verified = claim(verifiedReasons.length ? "fail" : "pass", verifiedReasons, read.evidence);
+    claims.verified = claim(verifiedFailures ? "fail" : "pass", verifiedReasons, read.evidence, verifiedFailures ? "GATE_VERIFIED_RED" : null);
   }
 
   if (!verdictBytes) {
@@ -539,6 +604,7 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
     worktree: Object.freeze({ path: worktree, pending_recheck: worktree === null ? "worktree_absent" : "recomputed" }),
     verdict: verdictRef ? Object.freeze(verdictRef) : null,
     claims: Object.freeze(Object.fromEntries(CLAIM_NAMES.map((name) => [name, Object.freeze(claims[name])]))),
+    claim_codes: Object.freeze(Object.fromEntries(CLAIM_NAMES.map((name) => [name, claims[name].code ?? null]))),
     environment: Object.freeze({ sha256: currentEnvironment, platform: process.platform, arch: process.arch, node: process.version, node_major: process.versions.node.split(".")[0], graphify: graphifyIdentity() }),
   });
 }
@@ -553,7 +619,7 @@ export async function recordCloseClaimsReadback({ taskPath, planRef, worktreeRoo
   if (!before.required) return { status: "not_required", claims: before, readback_ref: null };
   const failed = Object.entries(before.claims).filter(([, value]) => value.status !== "pass");
   if (failed.length) {
-    throw failure("DELIVERY_CLAIMS_REJECTED", `close refuses the unproven delivery claims: ${failed.map(([name, value]) => `${name} (${value.reasons.join("; ")})`).join(" | ")}`);
+    throw failure("DELIVERY_CLAIMS_REJECTED", `close refuses the unproven delivery claims [${failed.map(([, value]) => value.code ?? "UNCODED").join(",")}]: ${failed.map(([name, value]) => `${name} (${value.reasons.join("; ")})`).join(" | ")}`);
   }
   const record = {
     schema_version: "close-claims-readback.v1",

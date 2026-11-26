@@ -15,6 +15,25 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 - 第 7 步的实际 diff 扫描仍由原 diff 所有人执行；本技能只给交接动作，不把扫描或写权转到审查者。
 - 每一步都只按当前 Phase 的写集、冻结命令、真实原件和已确认 AC 工作；缺输入时停该路径，不用默认值或占位件补齐。
 
+<a id="process-not-applicable"></a>
+
+## 流程：调研与设计不适用
+
+本技能是执行契约，本步骤的输入已在 Phase 卡与阶段正文里定过；七步里的「上下文、调研、设计」三步不在本技能重做。
+
+- **不适用**：「上下文」由第 1 步读材料与 Phase 卡承担；「调研」由阶段第 1–2 步与 `skills/phase-maker/SKILL.md#八步` 的输入承担；「设计」由 Phase 卡 `skills/spec-plan/templates/phase-template.md` 的「这一 Phase 交出什么？」与「这一 Phase 怎么验收？」两节承担（节名定位，行号随模板漂移，不按旧行号硬读）。本技能从「产出」起算，冷读／对抗／异源对应第 8 步，收敛对应第 9 步。
+- **方案歧义回上游**：首改路径、成立条件或失败信号没写清，回 `skills/phase-maker/SKILL.md#八步`；方向、验收或取舍本身有歧义，回 `skills/decision-maker/SKILL.md#package-convergence`。回上游时停受影响步骤，写缺口、owner 与恢复条件，其余步骤继续。
+- **拒认**：在本技能里现场补设计；把实现中的选择当已定方案；用「按计划实现」代替首改路径。
+
+### 流程六项落点
+
+- 上下文来源：第 1 步读材料与 Phase 卡；本技能不重做上下文。
+- 谁派调研：阶段第 1–2 步与 `skills/phase-maker/SKILL.md#八步` 的输入；本技能不另派调研。
+- 歧义先 talk：方案歧义回 `skills/phase-maker/SKILL.md#八步`，方向或验收歧义回 `skills/decision-maker/SKILL.md#package-convergence`（见上一节）。
+- 产出形状：第 2–9 步各自的「交付」行与原件。
+- 谁审：第 8 步的独立审查与同源补充轴；开发不兼审。
+- 怎么收敛：第 9 步 findings 逐条处置、受影响复验、缺口清单带 owner。
+
 <a id="step-write-red-tests"></a>
 ## 第 2 步：先证目标失败
 
@@ -37,7 +56,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 ## 第 4 步：按实际差异选测试面
 
 - **输入**：真实 changed files、当前 Phase 的测试声明、既有实现与消费者。
-- **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。
+- **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。路线含自动触发或对外发送时，同读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」，按其判法与证据要求执行；本步只指路，不复述判法。
 - **交付**：实际差异到测试面的对应关系、选择理由、风险场景与排除原因。
 - **拒认**：按目录名猜测试面、拿计划路线代替实际 changed files、图或选择器代替真实 oracle。
 - **失败**：图缺失、歧义或目标不存在时如实记 exit 与 unknown，安全回原文与真实测试；图不作质量许可。
@@ -84,12 +103,24 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：审查与测试两方实际回件、原 finding 原文、当前 Phase 的受影响 file/case。
 - **首动作**：逐条保留原文并按内核 R5 四态处置；有效问题回原实施会话，先列受影响 file/case，再只跑该集合并写实际结果。
-- **交付**：每条 finding 的处置与理由、受影响复验原件、Phase Done 的缺口清单；`failures` 按现有执行清单五要素追加。
+- **交付**：每条 finding 的处置与理由、受影响复验原件、Phase Done 的缺口清单；残余：即该缺口清单（剩余失败、owner、下一 Phase），不另写；`failures` 按现有执行清单五要素追加。
 - **晚发现与同因**：晚发现即迟到有效发现，回原 Phase、由原开发修复，不另开 Phase、不丢弃、不得只带到期终审；同因时先停重复动作：同一失败重复或一轮没有新事实，按既有阈值分诊；改断言走原请求，oracle 身份不换。
 - **终末边界**：终末外部单审不在本段；push、merge、归档与删除归 stage-close，本段不执行。
 - **提交身份**：审后只做一次正常提交，记 commit sha 与 author 并绑定两方回报 ref，末段据此核同一开发；迟到发现按补提交单列。
 - **拒认**：只改处置状态、只改行号或夹具当新事实、拿未绑定的答复记接受风险、两方未回报就宣布完成。
 - **失败**：确实无法在当前范围解决时写影响、证据、原因与剩余选项，继续不受影响的工作；严重风险交真实用户，不自行接受。
+
+## 效率条款
+
+效率：审查一次定稿，findings 按内核 R5 四态（已修／无效／接受风险／需人）逐条处置；修复回原实施会话，不重复开第二轮审查。什么情况下不做：同一失败重复出现或一轮没有新事实时，先停重复动作做根因检查，不靠再开一轮审查换结论。违反时的表现：同一问题审两三轮、findings 只改状态不写处置，或把需人项自行记成接受风险。
+
+## 收尾：单元复盘记录
+
+第 9 步 findings 处置完、Phase Done 的缺口列清，这个 Phase 的设计与执行合成一个单元完成，当场记一条。
+这一节只记一件事：这批 findings 里哪条是真问题、处置后留下了哪条会改变下次做法的实现教训；没有就写具名依据。
+设计侧的切 Phase 信号与切片从 `skills/phase-maker/SKILL.md` 的「收尾：单元复盘记录」读，写进同一条记录；设计侧不另记。
+五问、摘要上限、记录形状、状态词与证据指针，读 `skills/stage-reflection/SKILL.md` 的「单元模式：单元复盘记录」；此处不复述方法。
+少记一条只让本 Phase 这一条判未完成，不拦本 Phase 之后再开工。
 
 ## 与完整方法的关系
 

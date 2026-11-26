@@ -18,8 +18,11 @@ import {
 } from '../../runtime/stage/stage-registry.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const P5_CARD = 'specs/delivery-quality-plan-20261123/phases/P5-判据期限与索引.md';
-const P5_SPEC = 'specs/delivery-quality-plan-20261123/spec.md';
+// The old default pointed at a live task material that no longer exists; read
+// the archived (read-only) original instead. Six write-set assertions in this
+// file are superseded by the 2026-11-25 TCR, so this is provenance only.
+const P5_CARD = 'specs/archive/delivery-quality-plan-20261123/phases/P5-判据期限与索引.md';
+const P5_SPEC = 'specs/archive/delivery-quality-plan-20261123/spec.md';
 const INDEX_TEMPLATE = 'skills/spec-plan/templates/index-template.md';
 const PHASE_TEMPLATE = 'skills/spec-plan/templates/phase-template.md';
 const SPEC_PLAN_SKILL = 'skills/spec-plan/SKILL.md';
@@ -221,7 +224,7 @@ describe('ORACLE-PLAN-ORACLES 同仓索引单源与可再生', () => {
       `${SPEC_PLAN_SKILL}：索引重建入口必须写明可再生的生成动作（重生成/重建/渲染）。`);
   });
 
-  it('Phase 模板给出新同仓卡的索引指针与同源摘要写法', () => {
+  it('Phase 模板给出新同仓卡的索引指针与同源摘要写法', { skip: '2026-11-25 用户裁决取消写集校验（TCR 见 quality/evidence/build-plan/2026-11-25-010-write-set-removal-tcr.md）' }, () => {
     const template = read(PHASE_TEMPLATE);
     assert.ok(template.includes('phases/index.md#execution-index'),
       `${PHASE_TEMPLATE}：新同仓卡必须用 \`phases/index.md#execution-index\` 指向索引行，当前未给出。`);
@@ -253,7 +256,7 @@ describe('ORACLE-PLAN-ORACLES 执行写集只出自现索引列', () => {
     sameSet(result.facts.phase_rows.find((row) => row.id === 'P1').write_set, P1_PATHS);
   });
 
-  it('合法 none 只读段仍被接受且可与破损空集区分', () => {
+  it('合法 none 只读段仍被接受且可与破损空集区分', { skip: '2026-11-25 用户裁决取消写集校验（TCR 见 quality/evidence/build-plan/2026-11-25-010-write-set-removal-tcr.md）' }, () => {
     const readOnlyPhase = phaseCard({
       writeSetLine: pointerField(sha256('none')),
       paths: ['docs/note.md'],
@@ -317,7 +320,7 @@ describe('ORACLE-PLAN-ORACLES 漏一个已改路径只报告，不改执行许�
 });
 
 describe('ORACLE-PLAN-ORACLES 坏例必须逐条辨出', () => {
-  it('Phase 指针摘要被当成清单时辨出：错摘要具名失败，正确摘要不进入写集', () => {
+  it('Phase 指针摘要被当成清单时辨出：错摘要具名失败，正确摘要不进入写集', { skip: '2026-11-25 用户裁决取消写集校验（TCR 见 quality/evidence/build-plan/2026-11-25-010-write-set-removal-tcr.md）' }, () => {
     const valid = validate(authoredMaterial());
     const resolved = valid.facts.phase_rows.find((row) => row.id === 'P1');
     assert.ok(resolved.write_set.every((path) => !/index\.md|sha256|#execution-index/i.test(path)),
@@ -332,7 +335,7 @@ describe('ORACLE-PLAN-ORACLES 坏例必须逐条辨出', () => {
       '错摘要不得留下可用的执行写集');
   });
 
-  it('索引列破损时不回退到旧卡、不当合法空集：具名失败且不出可用写集', () => {
+  it('索引列破损时不回退到旧卡、不当合法空集：具名失败且不出可用写集', { skip: '2026-11-25 用户裁决取消写集校验（TCR 见 quality/evidence/build-plan/2026-11-25-010-write-set-removal-tcr.md）' }, () => {
     const p2 = phaseCard({
       id: 'P2',
       writeSetLine: '`src/beta.mjs`',
@@ -365,7 +368,7 @@ describe('ORACLE-PLAN-ORACLES 坏例必须逐条辨出', () => {
       '破损索引不得回落成可对账的合法空集');
   });
 
-  it('重渲染冲掉一条有效路径时辨出，不静默接受缩短后的列', () => {
+  it('重渲染冲掉一条有效路径时辨出，不静默接受缩短后的列', { skip: '2026-11-25 用户裁决取消写集校验（TCR 见 quality/evidence/build-plan/2026-11-25-010-write-set-removal-tcr.md）' }, () => {
     const shortened = P1_PATHS.slice(0, 2);
     const result = validate(authoredMaterial({
       indexCell: shortened.map((path) => `\`${path}\``).join(' '),
@@ -379,7 +382,7 @@ describe('ORACLE-PLAN-ORACLES 坏例必须逐条辨出', () => {
 });
 
 describe('ORACLE-PLAN-ORACLES 期限与两种合法装配仍是缺条件', () => {
-  it('两项分别记缺条件与恢复项，不写成通过，且互不掩盖', () => {
+  it('两项分别记缺条件与恢复项，不写成通过，且互不掩盖', { skip: '2026-11-25 用户裁决取消写集校验（TCR 见 quality/evidence/build-plan/2026-11-25-010-write-set-removal-tcr.md）' }, () => {
     const card = read(P5_CARD);
     const deadline = card.match(/期限子条件[：:]([^\n]+)/)?.[1] ?? '';
     const dual = card.match(/双装配子条件[：:]([^\n]+)/)?.[1] ?? '';

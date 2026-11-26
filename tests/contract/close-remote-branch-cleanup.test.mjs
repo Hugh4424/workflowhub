@@ -7,6 +7,26 @@ import { prepareDeliveryClosePlan, confirmClosePlan, authorizeClosePlan, execute
 const roots=[];let counter=0;
 afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
 function git(root,args){return execFileSync("git",args,{cwd:root,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this file keeps
+// judging its own subject instead of tripping the gate. Evidence shape follows
+// the P9 hard-gate sample; no assertion or expectation is relaxed.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],["build-code","write-red-tests"],["build-code","implement-change"],["build-code","inspect-and-route-actual-tests"],["build-code","run-tests"],["build-code","inspect-acceptance-and-ui"],["build-code","scan-diff"],["build-code","review-change"],["build-code","analyze-review-findings"]];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),`${JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})}\n`);
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const path=join(taskDir,"facts.jsonl"),raw=existsSync(path)?readFileSync(path,"utf8"):"";
+  const rows=raw.trim()?raw.trim().split("\n").map(line=>JSON.parse(line)):[];
+  rows.push({record_kind:"step_claims",task_id:id,created_at:"2026-10-20T00:00:00Z",evidence:{value:claims}});
+  writeFileSync(path,rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
 function fixture({existing=false,remoteTask=true}={}){
   const base=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-narrow-")));roots.push(base);
   const repo=join(base,"repo"),bare=join(base,"origin.git"),id=`close-${++counter}`,worktree=join(base,`repo-${id}`),taskDir=join(base,"storage","Projects","workflowhub","tasks",id);
@@ -20,6 +40,7 @@ function fixture({existing=false,remoteTask=true}={}){
   git(worktree,["add",source]);git(worktree,["commit","-qm","materials"]);if(remoteTask)git(worktree,["push","-q","origin",branch]);
   writeFileSync(join(taskDir,"task.json"),JSON.stringify({schema_version:"1.0.0",project_name:"workflowhub",task_id:id,created_at:"2026-10-02T00:00:00Z",target_repo_root:repo,record_model:"vnext-single-write",activation_cohort:"post",...(existing?{workspace_mode:"existing",workspace_root:worktree}:{})})+"\n");
   writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:id,stage:"verify-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");
+  seedStepEvidence(taskDir,join(worktree,source),id);
   return {base,repo,bare,worktree,id,taskDir,branch,source,delivery:{remote:"origin",target_branch:"main",task_branch:branch,spec_source_path:source,spec_archive_path:`specs/archive/${id}`}};
 }
 async function prepare(s,mode){return prepareDeliveryClosePlan({taskDir:s.taskDir,delivery:s.delivery,...(mode?{closeMode:mode}:{})});}

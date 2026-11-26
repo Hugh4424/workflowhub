@@ -17,6 +17,25 @@ function enableFsmonitorNoChangeHook(s,path){
  git(s.worktree,["update-index","--fsmonitor"]);
  expect(git(s.worktree,["ls-files","-f","-z","--",path])[0]).toBe("h");
 }
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this file keeps
+// judging its own subject (authorization, cleanup, resume) instead of tripping
+// the gate. Evidence shape follows the P9 hard-gate sample.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],...["write-red-tests","implement-change","inspect-and-route-actual-tests","run-tests","inspect-acceptance-and-ui","scan-diff","review-change","analyze-review-findings"].map(slug=>["build-code",slug])];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})+"\n");
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const facts=readFileSync(join(taskDir,"facts.jsonl"),"utf8").trim().split("\n").map(line=>JSON.parse(line));
+  facts[0]={...facts[0],evidence:{value:claims}};
+  writeFileSync(join(taskDir,"facts.jsonl"),facts.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
 function fixture({existing=false,remoteTask=true,ignoredPaths=[]}={}){
   const base=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-narrow-")));roots.push(base);
   const repo=join(base,"repo"),bare=join(base,"origin.git"),id=`close-${++counter}`,worktree=join(base,`repo-${id}`),taskDir=join(base,"storage","Projects","workflowhub","tasks",id);
@@ -34,6 +53,7 @@ function fixture({existing=false,remoteTask=true,ignoredPaths=[]}={}){
   git(worktree,["add",source]);git(worktree,["commit","-qm","materials"]);if(remoteTask)git(worktree,["push","-q","origin",branch]);
   writeFileSync(join(taskDir,"task.json"),JSON.stringify({schema_version:"1.0.0",project_name:"workflowhub",task_id:id,created_at:"2026-10-02T00:00:00Z",target_repo_root:repo,record_model:"vnext-single-write",activation_cohort:"post",...(existing?{workspace_mode:"existing",workspace_root:worktree}:{})})+"\n");
   writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:id,stage:"build-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");
+  seedStepEvidence(taskDir,join(worktree,source),id);
   return {base,repo,bare,worktree,id,taskDir,branch,source,delivery:{remote:"origin",target_branch:"main",task_branch:branch,spec_source_path:source,spec_archive_path:`specs/archive/${id}`}};
 }
 async function prepare(s,mode){return prepareDeliveryClosePlan({taskDir:s.taskDir,delivery:s.delivery,...(mode?{closeMode:mode}:{})});}

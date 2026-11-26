@@ -1,6 +1,6 @@
 // Current post Phase and ordinary decision-log text contracts.
 // Pure facts only: no retired appendices, hash-bound identities or stage-completion machines.
-import { statSync, realpathSync } from "node:fs";
+import { readFileSync, statSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
@@ -390,9 +390,9 @@ function executionIndexRows(document, errors, reviewReadScope, invalidDependency
     }
     const paths = inlinePaths(cells[3]);
     const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(cells[3].trim());
-    if (paths.length === 0 && !explicitNone) rowErrors.push("write set is empty");
-    if (EMPTY_WRITE_SET_PREFIX.test(cells[3].trim()) && !explicitNone) rowErrors.push("none write set declaration is invalid");
-    for (const path of paths) if (unsafeWritePath(path, reviewReadScope)) rowErrors.push(`unsafe write set path: ${path}`);
+    // 2026-11-25 用户裁决：索引写入集列只作推荐，不校验。
+    // 2026-11-25 用户裁决：索引写入集列只作推荐，不校验。
+    // 2026-11-25 用户裁决：索引写入集列只作推荐，不校验。
     if (rowErrors.length) {
       errors.push(...rowErrors.map((error) => `${label} ${error}`));
       continue;
@@ -740,7 +740,7 @@ export function phaseReadinessRows(body) {
   return Object.freeze({ declared: true, rows: Object.freeze(rows), error: null });
 }
 
-function readinessMode(mode) {
+export function readinessMode(mode) {
   const text = String(mode ?? "").toLowerCase();
   if (text.includes("机器") || text.includes("machine")) return "machine";
   if (text.includes("人") || text.includes("human") || text.includes("manual")) return "human";
@@ -786,6 +786,143 @@ export function materialFingerprint({ spec = "", index = "", phases = {} } = {})
   }
   return hash.digest("hex");
 }
+
+// 2026-11-26 方案 C: the readiness verdict depends on the readiness rows and on
+// the real state of each probe's path arguments, not on the whole material set.
+// A closeout section written after the table must not invalidate the verdict;
+// a changed probe target must. This key is versioned so a legacy readiness.v1
+// original is never mistaken for an equal v2 record.
+const READINESS_FINGERPRINT_SCHEMA = "readiness-fingerprint.v2";
+
+function readinessPathToken(token, cwd = process.cwd()) {
+  const text = String(token ?? "");
+  if (!text || text.startsWith("-")) return false;
+  if (isAbsolute(text) || text.includes("/") || text.includes("\\")) return true;
+  try { statSync(resolve(cwd, text)); return true; }
+  catch { return false; }
+}
+
+// What a probe can observe about one path token. `test -e` judges existence
+// only; a directory is its own state; a readable file is bound by content; an
+// unreadable target is named instead of being silently treated as absent.
+function readinessTargetState(token, cwd = process.cwd(), { mode = "content" } = {}) {
+  const target = resolve(cwd, String(token ?? ""));
+  let stat;
+  try { stat = statSync(target); }
+  catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return "absent";
+    return `unreadable:${error.code ?? "unknown"}`;
+  }
+  if (mode === "exists") return "present";
+  if (mode === "directory") return stat.isDirectory() ? "directory" : "not-directory";
+  if (stat.isDirectory()) return "directory";
+  try { return `sha256:${createHash("sha256").update(readFileSync(target)).digest("hex")}`; }
+  catch (error) { return `unreadable:${error.code ?? "unknown"}`; }
+}
+
+function readinessProbeTargets(argv) {
+  const name = argv[0], rest = argv.slice(1), targets = [];
+  if (name === "test") {
+    const flag = rest[0], target = rest.at(-1);
+    if (typeof target === "string" && target !== "") {
+      targets.push({ token: target, mode: flag === "-e" ? "exists" : flag === "-d" ? "directory" : "content" });
+    }
+    return Object.freeze(targets);
+  }
+  for (const token of rest) if (readinessPathToken(token)) targets.push({ token, mode: "content" });
+  return Object.freeze(targets);
+}
+
+// Hash exactly what the readiness judgement read: the table rows as written and
+// the real state of the path tokens each machine probe names. spec.md,
+// phases/index.md and every other Phase card stay out (plan C, 2026-11-26).
+export function readinessFingerprint({ phasePath = "", rows = [], cwd = process.cwd() } = {}) {
+  // phasePath names the record's owner; it is not content and stays unhashed.
+  void phasePath;
+  const hash = createHash("sha256");
+  hash.update(`${READINESS_FINGERPRINT_SCHEMA}\0`);
+  for (const row of rows ?? []) {
+    const kind = row.kind ?? readinessMode(row.mode);
+    hash.update(JSON.stringify([String(row.command ?? ""), String(row.expected ?? ""), kind]));
+    hash.update("\0");
+    if (kind !== "machine") continue;
+    let argv;
+    try { argv = readinessProbeArgv(row.command); } catch { continue; }
+    for (const { token, mode } of readinessProbeTargets(argv)) {
+      hash.update(JSON.stringify([token, readinessTargetState(token, cwd, { mode })]));
+      hash.update("\0");
+    }
+  }
+  return hash.digest("hex");
+}
+
+function legacyProbeTargetChanges(probe, cwd) {
+  const argv = Array.isArray(probe?.argv) ? probe.argv : [];
+  const name = argv[0], rest = argv.slice(1), changes = [];
+  if (name === "test") {
+    const flag = rest[0], target = rest.at(-1);
+    if (typeof target !== "string" || target === "") return changes;
+    if (flag === "-e") {
+      const was = probe.expected === "0" ? "present" : "absent";
+      const is = readinessTargetState(target, cwd, { mode: "exists" }) === "absent" ? "absent" : "present";
+      if (was !== is) changes.push(`probe target ${target} ${was} -> ${is}`);
+    } else if (flag === "-d") {
+      const was = probe.expected === "0" ? "directory" : "not-directory";
+      const state = readinessTargetState(target, cwd, { mode: "directory" });
+      const is = state === "directory" ? "directory" : state === "absent" ? "absent" : "not-directory";
+      if (was !== is) changes.push(`probe target ${target} ${was} -> ${is}`);
+    } else {
+      // A readiness.v1 original records readability, not content; a removed or
+      // unreadable target is still a named change.
+      const was = probe.expected === "0" ? "readable" : "unreadable";
+      const state = readinessTargetState(target, cwd);
+      const is = state === "absent" ? "absent" : state.startsWith("unreadable:") ? "unreadable" : "readable";
+      if (was !== is) changes.push(`probe target ${target} ${was} -> ${is}`);
+    }
+    return changes;
+  }
+  if (name === "shasum" || name === "sha256sum") {
+    const target = rest.at(-1);
+    if (typeof target !== "string" || target === "") return changes;
+    let was = null;
+    try { was = String(readFileSync(probe.output_ref, "utf8")).trim().split(/\s+/)[0]; } catch { was = null; }
+    const state = readinessTargetState(target, cwd);
+    if (was && state === "absent") changes.push(`probe target ${target} absent (was ${was.slice(0, 12)})`);
+    else if (was && state.startsWith("sha256:") && state.slice(7) !== was) changes.push(`probe target ${target} sha256 changed`);
+    else if (was && state.startsWith("unreadable:")) changes.push(`probe target ${target} ${state}`);
+    return changes;
+  }
+  return changes;
+}
+
+// Legacy readiness.v1 originals carry no per-object fingerprint. Their own
+// recorded probes and outputs are still real evidence, so this reader names the
+// judged objects that changed instead of failing every legacy original as if
+// the whole material set had moved.
+export function legacyReadinessChanges({ record, rows = [], cwd = process.cwd() } = {}) {
+  const changes = [];
+  const probes = Array.isArray(record?.probes) ? record.probes : [];
+  const humans = Array.isArray(record?.human_rows) ? record.human_rows : [];
+  const machineRows = (rows ?? []).filter((row) => (row.kind ?? readinessMode(row.mode)) === "machine");
+  const humanRows = (rows ?? []).filter((row) => (row.kind ?? readinessMode(row.mode)) === "human");
+  if (probes.length !== machineRows.length) changes.push(`machine rows ${probes.length} -> ${machineRows.length}`);
+  if (humans.length !== humanRows.length) changes.push(`human rows ${humans.length} -> ${humanRows.length}`);
+  for (const [index, probe] of probes.entries()) {
+    const row = machineRows[index];
+    if (!row) break;
+    if (probe.probe !== row.command) changes.push(`machine row ${index + 1} command changed`);
+    if (probe.expected !== row.expected) changes.push(`machine row ${index + 1} expected ${JSON.stringify(probe.expected)} -> ${JSON.stringify(row.expected)}`);
+    changes.push(...legacyProbeTargetChanges(probe, cwd));
+  }
+  for (const [index, human] of humans.entries()) {
+    const row = humanRows[index];
+    if (!row) break;
+    if (human.command !== row.command) changes.push(`human row ${index + 1} command changed`);
+    if (human.expected !== row.expected) changes.push(`human row ${index + 1} expected changed`);
+  }
+  return Object.freeze(changes);
+}
+
 
 // Machine rows run as argv only. Material text is untrusted, so the command
 // must name a known read-only tool with read-only arguments; interpreters and
@@ -976,57 +1113,14 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     // supplies a Phase-level value.
     const phaseField = (name) => fieldValue(machineBody, name) ?? fieldValue(authorityFields, name);
     const declaration = phaseField("Write set");
+    // 2026-11-25 用户裁决：写入集字段只作推荐，不再校验（缺字段、摘要不符、
+    // 与索引不一致、同路径多阶段重复都不报错）。仍读取它，供「只读阶段」判定使用。
     const pointer = parseWriteSetPointer(declaration);
-    let explicitNone;
-    if (pointer) {
-      // Single source: the index row's write set is the executable set. A
-      // pointer with a stray second list, a missing/bad digest, or a digest that
-      // no longer matches the row fails by name and yields no usable set.
-      explicitNone = false;
-      if (pointer.extraTokens.length > 0 || pointer.digests.length !== 1) {
-        const observed = pointer.digests.length ? `sha256=${pointer.digests.join(",")}` : "sha256 is missing";
-        errors.push(`${expectedPath} Write set pointer declaration is invalid: ${observed}; only \`phases/index.md#execution-index\` and one sha256=<64 lowercase hex> are allowed`);
-        scopeValid = false;
-      } else {
-        const rowExplicitNone = row.explicit_none === true;
-        const expectedDigest = writeSetDigest(row.write_set, rowExplicitNone);
-        if (expectedDigest !== pointer.digests[0]) {
-          errors.push(`${expectedPath} Write set pointer sha256=${pointer.digests[0]} does not match phases/index.md ${expectedId} row sha256=${expectedDigest}`);
-          scopeValid = false;
-        } else {
-          declaredWriteSet.push(...row.write_set);
-          explicitNone = rowExplicitNone && row.write_set.length === 0;
-        }
-      }
-    } else {
-      declaredWriteSet.push(...phaseWriteSet(body));
-      explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
-      if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
-        errors.push(`${expectedPath} Write set none declaration is invalid`);
-        scopeValid = false;
-      }
-    }
-    if (declaredWriteSet.length === 0 && !(explicitNone && row.write_set.length === 0)) {
-      errors.push(`${expectedPath} Write set is missing`);
-      scopeValid = false;
-    }
-    for (const path of declaredWriteSet) if (unsafeWritePath(path, reviewReadScope)) {
-      errors.push(`${expectedPath} unsafe Write set path: ${path}`);
-      scopeValid = false;
-    }
+    if (pointer) declaredWriteSet.push(...(row.write_set ?? []));
+    else declaredWriteSet.push(...phaseWriteSet(body));
+    let explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "")
+      || (pointer ? (row.write_set ?? []).length === 0 : declaredWriteSet.length === 0);
     const sourceIdentity = path => writePathIdentity(path, reviewReadScope);
-    if (!sameIds(new Set(declaredWriteSet.map(sourceIdentity)), new Set(row.write_set.map(sourceIdentity)))) {
-      errors.push(`${expectedPath} write set differs from Phase index`);
-      scopeValid = false;
-    }
-    for (const path of declaredWriteSet) {
-      if (isSharedGovernancePath(path)) continue;
-      const identity = sourceIdentity(path);
-      const owners = writeOwners.get(identity) ?? [];
-      const owner = owners.find((ref) => !serializedPair(ref, expectedPath));
-      if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
-      writeOwners.set(identity, [...owners, expectedPath]);
-    }
     const dependencyText = phaseField("Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
     const phaseDependencies = WITHOUT_PREDECESSOR.test(dependency ?? "") ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
@@ -1140,8 +1234,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         && /(?:read-only|只读)/i.test(fields.Action ?? "")
         && /(?:no production writes|无生产修改|不.*(?:写|修改)|do not produce or change code)/i.test(`${fields["Files / symbols"] ?? ""} ${fields.Action ?? ""}`)
         && !hasAffirmativeCodeWrite(fields.Action);
-      if (!readOnlyTask && (filePaths.length === 0 || filePaths.some((path) => !declaredWriteSet.some(owned => sourceIdentity(owned) === sourceIdentity(path))))) {
-        errors.push(`${expectedPath} ${taskId} Files / symbols must name owned write-set paths`);
+      if (!readOnlyTask && filePaths.length === 0) {
+        errors.push(`${expectedPath} ${taskId} Files / symbols must name at least one path`);
       }
       if (!/(?:\bsymbol|符号|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {
         errors.push(`${expectedPath} ${taskId} Files / symbols must name a symbol or explain N/A for non-code files`);

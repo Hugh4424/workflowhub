@@ -10808,6 +10808,243 @@
       ],
       "delete_condition": "R8 的角色与归并说明由经独立验证的替代正文完整承接，且四个阶段的真实读者改接后，由内核 owner 删除。",
       "retention_basis": "delivery-quality-plan-20261123 包 3 / AC-QUAL-016、AC-QUAL-017；只证协议正文与真实文件存在，审查独立性仍由实际执行原件与人读判断。"
+    },
+    {
+      "source": "tools/cli/rule-tables.mjs",
+      "destination": "tools/cli/rule-tables.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "规则表的建、锚点唯一、逐字副本检测；不写规则正文，不另立规范根。",
+      "owner": "规范结构维护者（P6 起承接）",
+      "consumer": "`skills/project-norm-init/SKILL.md`「规则的建与读」、`skills/norm-sync/SKILL.md` 第 4 步与 build-plan/build-code/build-prd 四个读点；`tools/cli/verify-structure.mjs` 导入 `deriveSlug` 作为仓内唯一 slug 算法。",
+      "module_consumers": [
+        "tools/cli/verify-structure.mjs"
+      ],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/norm-sync/SKILL.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/build-prd/SKILL.md",
+        "tests/contract/rule-tables.test.mjs"
+      ],
+      "delete_condition": "五列表不再是规则归属判据、四个读点与 norm-sync 改接其它已验证结构后，由规范结构维护者删除；不因当前无表而提前删。",
+      "retention_basis": "delivery-quality-code-20261124 P1 / AC-P1-001..007；只证建表、报缺、查重、参数守卫的能力，不证本仓域文件已建（P6）。"
+    },
+    {
+      "source": "tools/cli/check-added-failure-masks.mjs",
+      "destination": "tools/cli/check-added-failure-masks.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "只扫 phase_progress.base_head 之后新增行，报告新增空 catch 与 catch 体只返回空值；机器只报候选，处置由人写。",
+      "owner": "build-code 门命令维护者",
+      "consumer": "workflows/build-code/SKILL.md 第 5 步门命令执行者与第 7 步审查者；tests/contract/check-added-failure-masks.test.mjs 直接导入函数。",
+      "module_consumers": [
+        "tests/contract/check-added-failure-masks.test.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/check-added-failure-masks.test.mjs"
+      ],
+      "delete_condition": "门命令改由经独立验证的替代检查承接、build-code 第 5/7 步与契约测试改接后，由 build-code 门命令维护者删除；两问四问仍保留。",
+      "retention_basis": "delivery-quality-code-20261124 P2 / AC-P2-001..003；只证自测与真实新增行候选，不判理由真假、不做全仓历史扫描。"
+    },
+    {
+      "source": "tests/contract/check-added-failure-masks.test.mjs",
+      "destination": "tests/contract/check-added-failure-masks.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "以 19 个样本、13 组断言与临时仓夹具验证检查器两类规则、跳过面、基线读取与输入错退出码；不代表真实 Phase 零漏报。",
+      "owner": "build-code 门命令维护者",
+      "consumer": "独立测试者与 P2 实现者；vitest run 直接收集。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "检查器退役或两类规则由经独立验证的替代测试完整承接后，由 build-code 门命令维护者同批删除。",
+      "retention_basis": "delivery-quality-code-20261124 P2 / AC-P2-001..003；只证自测与真实新增行候选，不判理由真假。"
+    },
+    {
+      "source": "specs/code-changes/README.md",
+      "destination": "specs/code-changes/README.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "代码改动域规则表入口：五列五行，一行一组，只导航不写规则正文。",
+      "owner": "代码改动域规则表维护者",
+      "consumer": "四个非 UI 读点与 AGENTS「代码改动」行；建成后由 P1 rule-tables check 按 AGENTS 指针识别。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/make-decision/SKILL.md",
+        "workflows/build-prd/SKILL.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/code-changes/ownership.md",
+      "destination": "specs/code-changes/ownership.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "归属组正文：唯一写主、共享路径前后写者与越界处置。",
+      "owner": "代码改动域归属规则 owner",
+      "consumer": "specs/code-changes/README.md 表行 1；build-code 三角色与派发者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/code-changes/README.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/code-changes/defaults.md",
+      "destination": "specs/code-changes/defaults.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "错误与默认值组正文：失败显式、默认值具名 owner、兜底只在边缘。",
+      "owner": "代码改动域错误与默认值规则 owner",
+      "consumer": "specs/code-changes/README.md 表行 2；写错误处理与审查该分支的实现者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/code-changes/README.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/code-changes/interface.md",
+      "destination": "specs/code-changes/interface.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "接口变更处置组正文：只写四问处置，不定义字段。",
+      "owner": "代码改动域接口处置规则 owner",
+      "consumer": "specs/code-changes/README.md 表行 3；改 public/CLI 调用前的人与审查者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/code-changes/README.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/code-changes/wiring.md",
+      "destination": "specs/code-changes/wiring.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "接线组正文：先有 consumer 再建、三处登记与删除条件。",
+      "owner": "代码改动域接线规则 owner",
+      "consumer": "specs/code-changes/README.md 表行 4；move-map 与 skill-deps 维护者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/code-changes/README.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/code-changes/records.md",
+      "destination": "specs/code-changes/records.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "记录组正文：只写记录动作，范围与证据规则全部指向 AGENTS 原文。",
+      "owner": "代码改动域记录规则 owner",
+      "consumer": "specs/code-changes/README.md 表行 5；实施者、独立测试者与 build-code 终末。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/code-changes/README.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/design/README.md",
+      "destination": "specs/design/README.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "设计域规则表入口：五行只指已存在锚点，不建六个默认正文占位。",
+      "owner": "设计域规则表维护者",
+      "consumer": "AGENTS 设计行（AGENTS.md:96）；build-plan:58 与 build-code:137 的 UI 三句；specs/frontend/frontend.md 的边界行引用。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md",
+        "skills/project-norm-init/SKILL.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/frontend/README.md",
+      "destination": "specs/frontend/README.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "前端域规则表入口：1 行前端工程正文＋4 条搬来的链接，顺序先入口再正文。",
+      "owner": "前端域规则表维护者",
+      "consumer": "AGENTS 前端行（AGENTS.md:97）；build-plan:58、build-code:137 的 UI 三句；skills/project-norm-init/SKILL.md ⑥行；skills/plan-design-review/SKILL.md ③④⑥ 三行。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md",
+        "skills/project-norm-init/SKILL.md",
+        "skills/plan-design-review/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "specs/frontend/frontend.md",
+      "destination": "specs/frontend/frontend.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "前端工程正文：模块边界、配置与构建、DTO→ViewModel、请求生命周期、错误与样式归属。",
+      "owner": "前端工程正文 owner",
+      "consumer": "specs/frontend/README.md 表行 1；skills/project-norm-init/SKILL.md ⑥行；skills/plan-design-review/SKILL.md ③④⑥ 三行；build-code:136 第 7 步 UI 读点；AGENTS 前端行（AGENTS.md:97）。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/frontend/README.md",
+        "skills/project-norm-init/SKILL.md",
+        "skills/plan-design-review/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实 caller/索引均迁接后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P6 T035；R-026；登记不证明已验收。"
+    },
+    {
+      "source": "runtime/task/step-coverage.mjs",
+      "destination": "runtime/task/step-coverage.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "声明步覆盖的唯一判定实现：只从报告行的非空 skill 派生、无对应行不适用、definition_unavailable 单列、named_evidence_gap 保留既有 make-decision 具名缺口；不保存状态、不建第二证据账本。",
+      "owner": "runtime/task（声明步覆盖与收口判定）",
+      "consumer": "core/task-close.mjs 的 closeDelivery 早门（直接 import）与 tools/cli/run-checks.mjs 的 stepCoverageExit（import 并再导出）；两个测试经 run-checks 的 stepCoverageExit 读取，不直接 import 本模块。",
+      "module_consumers": [
+        "core/task-close.mjs",
+        "tools/cli/run-checks.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/make-decision/steps.json",
+        "workflows/build-prd/steps.json",
+        "workflows/build-plan/steps.json",
+        "workflows/build-code/steps.json"
+      ],
+      "delete_condition": "声明步覆盖改由经独立验证的同一职责替代实现承接、core 与 CLI 两 consumer 迁移后由原 owner 删除；历史证据保留。",
+      "retention_basis": "delivery-quality-code-20261124 P9/T059；R-030；登记不证明已验收。"
+    },
+    {
+      "source": "runtime/interface/record-step-evidence.mjs",
+      "destination": "runtime/interface/record-step-evidence.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "声明步单步证据的唯一私有写入口：校验 receipt/claim 后经 runtime/task/task-store.mjs#appendStepEvidence 写 facts；不是公共 runtime behavior，不新增公共命令节点。",
+      "owner": "runtime/task（task-store 写入口）",
+      "consumer": "build-code 阶段执行者以 `node runtime/interface/record-step-evidence.mjs` 显式调用；tests/contract/four-skill-wiring.test.mjs 以子进程 spawn 调用（模块 import 关系为无）；不进入 RUNTIME_BEHAVIORS、不是 stage 步骤。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/steps.json",
+        "workflows/build-prd/steps.json",
+        "workflows/build-plan/steps.json",
+        "workflows/build-code/steps.json"
+      ],
+      "delete_condition": "声明步证据生产者由经独立验证的同一职责替代实现承接且全部调用者迁移后删除；已写入 facts 条目保留为历史事实。",
+      "retention_basis": "delivery-quality-code-20261124 P9/T057；A1 宪法修正（record-* 只作私有实现）；登记不证明已验收。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

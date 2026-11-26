@@ -721,6 +721,36 @@ function preflightMaterialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+// One missing-required-material contract for both preflight sites: the detail
+// branch below and runMaterialAllowlistPreflight must name the same first
+// missing key and return the same blocked shape. The task-bound integration
+// bundle owns the honest fallback for missing test evidence: buildReviewMaterials
+// adds an unavailable, current-snapshot fact so the provider can still review
+// implementation behavior. The static caller preflight must not reject that
+// path before the bundle builder gets a chance to publish the fallback. A
+// caller-supplied but malformed/empty test_evidence still fails closed. That
+// exception is stage/scope-specific and therefore stays inside this finder.
+function missingRequiredMaterialKey(input, required) {
+  const materials = input.materials;
+  return required.find((key) => {
+    const canDegradeMissingIntegrationTests = input.stage === "build-code"
+      && (input.review_scope === "integration" || input.reviewScope === "integration")
+      && key === "test_evidence"
+      && !Object.hasOwn(materials, key);
+    if (canDegradeMissingIntegrationTests) return false;
+    return !Object.hasOwn(materials, key) || !preflightMaterialPresent(materials[key]);
+  });
+}
+
+function blockedMissingRequiredMaterial(input, missing, pair = null) {
+  return blockedPreflight(input, "MATERIAL_INCOMPLETE", `required material ${missing} is missing or empty`, preflightDiagnostic({
+    field: missing,
+    expected: "non-empty caller material",
+    actual: Object.hasOwn(input.materials, missing) ? "empty" : "missing",
+    nextAction: "supply current material and retry",
+  }), pair, { material_id: null });
+}
+
 function preflightDiagnostic({ field, expected, actual, nextAction }) {
   return {
     field,
@@ -769,27 +799,13 @@ function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerat
       nextAction: "supply the selected direction, alternatives, rationale and key assumptions before dispatch",
     }), pair, reviewActivationCohort(input) === "post" ? { material_id: null } : {});
   }
-  const missing = required.find((key) => {
-    // The task-bound integration bundle owns the honest fallback for missing
-    // test evidence: buildReviewMaterials adds an unavailable, current-snapshot
-    // fact so the provider can still review implementation behavior. The
-    // static caller preflight must not reject that path before the bundle
-    // builder gets a chance to publish the fallback. A caller-supplied but
-    // malformed/empty test_evidence still fails closed below.
-    const canDegradeMissingIntegrationTests = input.stage === "build-code"
-      && (input.review_scope === "integration" || input.reviewScope === "integration")
-      && key === "test_evidence"
-      && !Object.hasOwn(materials, key);
-    if (canDegradeMissingIntegrationTests) return false;
-    return !Object.hasOwn(materials, key) || !preflightMaterialPresent(materials[key]);
-  });
+  const missing = missingRequiredMaterialKey(input, required);
   if (missing) {
-    return blockedPreflight(input, "MATERIAL_INCOMPLETE", `required material ${missing} is missing or empty`, preflightDiagnostic({
-      field: missing,
-      expected: "non-empty caller material",
-      actual: Object.hasOwn(materials, missing) ? "empty" : "missing",
-      nextAction: "supply current material and retry",
-    }), pair, reviewActivationCohort(input) === "post" ? { material_id: null } : {});
+    // A missing required key has no authenticated material identity, so this
+    // branch always records material_id=null instead of a computed id. The old
+    // reviewActivationCohort(input)==="post" condition left make-decision
+    // (whose cohort is null) with a computed id for blocked detail results.
+    return blockedMissingRequiredMaterial(input, missing, pair);
   }
   if (reviewActivationCohort(input) === "post") {
     try { providerMaterialEntries(input); }
@@ -961,6 +977,22 @@ async function runStaticPreflight(input, {
     || input.stage === "build-prd" || input.review_kind === "build_prd" || input.reviewKind === "build_prd";
   const materialResult = materialPreflight ? runMaterialAllowlistPreflight(input, rule, pair) : null;
   if (materialResult) return materialResult;
+  // make-decision/detail is the one document surface whose caller material
+  // contract is closed and whose keys the projection keeps verbatim. A request
+  // that names no key from that contract cannot have delivered raw_requirement
+  // or approved_direction; without this branch it is dispatched as a complete
+  // review and the provider receives a bundle whose only annotation is
+  // "Supplied material is incomplete". Report the missing key before any
+  // provider call instead of widening the allowlist contract, whose
+  // unknown-key-first result the build-prd and material-only surfaces rely on.
+  if (!materialPreflight && input.stage === "make-decision"
+      && (input.review_track ?? input.reviewTrack ?? null) === "detail"
+      && input.materials && typeof input.materials === "object" && !Array.isArray(input.materials)) {
+    const allowlist = materialAllowlistForRule(rule);
+    const requiredKeys = allowlist.required.filter((key) => !allowlist.generated.includes(key));
+    const missingKey = missingRequiredMaterialKey(input, requiredKeys);
+    if (missingKey) return blockedMissingRequiredMaterial(input, missingKey, pair);
+  }
   if (typeof providerPreflight !== "function") return null;
 
   const providerResults = [];
@@ -1932,7 +1964,7 @@ function combinePairedResults(input, pairId, roleResults) {
   const materialIds = Object.fromEntries(roleResults.map((result) => [result.role, result.material_id]));
   const materialValues = roleResults.map((result) => result.material_id).filter((value) => typeof value === "string");
   const materialConsistent = true; // Independent role packets are transport facts, not a shared advancement identity.
-  const expectedMaterialId = materialConsistent ? materialValues[0] : null;
+  const expectedMaterialId = materialConsistent ? (materialValues[0] ?? null) : null;
   const incomplete = Object.fromEntries(roleResults.map((result) => [result.role, pairResultIncomplete(result, expectedMaterialId)]));
   const anyAvailable = roleResults.some((result) => ["available", "available-with-failures"].includes(result.status));
   const anyIncomplete = Object.values(incomplete).some(Boolean);

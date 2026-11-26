@@ -96,20 +96,80 @@ function currentRow(input,identity,now) {
   }
   return row;
 }
+// The store lock only guards one facts.jsonl read-modify-write. Callers that
+// also own a stage lock (the stage row writers) call this unlocked core while
+// already holding that stage lock, so a facts row is never rewritten by two
+// writers that both believe they read the current bytes.
+async function writeStageRowLocked(identity,input,options={}) {
+  const prior=factLines(readFile(join(identity.root,"facts.jsonl")),identity);
+  const same=value=>value.record_kind===(input?.record_kind??"stage")&&(input?.record_kind==="close_action"?value.close_action?.action===input.close_action?.action:value.stage===input?.stage);
+  const index=prior.findIndex(({value})=>same(value));
+  const oldCursor=index>=0?prior[index].value.phase_progress:null;
+  const nextInput=!Object.hasOwn(input??{},"phase_progress")&&oldCursor?.phases_head&&input?.stage==="build-code"?{...input,phase_progress:oldCursor}:input;
+  const row=currentRow(nextInput,identity,options.now??new Date().toISOString());
+  const line=JSON.stringify(row);const lines=prior.map(entry=>entry.line);
+  if(index<0)lines.push(line);else lines[index]=line;
+  await writeFileAtomic(identity.root,"facts.jsonl",lines.join("\n")+"\n");
+  return Object.freeze({action:index<0?"inserted":"replaced",ref:`facts.jsonl#${index<0?lines.length:index+1}`,value:Object.freeze(row)});
+}
 export async function writeStageRow(taskRoot,input,options={}) {
   const identity=assertRoot(taskRoot,input?.task_id);
-  return withStoreLock(identity.root,async()=>{
+  return withStoreLock(identity.root,()=>writeStageRowLocked(identity,input,options));
+}
+const STEP_EVIDENCE_FIELDS = Object.freeze(["ref","sha256","command","exit_code","failure_signature","receipt_ref","degraded"]);
+function stepEvidenceError(code,message,detail={}){const error=new Error(message);error.code=code;Object.assign(error,detail);return error;}
+function sameStepEvidence(left,right){return STEP_EVIDENCE_FIELDS.every(key=>JSON.stringify(left?.[key]??null)===JSON.stringify(right?.[key]??null));}
+/**
+ * Append (or idempotently re-read, or CAS-replace) the one quality-evidence
+ * entry for a declared step. The stage row itself must already exist: this
+ * writer never invents the stage fact. Slot identity is source + step_slug and
+ * follows the same single-eligible-ref rule as check-stage-steps.
+ */
+export async function appendStepEvidence(taskRoot,input,options={}) {
+  const identity=assertRoot(taskRoot,input?.taskId);
+  if(typeof input?.stage!=="string"||!STAGES.has(input.stage))throw new TypeError("appendStepEvidence requires an existing stage");
+  if(typeof input?.source!=="string"||!text(input.source))throw new TypeError("appendStepEvidence requires the declared source");
+  if(typeof input?.stepSlug!=="string"||!text(input.stepSlug))throw new TypeError("appendStepEvidence requires the declared step_slug");
+  if(typeof input?.ref!=="string"||!text(input.ref))throw new TypeError("appendStepEvidence requires a readable evidence ref");
+  if(typeof input?.sha256!=="string"||!/^[a-f0-9]{64}$/.test(input.sha256))throw new TypeError("appendStepEvidence requires the evidence sha256");
+  if(typeof input?.command!=="string"||!text(input.command))throw new TypeError("appendStepEvidence requires the executed command");
+  if(!Number.isInteger(input?.exitCode))throw new TypeError("appendStepEvidence requires an integer exit code");
+  if(typeof input?.failureSignature!=="string"||!text(input.failureSignature))throw new TypeError("appendStepEvidence requires a failure signature");
+  if(input.exitCode!==0&&input.failureSignature==="none")throw new TypeError("a non-zero command needs a named failure signature");
+  if(input.degraded!==undefined&&input.receiptRef!==undefined)throw new TypeError("a degraded human entry must not also claim a program receipt");
+  const entry={kind:"quality_evidence",source:input.source,step_slug:input.stepSlug,ref:input.ref,sha256:input.sha256,
+    command:input.command,exit_code:input.exitCode,failure_signature:input.failureSignature,
+    ...(input.receiptRef!==undefined?{receipt_ref:input.receiptRef}:{}),
+    ...(input.degraded!==undefined?{degraded:{reason:input.degraded.reason,owner:input.degraded.owner,...(input.degraded.action!==undefined?{action:input.degraded.action}:{})}}:{}),
+    ...(input.replaces!==undefined?{replaces:input.replaces}:{})};
+  return withLock(identity.root,`workflowhub-${input.stage}-row`,()=>withStoreLock(identity.root,async()=>{
     const prior=factLines(readFile(join(identity.root,"facts.jsonl")),identity);
-    const same=value=>value.record_kind===(input?.record_kind??"stage")&&(input?.record_kind==="close_action"?value.close_action?.action===input.close_action?.action:value.stage===input?.stage);
-    const index=prior.findIndex(({value})=>same(value));
-    const oldCursor=index>=0?prior[index].value.phase_progress:null;
-    const nextInput=!Object.hasOwn(input??{},"phase_progress")&&oldCursor?.phases_head&&input?.stage==="build-code"?{...input,phase_progress:oldCursor}:input;
-    const row=currentRow(nextInput,identity,options.now??new Date().toISOString());
-    const line=JSON.stringify(row);const lines=prior.map(entry=>entry.line);
-    if(index<0)lines.push(line);else lines[index]=line;
-    await writeFileAtomic(identity.root,"facts.jsonl",lines.join("\n")+"\n");
-    return Object.freeze({action:index<0?"inserted":"replaced",ref:`facts.jsonl#${index<0?lines.length:index+1}`,value:Object.freeze(row)});
-  });
+    const stageIndex=prior.findIndex(({value})=>value.record_kind==="stage"&&value.stage===input.stage);
+    if(stageIndex<0)throw stepEvidenceError("STEP_EVIDENCE_STAGE_ROW_MISSING",`facts.jsonl has no ${input.stage} stage row; run the stage entry first`);
+    const stageRow=prior[stageIndex].value;
+    const slot=prior.flatMap(({value},lineIndex)=>Array.isArray(value.evidence?.value)?value.evidence.value.map((existing,index)=>({existing,lineIndex,index})).filter(item=>item.existing&&item.existing.source===input.source&&item.existing.step_slug===input.stepSlug):[]);
+    if(slot.length>1)throw stepEvidenceError("EVIDENCE_SLOT_AMBIGUOUS",`${input.source}#${input.stepSlug} has ${slot.length} quality evidence entries; fix the facts slot before writing`,{slot_count:slot.length});
+    if(slot.length===1){
+      const current=slot[0].existing;
+      if(input.replace===undefined){
+        if(sameStepEvidence(current,entry))return Object.freeze({action:"unchanged",ref:`facts.jsonl#${slot[0].lineIndex+1}`,slot:{source:input.source,step_slug:input.stepSlug},value:Object.freeze(current)});
+        throw stepEvidenceError("EVIDENCE_SLOT_CONFLICT",`${input.source}#${input.stepSlug} already has different evidence; re-run with --replace --expect-sha256=<current sha256>`,{current_sha256:current.sha256??null,current_ref:current.ref??null,current_command:current.command??null});
+      }
+      if(typeof input.replace.expectSha256!=="string"||current.sha256!==input.replace.expectSha256)throw stepEvidenceError("EVIDENCE_SLOT_CONFLICT",`--replace CAS mismatch for ${input.source}#${input.stepSlug}; the slot was not rewritten`,{current_sha256:current.sha256??null,current_ref:current.ref??null,current_command:current.command??null});
+    }
+    const evidence=[...(stageRow.evidence?.value??[])];
+    if(slot.length===1){
+      const current=slot[0].existing;
+      const replaces={ref:current.ref,sha256:current.sha256,command:current.command,exit_code:current.exit_code,failure_signature:current.failure_signature};
+      evidence[slot[0].index]={...entry,replaces};
+    }else evidence.push(entry);
+    // Rebuild from the same fields the stage writers carry (STAGE_ROW_KEYS +
+    // the cursor), so a whole-row rewrite cannot smuggle retired fields in.
+    const fields=Object.fromEntries([...STAGE_ROW_KEYS,"phase_progress"].filter(key=>Object.hasOwn(stageRow,key)).map(key=>[key,stageRow[key]]));
+    const updated={...fields,evidence:{value:evidence,...(stageRow.evidence?.reason!==undefined?{reason:stageRow.evidence.reason}:{})}};
+    const written=await writeStageRowLocked(identity,updated,options);
+    return Object.freeze({action:slot.length===1?"replaced":"inserted",ref:`facts.jsonl#${stageIndex+1}`,slot:{source:input.source,step_slug:input.stepSlug},value:Object.freeze(written.value)});
+  }));
 }
 /** Existing confirmation reader is retained only until the old producer is
  * removed; no current writer or hash authentication is added here. */

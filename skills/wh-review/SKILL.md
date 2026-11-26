@@ -129,7 +129,7 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 - `review_facts.providers[].opinion_returned`：`review-record-route.mjs:providerFacts`推导，存原件 `review_facts.providers[]`，审查读者核本路意见。`result.schema.json:$defs.reviewFacts`必填布尔，仅真实 `completed` 且解析 `ok` 为true，不证完整覆盖/质量通过。
 - `material_coverage`：`review-record-route.mjs:providerCoverage`存原件覆盖数组，审查读者逐材料核。`result.schema.json:$defs.materialCoverage`仅允许 `provider`／`read`／`unread`／`undetermined`，`additionalProperties:false`；三键语义见本节。`read_confirmed`由 `runtime/review/ocr-delegation-adapter.mjs`存provider的 `coverage.read_confirmed`，不在此对象加键。
 - `discarded_facts`：真实解析丢弃及 `review-record-route.mjs:onProviderOutput`／`providerFact`产生，存原件现数组，审查读者读理由/来源。`result.schema.json:$defs.discardedFact`必填 `fact_kind`／`reason`并保所需 `dropped_key` 或 `finding_excerpt`；零字节按真实 `provider_output_not_persisted`／`zero_bytes`保留，无事实不造占位。
-- `executor`：`tools/cli/stage-runtime.mjs`代码审查OCR返回实际声明，`review-record-route.mjs`存原件；审查读者及 `tests/contract/ocr-delegation-route.test.mjs`、`tests/contract/verify-code-dsh-public-run.test.mjs`身份断言消费。依据 `result.schema.json`枚举 `ocr`／`wh-review`，缺身份留缺口，不造值。不得以OCR身份记wh-review结果；schema版本不是执行者声明，身份/版本/声明不得互代。
+- `executor`：`tools/cli/stage-runtime.mjs`代码审查OCR返回实际声明，`review-record-route.mjs`存原件；审查读者及 `tests/contract/ocr-delegation-route.test.mjs:846` 的 `executor` 身份断言消费。依据 `result.schema.json`枚举 `ocr`／`wh-review`，缺身份留缺口，不造值。不得以OCR身份记wh-review结果；schema版本不是执行者声明，身份/版本/声明不得互代。
 
 对 `OUTPUT_INVALID` 且保留了原始输出的失败来源，操作者必须只读回读该原始输出一次，并记录「其中是否存在唯一可解析的 findings JSON」这一事实；只允许据此救回真实发现，禁止把失败改写成通过或空 findings。
 

@@ -6,7 +6,7 @@
 // 隔离：全部数据建在 createTrackedTempDir 的临时目录，不写产品库、不连真实任务。
 import { afterEach, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTrackedTempDir } from "../../runtime/interface/temp-dir.mjs";
@@ -21,6 +21,8 @@ const GATE_COMMAND = "node --test tests/owned.test.mjs";
 // 机器项只接受只读 allowlist 命令；解释器 -c/-e 与写删命令一律拒绝。
 const PASSING_PROBE = "git rev-parse --show-toplevel";
 const FAILING_PROBE = "git rev-parse --verify refs/heads/p5-readiness-absent";
+// 第二张 Phase 卡只用来证明「按阶段分指纹」：别阶段收口段不改本阶段判定。
+const P2_REF = "phases/P2-readiness.md";
 
 const owned = [];
 const cleanEnv = () => {
@@ -45,9 +47,61 @@ function readinessTable(probe, humanFirst = false) {
   return ["### 开工就绪表", "| 命令 | 期望 | 证据 | 机器或人判 | 负责人 |", "| --- | --- | --- | --- | --- |", ...ordered, ""].join("\n");
 }
 
+// One valid Phase card. `secondPhase` reuses it with P2/T002 so tests can prove
+// the fingerprint is scoped to one Phase instead of the whole material set.
+function phaseDoc({ id = "P1", taskId = "T001", probe = PASSING_PROBE, readiness = true,
+  humanFirst = false, dependency = "none", cardDependency = "none" } = {}) {
+  return [
+    `# Phase ${id} — readiness gate`,
+    "- **Global spec**：`spec.md`",
+    "- **Write set**：`README.md`",
+    `- **Dependency**：${dependency}`,
+    "- **Consumer**：build-code",
+    "## L0 — Outcome",
+    ...(readiness ? [readinessTable(probe, humanFirst)] : []),
+    `- **gate_cmd**：\`${GATE_COMMAND}\``,
+    "- **expected_exit**：RED nonzero; GREEN 0",
+    `- **oracle**：${ORACLE}`,
+    "- **evidence_path**：planned: quality/tests/p5-readiness.output",
+    "- **STOP**：preserve actual failure",
+    "- **Done**：real target result",
+    "## L1 — Contract",
+    `### ${taskId} — deliver owned result`,
+    "This card delivers the owned visible result and keeps the lost-output failure replayable.",
+    "- **Source / FR / AC**：R-001 / FR-001 / AC-001",
+    "- **Files / symbols**：`README.md` symbol: N/A — fixture source text",
+    "- **Action**：return the owned result",
+    "- **Inputs**：owned input and a negative case",
+    "- **Outputs / failure**：visible output or explicit failure",
+    "- **Boundary / DO NOT TOUCH**：no external repository changes",
+    `- **Dependency**：${cardDependency}`,
+    "- **Test tier / skill**：feature / backend-testing",
+    "- **Scenario / fixture or service**：owned local result",
+    `- **RED/GREEN gate_cmd**：\`${GATE_COMMAND}\``,
+    "- **expected_exit**：RED target nonzero; GREEN 0",
+    `- **RED target failure**：${ORACLE} assertion fails when result lost`,
+    `- **GREEN oracle**：${ORACLE} visible output assertion`,
+    "- **Evidence**：quality/tests/p5-readiness.output",
+    "- **STOP / recovery**：preserve failure and continue safe repair",
+    "- **Coverage limit**：no external provider quality",
+    "- **Done**：real result and evidence",
+    "## L2 — Removable reference",
+    "Owned fixture, not a workflow permit.",
+    "",
+  ].join("\n");
+}
+
 // 合法 spec/index/phases；probe=null 表示空表缺探针，其他字符串为真实命令；
 // readiness=false 表示 Phase 没有开工就绪表。
-function materials({ probe = PASSING_PROBE, ref = PHASE_REF, readiness = true, humanFirst = false } = {}) {
+function materials({ probe = PASSING_PROBE, ref = PHASE_REF, readiness = true, humanFirst = false, secondPhase = false } = {}) {
+  const traceRows = [`| R-001 | FR-001 | AC-001 | P1/T001 | ${ORACLE} |`];
+  const indexRows = [`| \`P1\` | \`${ref}\` | \`phase-p1\` | \`README.md\` | \`none\` | build-code |`];
+  const phases = { [ref]: phaseDoc({ probe, readiness, humanFirst }) };
+  if (secondPhase) {
+    traceRows.push(`| R-001 | FR-001 | AC-001 | P2/T002 | ${ORACLE} |`);
+    indexRows.push(`| \`P2\` | \`${P2_REF}\` | \`phase-p2\` | \`README.md\` | \`P1\` | build-code |`);
+    phases[P2_REF] = phaseDoc({ id: "P2", taskId: "T002", probe, readiness, humanFirst, dependency: "P1", cardDependency: "P1" });
+  }
   const spec = [
     "# Spec",
     "- **FR-001**：Visible owned result.",
@@ -64,7 +118,7 @@ function materials({ probe = PASSING_PROBE, ref = PHASE_REF, readiness = true, h
     "### Requirement-to-Task Trace",
     "| source | FR | AC | task | oracle |",
     "| --- | --- | --- | --- | --- |",
-    `| R-001 | FR-001 | AC-001 | P1/T001 | ${ORACLE} |`,
+    ...traceRows,
     "### Global Verification Strategy",
     `\`${GATE_COMMAND}\``,
     "",
@@ -76,52 +130,14 @@ function materials({ probe = PASSING_PROBE, ref = PHASE_REF, readiness = true, h
     "",
     "| phase | authority ref | semantic anchor | write set | dependency | consumer |",
     "| --- | --- | --- | --- | --- | --- |",
-    `| \`P1\` | \`${ref}\` | \`phase-p1\` | \`README.md\` | \`none\` | build-code |`,
+    ...indexRows,
     "",
   ].join("\n");
-  const phase = [
-    "# Phase P1 — readiness gate",
-    "- **Global spec**：`spec.md`",
-    "- **Write set**：`README.md`",
-    "- **Dependency**：none",
-    "- **Consumer**：build-code",
-    "## L0 — Outcome",
-    ...(readiness ? [readinessTable(probe, humanFirst)] : []),
-    `- **gate_cmd**：\`${GATE_COMMAND}\``,
-    "- **expected_exit**：RED nonzero; GREEN 0",
-    `- **oracle**：${ORACLE}`,
-    "- **evidence_path**：planned: quality/tests/p5-readiness.output",
-    "- **STOP**：preserve actual failure",
-    "- **Done**：real target result",
-    "## L1 — Contract",
-    "### T001 — deliver owned result",
-    "This card delivers the owned visible result and keeps the lost-output failure replayable.",
-    "- **Source / FR / AC**：R-001 / FR-001 / AC-001",
-    "- **Files / symbols**：`README.md` symbol: N/A — fixture source text",
-    "- **Action**：return the owned result",
-    "- **Inputs**：owned input and a negative case",
-    "- **Outputs / failure**：visible output or explicit failure",
-    "- **Boundary / DO NOT TOUCH**：no external repository changes",
-    "- **Dependency**：none",
-    "- **Test tier / skill**：feature / backend-testing",
-    "- **Scenario / fixture or service**：owned local result",
-    `- **RED/GREEN gate_cmd**：\`${GATE_COMMAND}\``,
-    "- **expected_exit**：RED target nonzero; GREEN 0",
-    `- **RED target failure**：${ORACLE} assertion fails when result lost`,
-    `- **GREEN oracle**：${ORACLE} visible output assertion`,
-    "- **Evidence**：quality/tests/p5-readiness.output",
-    "- **STOP / recovery**：preserve failure and continue safe repair",
-    "- **Coverage limit**：no external provider quality",
-    "- **Done**：real result and evidence",
-    "## L2 — Removable reference",
-    "Owned fixture, not a workflow permit.",
-    "",
-  ].join("\n");
-  return { spec, index, phases: { [ref]: phase } };
+  return { spec, index, phases };
 }
 
 // 入口级夹具：临时 git 仓库 + worktree + 假任务（task.json/facts.jsonl），不连真实库。
-function entryFixture({ probe, taskId = "p5-readiness-owned", readiness = true, humanFirst = false } = {}) {
+function entryFixture({ probe, taskId = "p5-readiness-owned", readiness = true, humanFirst = false, secondPhase = false } = {}) {
   const root = trackedRoot("p5-readiness-");
   const repo = join(root, "repo"), worktree = join(root, "worktree"), storage = join(root, "storage"), home = join(root, "home");
   const taskDir = join(storage, "Projects", "workflowhub", "tasks", taskId), hooks = join(root, "hooks");
@@ -135,10 +151,10 @@ function entryFixture({ probe, taskId = "p5-readiness-owned", readiness = true, 
   const materialRoot = join(worktree, "specs", taskId), phaseDir = join(materialRoot, "phases");
   mkdirSync(phaseDir, { recursive: true });
   writeFileSync(join(materialRoot, "decision-log.md"), "# Decision\n");
-  const docs = materials({ probe, readiness, humanFirst });
+  const docs = materials({ probe, readiness, humanFirst, secondPhase });
   writeFileSync(join(materialRoot, "spec.md"), docs.spec);
   writeFileSync(join(materialRoot, "phases/index.md"), docs.index);
-  writeFileSync(join(materialRoot, PHASE_REF), docs.phases[PHASE_REF]);
+  for (const [path, body] of Object.entries(docs.phases)) writeFileSync(join(materialRoot, path), body);
   git(worktree, "add", "specs");
   git(worktree, "commit", "-qm", "owned materials");
   writeFileSync(join(taskDir, "task.json"), JSON.stringify({
@@ -343,7 +359,8 @@ it("ORACLE-PHASE-READINESS: 材料变更后旧指纹按 stale 非零拒绝，重
   expect(first.exit, `${ORACLE}: 首次必须通过；实际 ${summarise(first)}`).toBe(0);
   const rowsBefore = fixture.factsRows().length;
   const phase = readFileSync(join(fixture.materialRoot, PHASE_REF), "utf8");
-  writeFileSync(join(fixture.materialRoot, PHASE_REF), `${phase}\n<!-- one material byte changed -->\n`);
+  // 方案 C：被判断对象是就绪表行与探针目标；改一行原文才该 stale。
+  writeFileSync(join(fixture.materialRoot, PHASE_REF), phase.replace("人工核对样本", "人工核对样本（改一个被判断字节）"));
   const stale = fixture.runEntry(cursorInput());
   expect.soft(stale.exit, `${ORACLE}: stale 必须非零拒绝；实际 ${summarise(stale)}`).not.toBe(0);
   expect.soft(stale.stderr).toMatch(/stale readiness result/i);
@@ -354,6 +371,9 @@ it("ORACLE-PHASE-READINESS: 材料变更后旧指纹按 stale 非零拒绝，重
   const staleRecord = JSON.parse(readFileSync(stalePath, "utf8"));
   expect(staleRecord.status).toBe("stale");
   expect(staleRecord.recover?.action, "stale 原件必须写明恢复动作").toBe("rerun-same-entry");
+  // Readout for the evidence original: the changed trigger still catches stale.
+  console.log(`[${ORACLE}] stale readout: exit=${stale.exit} kind=${staleRecord.stale_kind} `
+    + `reason=${JSON.stringify(staleRecord.stale_reason)} original=${staleName}`);
   const recovered = fixture.runEntry(cursorInput());
   expect(recovered.exit, `${ORACLE}: 显式重跑后必须恢复；实际 ${summarise(recovered)}`).toBe(0);
   const row = fixture.factsRows().find((entry) => entry?.stage === "build-code");
@@ -553,9 +573,14 @@ it("ORACLE-PHASE-READINESS: 人判行在前时材料侧仍按机器探针对齐"
   expect(record.probes.length, "原件只存机器探针").toBe(1);
   expect(record.human_rows.length, "人判行单独记录").toBe(1);
   expect(record.human_rows[0].status).toBe("unverified");
+  // P3/T020: the summary names the unverified human rows; naming never turns
+  // into a dispatch gate (the exit codes and the status above stay unchanged).
+  expect(record.probe, "就绪原件摘要必须点名").toBe("1 machine; 1 human; 人判未验证＝1");
+  expect(JSON.parse(run.stdout).human_unverified, "回执派生点名计数").toBe(1);
   const check = runChecks(fixture, "build-code");
   expect.soft(check.status, `人判在前时材料侧对齐：${check.stdout.slice(-600)} ${check.stderr.slice(-300)}`).toBe(0);
   expect.soft(check.stdout).toMatch(/readiness phase=P1 status=pass/);
+  expect.soft(check.stdout, "材料侧同时点名未验证人判").toMatch(/人判未验证＝1/);
   expect.soft(check.stdout).not.toMatch(/drift/i);
 });
 
@@ -571,4 +596,141 @@ it("ORACLE-PHASE-READINESS: 省略 --stage 时按 build-code 只诊断，缺表�
   expect.soft(explicit.stdout).toMatch(/missing readiness table/i);
   // Archive materials and arbitrary helper directories keep the old diagnostic
   // behavior; nothing is inferred into a dispatch gate.
+});
+
+// --- P3/AC-008: stale readiness keeps the existing named failure. -------------
+// The failure reason family is the text after the ORACLE tag up to the first
+// path or parenthesis; temporary roots, material sha256 and timestamps are
+// normalised so two different fixture roots can be compared.
+const staleFailureFamilies = (run) => {
+  const text = `${run.stdout}\n${run.stderr}`;
+  return [...text.matchAll(/ORACLE-PHASE-READINESS: ([^\n(]*)/g)].map((match) => match[1]
+    .replace(/\/[^\s;]*/g, "<path>")
+    .replace(/[0-9a-f]{64}/g, "<sha>")
+    .replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, "<time>")
+    .trim());
+};
+const staleOracleCount = (run) => (`${run.stdout}\n${run.stderr}`.match(/ORACLE-PHASE-READINESS: /g) ?? []).length;
+const staleFixture = (taskId) => {
+  const fixture = entryFixture({ probe: PASSING_PROBE, taskId });
+  const pass = fixture.runEntry(cursorInput());
+  expect(pass.exit, `${ORACLE}: 首次必须通过；实际 ${summarise(pass)}`).toBe(0);
+  const phase = readFileSync(join(fixture.materialRoot, PHASE_REF), "utf8");
+  // 同一条被判断字节，两处调用一致：改就绪表一行原文，不改卡里无关字节。
+  writeFileSync(join(fixture.materialRoot, PHASE_REF), phase.replace("人工核对样本", "人工核对样本（改一个被判断字节）"));
+  const stale = fixture.runEntry(cursorInput());
+  expect(stale.exit, `${ORACLE}: stale 必须非零拒绝；实际 ${summarise(stale)}`).not.toBe(0);
+  return { fixture, stale };
+};
+
+it("P3-AC-008: stale readiness keeps its named failure family, exit code and count across temporary roots and stays byte-identical inside one root", () => {
+  const left = staleFixture("p3-ac-008-left"), right = staleFixture("p3-ac-008-right");
+  const families = staleFailureFamilies(left.stale);
+  expect(families.length, "stale 失败必须有可读原因族").toBeGreaterThan(0);
+  // The pre-change baseline keeps this named family. Folding stale into the new
+  // 人判未验证 wording would change it, so the literal prefix is frozen here.
+  expect(families.every((family) => family.startsWith("stale readiness result")), "既有具名失败原因族不变").toBe(true);
+  expect(families.join(" ")).not.toMatch(/人判未验证/);
+  // Cross-directory tier: only the three normalised facts are comparable.
+  expect(staleFailureFamilies(right.stale), "跨临时目录归一化后原因族一致").toEqual(families);
+  expect(right.stale.exit, "跨临时目录退出码一致").toBe(left.stale.exit);
+  expect(staleOracleCount(right.stale), "跨临时目录失败条数一致").toBe(staleOracleCount(left.stale));
+  // Same-directory tier: byte equality is reachable only inside one fixture
+  // root. Removing the stale original this fixture just wrote lets the same
+  // inputs produce the same failure again; it is temp fixture state, not a real
+  // evidence original.
+  const fixture = left.fixture;
+  const staleName = readinessFiles(fixture).filter((name) => name.endsWith("-stale.json")).at(-1);
+  expect(staleName, "stale 拒绝必须留下具名原件").toBeTruthy();
+  rmSync(join(fixture.taskDir, "quality", "tests", staleName));
+  const again = fixture.runEntry(cursorInput());
+  expect(again.exit, "同目录重放仍是同一具名失败").toBe(left.stale.exit);
+  expect(again.stdout, "同目录 stdout 逐字一致").toBe(left.stale.stdout);
+  expect(again.stderr, "同目录 stderr 逐字一致").toBe(left.stale.stderr);
+});
+
+// --- 方案 C：就绪指纹只绑定这次判断实际读取的东西（2026-11-26）。 ------------
+// a) 别阶段的收口段不是本阶段的被判断对象；b) 改一行就绪原文只让本阶段 stale；
+// c) 探针目标文件变化必须抓到（旧口径完全看不到）；d) 旧 v1 原件记一次口径变更。
+const p2Input = () => ({ phase_progress: { phase_id: "P2", task_id: "T002" } });
+const latestReadinessRecord = (fixture, phase = "p1") => {
+  const dir = join(fixture.taskDir, "quality", "tests");
+  const name = readdirSync(dir).filter((entry) => new RegExp(`-readiness-${phase}(-stale)?\\.json$`).test(entry)).sort().at(-1);
+  return name ? { name, record: JSON.parse(readFileSync(join(dir, name), "utf8")) } : null;
+};
+
+it("ORACLE-PHASE-READINESS: 追加别阶段的收口段不让本阶段 stale", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE, secondPhase: true });
+  const first = fixture.runEntry(cursorInput());
+  expect(first.exit, `首次必须通过；实际 ${summarise(first)}`).toBe(0);
+  const filesAfterFirst = readinessFiles(fixture);
+  const p2Path = join(fixture.materialRoot, P2_REF);
+  writeFileSync(p2Path, `${readFileSync(p2Path, "utf8")}\n## 收口记录\n\nP2 已收口：这里只是刚写完的收口段，不是 P1 的就绪判定对象。\n`);
+  const rerun = fixture.runEntry(cursorInput());
+  expect.soft(rerun.exit, `方案 C：别阶段收口段不得让本阶段 stale；实际 ${summarise(rerun)}`).toBe(0);
+  expect.soft(rerun.stderr, "不得出现 stale").not.toMatch(/stale readiness result/i);
+  expect.soft(readinessFiles(fixture), "复用通过原件，不新增就绪原件").toEqual(filesAfterFirst);
+});
+
+it("ORACLE-PHASE-READINESS: 改本阶段就绪表一行只让本阶段 stale，另一阶段照旧复用", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE, secondPhase: true });
+  expect(fixture.runEntry(cursorInput()).exit, "P1 首次通过").toBe(0);
+  expect(fixture.runEntry(p2Input()).exit, "P2 首次通过").toBe(0);
+  const p2FilesBefore = readinessFiles(fixture).filter((name) => name.includes("-p2"));
+  const p1Path = join(fixture.materialRoot, PHASE_REF);
+  writeFileSync(p1Path, readFileSync(p1Path, "utf8").replace("人工核对样本", "人工核对样本（改一个被判断字节）"));
+  const p1Again = fixture.runEntry(cursorInput());
+  expect.soft(p1Again.exit, `方案 C：本阶段就绪行变了必须 stale；实际 ${summarise(p1Again)}`).not.toBe(0);
+  expect.soft(p1Again.stderr, "stale 必须具名").toMatch(/stale readiness result/i);
+  const p2Again = fixture.runEntry(p2Input());
+  expect.soft(p2Again.exit, `方案 C：另一阶段不得被牵连 stale；实际 ${summarise(p2Again)}`).toBe(0);
+  expect.soft(p2Again.stderr, "另一阶段不得出现 stale").not.toMatch(/stale readiness result/i);
+  expect.soft(readinessFiles(fixture).filter((name) => name.includes("-p2")), "P2 原件未被新增或改写").toEqual(p2FilesBefore);
+  expect.soft(readinessFiles(fixture).filter((name) => name.includes("-p1-stale")), "只有本阶段留下 stale 原件").toHaveLength(1);
+});
+
+it("ORACLE-PHASE-READINESS: 探针目标文件内容变化让该阶段 stale（旧口径抓不到）", () => {
+  const fixture = entryFixture({ probe: "test -r README.md" });
+  const first = fixture.runEntry(cursorInput());
+  expect(first.exit, `首次必须通过；实际 ${summarise(first)}`).toBe(0);
+  const before = latestReadinessRecord(fixture);
+  expect(before?.record.status, "首次留下通过原件").toBe("pass");
+  writeFileSync(join(fixture.worktree, "README.md"), "owned baseline changed after the readiness pass\n");
+  const stale = fixture.runEntry(cursorInput());
+  expect.soft(stale.exit, `方案 C：探针目标内容变了必须 stale；实际 ${summarise(stale)}`).not.toBe(0);
+  expect.soft(stale.stderr, "stale 必须具名").toMatch(/stale readiness result/i);
+  const after = latestReadinessRecord(fixture);
+  expect.soft(after?.record.status, "留下 stale 原件").toBe("stale");
+  expect.soft(after?.record.stale_kind, "口径要区分「被判断对象变化」").toBe("judged-objects");
+  expect.soft(after?.record.stale_reason, "原因点名就绪行或探针目标").toMatch(/judged readiness rows|probe target/i);
+});
+
+it("ORACLE-PHASE-READINESS: 旧 readiness.v1 原件先记口径变更 stale，重跑同一入口生成 v2", () => {
+  const fixture = entryFixture({ probe: PASSING_PROBE });
+  const first = fixture.runEntry(cursorInput());
+  expect(first.exit, `先记录一份真实通过原件；实际 ${summarise(first)}`).toBe(0);
+  const row = buildCodeRow(fixture);
+  const passRef = row.source.split("; readiness: ")[1];
+  rmSync(passRef);
+  const legacy = {
+    schema_version: "readiness.v1", phase: "P1", material_sha256: "0".repeat(64),
+    probe: "0 machine; 0 human", status: "pass", runner: "build-code run --action=execute first step",
+    at: "2000-01-01T00:00:00.000Z", cwd: fixture.worktree, phase_file: PHASE_REF, probes: [], human_rows: [],
+  };
+  writeFileSync(join(fixture.taskDir, "quality", "tests", "2000-01-01-001-readiness-p1.json"), JSON.stringify(legacy, null, 2));
+  const schemeStale = fixture.runEntry(cursorInput());
+  expect.soft(schemeStale.exit, `旧 v1 原件必须先按 stale 拒绝；实际 ${summarise(schemeStale)}`).not.toBe(0);
+  expect.soft(schemeStale.stderr, "stale 原因族不变").toMatch(/stale readiness result/i);
+  const staleRecord = latestReadinessRecord(fixture);
+  expect.soft(staleRecord?.record.stale_kind, "口径变更单独命名").toBe("fingerprint-scheme");
+  expect.soft(staleRecord?.record.stale_reason, "原因说明 v1→v2 口径变更").toMatch(/fingerprint scheme changed/i);
+  const recovered = fixture.runEntry(cursorInput());
+  expect(recovered.exit, `同一入口重跑必须生成 v2；实际 ${summarise(recovered)}`).toBe(0);
+  const v2 = latestReadinessRecord(fixture);
+  expect.soft(v2?.record.schema_version, "重跑生成 readiness.v2").toBe("readiness.v2");
+  expect.soft(v2?.record.readiness_sha256, "v2 记新键").toMatch(/^[0-9a-f]{64}$/);
+  expect.soft(v2?.record.recovered_from, "恢复原件记录 stale 来源").toBe(join(fixture.taskDir, "quality", "tests", staleRecord.name));
+  const check = runChecks(fixture, "build-code");
+  expect.soft(check.status, `材料侧读到 v2 pass：${check.stdout.slice(-600)}`).toBe(0);
+  expect.soft(check.stdout, "材料侧按 per-phase 值读回").toMatch(/readiness phase=P1 status=pass/);
 });

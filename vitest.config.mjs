@@ -38,6 +38,9 @@ export default defineConfig({
       "tests/contract/unit-card-field-consumption.test.mjs",
       "tests/contract/skill-usage-negative.test.mjs",
       "tests/contract/phase-author-first-card.test.mjs",
+      // 2026-11-25：四技能接线的 node:test 契约（由 scripts.check 直接调用），
+      // 同样排除，避免整树 vitest 当空套件收集。
+      "tests/contract/four-skill-wiring.test.mjs",
       "tests/contract/phase-index-write-authority.test.mjs",
       "tests/contract/prd-task-section-consumption.test.mjs",
       "tests/contract/prd-sectional-review.test.mjs",

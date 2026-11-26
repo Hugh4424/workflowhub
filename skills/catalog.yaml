@@ -134,7 +134,7 @@ skills:
     path: skills/stage-reflection/SKILL.md
     local_version: 1.0.0
     m16_contract: consumer-scan-proof.v1
-    last_reviewed_at: '2026-07-14'
+    last_reviewed_at: '2026-11-25'
     status: native
     metrics_enabled: true
     purpose: 每阶段结束由主会话发起收口，归纳归口、记成本后内部发布并读回交接
@@ -174,7 +174,7 @@ skills:
         skill_url: https://github.com/backnotprop/pstack/blob/1f0f9c3bac03c4297f6fc8f7644fa412eda57085/skills/principle-encode-lessons-in-structure/SKILL.md
         adopted:
           - skills/principle-encode-lessons-in-structure/SKILL.md#encode-lessons-in-structure — 历史负例与结构护栏，原采集commit/时刻未知，不采用规则表/自动提交
-    local_changes: 复用既有收口、交接与成本入口；保用户真选检查与人确认清理，直接落账与待批分开，业务仓specs经验按下一步加现象判重，无来源不编、越权不回落；不新增writer或控制面
+    local_changes: 复用既有收口、交接与成本入口；保用户真选检查与人确认清理，直接落账与待批分开，业务仓specs经验按下一步加现象判重，无来源不编、越权不回落；不新增writer或控制面。2026-11-25 补 rule-tables 分工：specs/Improvements.md 只收未决事项，已证规则只经 norm-sync 写域表锚点。
     dependency_closure: ["skills/spec-specify", "skills/stage-handoff", "skills/norm-sync", "skills/material-writing"]
     update_policy: 迭代时核正文三个具名固定子文件与本地偏离、用户选择/check/prune消费者；pstack各文件内容pin不推原采集commit/时间或全仓基线，不自动追HEAD或以来源登记冒效果
   - name: stage-handoff
@@ -1026,7 +1026,7 @@ skills:
   - name: project-norm-init
     path: skills/project-norm-init/SKILL.md
     local_version: 2.0.0
-    last_reviewed_at: '2026-10-25'
+    last_reviewed_at: '2026-11-25'
     status: native
     metrics_enabled: true
     purpose: 为三种真实起点定位适用专业来源并接线原专业 owner
@@ -1035,7 +1035,7 @@ skills:
     used_by_stages: [build-plan]
     upstream: []
     local_changes: |
-      WorkflowHub 原生薄入口；owner 是五类专业规范接线维护者，各类规则仍归原专业owner。local_version沿既有2.0.0，不把本次审查日期冒新发行版本。
+      WorkflowHub 原生薄入口；owner 是五类专业规范接线维护者，各类规则仍归原专业owner。local_version沿既有2.0.0，不把本次审查日期冒新发行版本。2026-11-25 补 rule-tables 规则表的建与读：先 init 后 lookup，缺表记 rule_table absent、0 行记 no_registered_rule；结构只写最小集合。
       consumer 为 workflows/build-plan/SKILL.md 的既有UI trigger及设计/测试蓝图前非UI显式读取、workflows/build-code/SKILL.md每Phase接口/测试选择前、workflows/build-code/SKILL.md终末验收准备；build-prd经readiness/render间接读同一来源指针，不据此增加直接运行路由。
       五类规范、原八UI子类职责及三起点只引用 skills/project-norm-init/SKILL.md「规范职责/非UI规范与索引/方法」，各正文仍归原专业 owner；
       delete-condition 为所有上述真实直接与间接consumer均由已审替代方法承接后。SDD、markdown 材料子技能及 design-tokens
@@ -1226,7 +1226,7 @@ skills:
   - name: norm-sync
     path: skills/norm-sync/SKILL.md
     local_version: 1.0.0
-    last_reviewed_at: '2026-10-25'
+    last_reviewed_at: '2026-11-25'
     status: native
     metrics_enabled: false
     standalone: true
@@ -1234,7 +1234,7 @@ skills:
     design_idea: 锁外核证；项目同root/name锁内before/delta先行，有序写入与after匹配补偿
     used_by_stages: [build-code]
     upstream: []
-    local_changes: 原生方法复用record-lock/safe-write/task handle，不导入同步引擎；owner为规范同步维护者，consumer为build-code每Phase、verify终末、reflection经验前、closeout任务前；保未解判断与独立质量，不建候选/状态/历史账本。
+    local_changes: 原生方法复用record-lock/safe-write/task handle，不导入同步引擎；owner为规范同步维护者，consumer为build-code每Phase、verify终末、reflection经验前、closeout任务前；保未解判断与独立质量，不建候选/状态/历史账本。2026-11-25 补 rule-tables 归属：判重键 task＋正文锚点，写序表行→锚点正文→AGENTS→经验，第二处只报 second_home 与 refused。
     dependency_closure: ["skills/spec-specify"]
     update_policy: 四owner与原窄接口/五类原源一起审查；替代完整承接且caller/bundle迁接后同批退役，历史delta不删覆；版本不自动升级。
 

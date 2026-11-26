@@ -35,6 +35,8 @@ import { GAP, SIX_KEYS, validateExecutionRecord } from "../../metrics/execution-
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
 import { resolve, dirname, isAbsolute, basename, sep, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { declaredStepCoverage, applyRecordModelExclusions } from "../../runtime/task/step-coverage.mjs";
+import { readinessFingerprint, legacyReadinessChanges } from "../../runtime/stage/stage-content-contracts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -372,7 +374,12 @@ export function readinessEvidenceStatus(evidence, { recordRoot = null, materialR
 
 function sectionBody(text, name) {
   const lines = String(text ?? "").split(/\r?\n/);
-  const start = lines.findIndex((line) => new RegExp(`^##\\s+${name}\\s*$`, "i").test(line));
+  // The real checklists use a numbered heading with a parenthetical, for
+  // example `## 6. failures（五要素：…）`. Accept that shape (optional numeric
+  // prefix and annotation) as well as the bare `## failures`; only the heading
+  // is widened, the five-element rule below is unchanged.
+  const heading = new RegExp(`^##\\s+(?:\\d+(?:\\.\\d+)*[.、]?\\s*)?${name}(?:\\s*[（(].*)?\\s*$`, "i");
+  const start = lines.findIndex((line) => heading.test(line));
   if (start < 0) return null;
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => /^##\s+/.test(line));
@@ -546,6 +553,14 @@ function runFailureRecordChecks(root, facts, recordRoot) {
   return errors;
 }
 
+// The readiness probes run at the workspace root, which owns the relative path
+// tokens in their argv. A material root under .../specs/<task> names it; other
+// roots keep the diagnostic path and never invent a working directory.
+function readinessProbeWorktree(materialRoot) {
+  const absolute = resolve(materialRoot), marker = `${sep}specs${sep}`, at = absolute.lastIndexOf(marker);
+  return at > 0 ? absolute.slice(0, at) : null;
+}
+
 async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = false } = {}) {
   const phases = facts?.readiness?.phases ?? [];
   if (phases.length === 0) return [];
@@ -591,9 +606,37 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
     let stored;
     try { stored = JSON.parse(readFileSync(ref, "utf8")); }
     catch (error) { fail(`${root} readiness original is not readable: ${ref} (${error.code ?? error.message})`); continue; }
-    if (stored.status === "stale" || stored.material_sha256 !== facts.material_sha256) {
-      fail(`${root} readiness stale: stored result ${ref} is bound to material_sha256 `
-        + `${stored.material_sha256 ?? "unknown"}, current ${facts.material_sha256}`);
+    // 2026-11-26 方案 C: compare this Phase's judged objects (its readiness rows
+    // and the real state of its probe targets), never the whole material set.
+    const probeCwd = readinessProbeWorktree(root)
+      ?? (typeof stored.cwd === "string" && existsSync(stored.cwd) ? stored.cwd : null);
+    const currentReadiness = probeCwd
+      ? readinessFingerprint({ phasePath: phase.path, rows: phase.rows, cwd: probeCwd }) : null;
+    if (stored.status === "stale") {
+      fail(`${root} readiness stale: stored result ${ref} is itself a stale refusal `
+        + `(${stored.stale_reason ?? "reason unavailable"}); rerun the build-code entry to recover`);
+      continue;
+    }
+    const legacy = stored.schema_version !== "readiness.v2" || typeof stored.readiness_sha256 !== "string";
+    if (legacy) {
+      // A v1 original has no per-phase key. Its own probes and outputs still
+      // name the judged objects, so the reader names what actually changed.
+      const changes = currentReadiness === null
+        ? ["probe working directory is unavailable"]
+        : legacyReadinessChanges({ record: stored, rows: phase.rows, cwd: probeCwd });
+      if (changes.length) {
+        fail(`${root} readiness stale (legacy ${stored.schema_version ?? "unknown"}): judged objects changed: `
+          + `${changes.join("; ")}; current ${currentReadiness ?? "unknown"} (original ${ref})`);
+        continue;
+      }
+      console.log(`[run-checks][material] readiness phase=${phase.phase_id} legacy ${stored.schema_version ?? "unknown"}: `
+        + `fingerprint scheme changed; recorded rows and probe targets unchanged; rerun the entry to record readiness.v2 (original ${ref})`);
+    } else if (currentReadiness === null) {
+      fail(`${root} readiness stale: cannot resolve the probe working directory for ${ref}`);
+      continue;
+    } else if (stored.readiness_sha256 !== currentReadiness) {
+      fail(`${root} readiness stale: stored result ${ref} is bound to readiness_sha256 `
+        + `${stored.readiness_sha256}, current ${currentReadiness}`);
       continue;
     }
     if (stored.status !== "pass") {
@@ -632,9 +675,14 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
       }
     }
     if (!failed) {
+      // Same single source as the readiness original: human rows counted by
+      // their own status, not by array length.
+      const humanUnverified = Array.isArray(stored.human_rows)
+        ? stored.human_rows.filter((row) => row?.status === "unverified").length : 0;
       console.log(`[run-checks][material] readiness phase=${phase.phase_id} status=pass `
         + `machine=${phase.rows.filter((row) => row.kind === "machine").length} human=${human.length} `
-        + `material_sha256=${facts.material_sha256} original=${ref}`);
+        + `human_unverified=${humanUnverified} (人判未验证＝${humanUnverified}) `
+        + `readiness_sha256=${currentReadiness ?? "unknown"} original=${ref}`);
     }
   }
   return errors;
@@ -769,53 +817,17 @@ function triageSkipReasons(phases) {
   return errors;
 }
 
-// A report projection only: zero attestation does not claim that a workflow ran.
+// The declared-step decision lives in the runtime module; this CLI only adapts
+// its report input and keeps the historical `stepCoverageExit` report shape.
+// TCR-2 (decision-log 2026-11-26 裁决三, P11/C4): the report face was the one
+// open face -- an unreadable step definition kept exit 0 here while the close
+// face (core/task-close.mjs) already refused it. This adapter is the report
+// face, so it passes the same `failClosed: true` the close face uses.
+export { declaredStepCoverage } from "../../runtime/task/step-coverage.mjs";
 export function stepCoverageExit(report) {
-  if (!Array.isArray(report?.workflow_steps)) throw new TypeError("workflow_steps report is required");
-  const stages = new Map();
-  const definition_unavailable = [];
-  for (const row of report.workflow_steps) {
-    if (!row || typeof row.stage !== "string" || !row.stage || typeof row.source !== "string"
-        || typeof row.step_slug !== "string" || typeof row.state !== "string") {
-      throw new TypeError("workflow step identity/state is required");
-    }
-    // A definition failure is not a declared step. The final-chain runner keeps
-    // its <definition-unavailable> sentinel outside the evaluated denominator,
-    // so it must not be reported here as a missing (or unattested) step. Its
-    // stage stays visible below as undetermined, never as clean coverage.
-    if (row.definition_status === "unreadable") {
-      if (!definition_unavailable.includes(row.stage)) definition_unavailable.push(row.stage);
-      continue;
-    }
-    if (!stages.has(row.stage)) stages.set(row.stage, []);
-    stages.get(row.stage).push(row);
-  }
-  const missing_steps = [], steps_unattested = [];
-  for (const [stage, rows] of stages) {
-    const attested = rows.some(row => row.state === "completed" || row.state === "not_applicable");
-    if (!attested) {
-      steps_unattested.push({ stage, declared_steps: rows.length });
-    }
-    for (const { source, step_slug, state } of rows) {
-      if (state !== "completed" && state !== "not_applicable") missing_steps.push({ source, step_slug, state });
-    }
-  }
-  // S4: a make-decision row whose named evidence basis is incomplete returns 1;
-  // build-code rows and rows without basis stay report-only.
-  const namedEvidenceGap = (stages.get('make-decision') ?? []).some((row) =>
-    row.state === 'incomplete' && Array.isArray(row.basis)
-    && row.basis.some(item => item && item.conclusion === 'incomplete'));
-  return {
-    exit_code: namedEvidenceGap ? 1 : 0, missing_steps, steps_unattested,
-    ...(definition_unavailable.length ? {
-      definition_unavailable: {
-        stages: definition_unavailable,
-        summary: `${definition_unavailable.length} 个阶段未判定：读不到步骤定义`,
-      },
-    } : {}),
-  };
+  const { declared, evaluable, named_evidence_gap, ...coverage } = declaredStepCoverage(report, { failClosed: true });
+  return coverage;
 }
-
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) return runAggregate();
@@ -848,6 +860,9 @@ async function main() {
       taskPath: resolve(options.taskPath),
       ...(options.workflowRoot === undefined ? {} : { workflowRoot: options.workflowRoot }),
     });
+    // Record-model boundary: the single decision lives in step-coverage; this
+    // call only makes the printed coverage metrics use the same denominator.
+    applyRecordModelExclusions(report);
     const { exit_code, ...coverage } = stepCoverageExit(report);
     let convergenceExit = exit_code;
     let convergenceChecked = false;
@@ -857,9 +872,10 @@ async function main() {
       if (existsSync(material)) {
         const { runStageStepsCheck } = await import("./check-stage-steps.mjs");
         const checked = runStageStepsCheck({ taskPath: resolve(options.taskPath), materialRoot: material, repoRoot: options.workflowRoot ?? undefined, stage: "make-decision" });
-        const gaps = checked.convergence?.gaps ?? [];
-        const { isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
-        if (gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
+        // P3/AC-P3-009: read the same frozen code table through the one seam;
+        // this entry keeps no second text predicate.
+        const { convergenceExitCode } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+        if (convergenceExitCode({ stage: "make-decision", gap_codes: checked.convergence?.gap_codes ?? [] }) === 1) convergenceExit = 1;
       }
     } catch (error) {
       // The material root existed, so a throw here is a real reader failure:
@@ -883,7 +899,7 @@ async function main() {
         const cwdMaterial = join(process.cwd(), "specs", manifest.task_id);
         if (existsSync(join(cwdMaterial, "decision-log.md"))) material = cwdMaterial;
       }
-      const { convergencePointerRefs, convergenceChecklistGaps, isDirectionMaterialFailure } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
+      const { convergencePointerRefs, convergenceChecklistGaps, gapFailureCode, convergenceExitCode } = (await import("./check-stage-steps.mjs")).directionMaterialApi();
       const reportGaps = [];
       let body = null, level = null, decision = "";
       const decideLevel = text => {
@@ -943,7 +959,7 @@ async function main() {
       }
       const gaps = [...new Set(reportGaps)];
       for (const gap of gaps) console.error(`[run-checks] ${gap}`);
-      if (gaps.some(gap => String(gap).startsWith("未收敛：")) || gaps.some(isDirectionMaterialFailure)) convergenceExit = 1;
+      if (convergenceExitCode({ stage: "make-decision", gap_codes: gaps.map(gapFailureCode) }) === 1) convergenceExit = 1;
     }
     process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
     process.exitCode = convergenceExit;

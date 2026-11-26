@@ -1,7 +1,27 @@
 // Extract ordinary native confirmation/authorization; old quality/snapshot permit graph retires.
 import{afterEach,expect,it}from"vitest";import{execFileSync,spawnSync}from"node:child_process";import{chmodSync,existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,realpathSync,rmSync,writeFileSync}from"node:fs";import{tmpdir}from"node:os";import{basename,dirname,join}from"node:path";import{fileURLToPath}from"node:url";import{bootstrapTask}from"../../tools/cli/task-bootstrap.mjs";
 const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
-async function fixture(existing=false){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-current-close-")));roots.push(root);const repo=join(root,"repo"),bare=join(root,"origin.git"),storage=join(root,"storage"),home=join(root,"home");for(const d of[repo,bare,storage,home])mkdirSync(d);const env={...process.env,HOME:home,WORKFLOWHUB_TASK_DIR:storage};for(const k of Object.keys(env))if(k.startsWith("GIT_"))delete env[k];const git=(cwd,args)=>execFileSync("git",args,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close"]);git(repo,["config","user.email","owned@test.invalid"]);writeFileSync(join(repo,"README.md"),"owned base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);const taskId="owned-close";let target=repo;if(existing){target=join(root,"existing");git(repo,["worktree","add","-q","-b",`task/workflowhub/${taskId}`,target,"main"]);}const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":target},{env,home}),wt=boot.workspace.worktree_root,taskDir=boot.task_path;const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Current decision\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned actual delivery\n");writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:taskId,stage:"verify-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");return{root,repo,bare,storage,wt,taskDir,taskId,git};}
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this file keeps
+// judging its own subject instead of tripping the gate. Evidence shape follows
+// the P9 hard-gate sample; no assertion or expectation is relaxed.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],["build-code","write-red-tests"],["build-code","implement-change"],["build-code","inspect-and-route-actual-tests"],["build-code","run-tests"],["build-code","inspect-acceptance-and-ui"],["build-code","scan-diff"],["build-code","review-change"],["build-code","analyze-review-findings"]];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),`${JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})}\n`);
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const path=join(taskDir,"facts.jsonl"),raw=existsSync(path)?readFileSync(path,"utf8"):"";
+  const rows=raw.trim()?raw.trim().split("\n").map(line=>JSON.parse(line)):[];
+  rows.push({record_kind:"step_claims",task_id:id,created_at:"2026-10-20T00:00:00Z",evidence:{value:claims}});
+  writeFileSync(path,rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
+async function fixture(existing=false){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-current-close-")));roots.push(root);const repo=join(root,"repo"),bare=join(root,"origin.git"),storage=join(root,"storage"),home=join(root,"home");for(const d of[repo,bare,storage,home])mkdirSync(d);const env={...process.env,HOME:home,WORKFLOWHUB_TASK_DIR:storage};for(const k of Object.keys(env))if(k.startsWith("GIT_"))delete env[k];const git=(cwd,args)=>execFileSync("git",args,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close"]);git(repo,["config","user.email","owned@test.invalid"]);writeFileSync(join(repo,"README.md"),"owned base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);const taskId="owned-close";let target=repo;if(existing){target=join(root,"existing");git(repo,["worktree","add","-q","-b",`task/workflowhub/${taskId}`,target,"main"]);}const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":target},{env,home}),wt=boot.workspace.worktree_root,taskDir=boot.task_path;const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Current decision\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned actual delivery\n");writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:taskId,stage:"verify-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");seedStepEvidence(taskDir,materials,taskId);return{root,repo,bare,storage,wt,taskDir,taskId,git};}
 import{prepareDeliveryClosePlan,confirmClosePlan,authorizeClosePlan,executeClosePlan,inspectDeliveryCloseState}from"../../core/task-close.mjs";
 it("keeps rejection and timeout blocked without inventing a human reply or changing Git",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),head=f.git(f.repo,["rev-parse","HEAD"]);const rejected=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,outcome:"rejected",replyText:"Do not execute this owned plan."});expect(rejected.status).toBe("blocked");await expect(executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:rejected.confirmation_ref})).rejects.toMatchObject({code:"CONFIRMATION_REJECTED"});const timeout=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,outcome:"timeout"});expect(timeout.status).toBe("blocked");await expect(confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,outcome:"timeout",replyText:"invented reply"})).rejects.toMatchObject({code:"CONFIRMATION_REPLY"});expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(head);});
 it("binds authorizations to the displayed plan and rejects operations outside its actual action set",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});await expect(authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,operations:["unlisted-operation"]})).rejects.toMatchObject({code:"AUTH_SCOPE"});const grants=await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,operations:["commit"]});expect(grants).toHaveLength(1);expect(JSON.parse(readFileSync(grants[0].path,"utf8"))).toMatchObject({operation:"commit",confirmation_ref:c.confirmation_ref});});
@@ -37,7 +57,7 @@ it("isolated archive before delivery moves the whole materials directory into th
     const commit=partial.records.find(row=>row.operation==="commit").source_head;
     // Commit already contains the whole directory and the delivery bytes.
     expect(f.git(f.repo,["ls-tree","-r","--name-only",commit,"--",`specs/${f.taskId}`])).toBe("");
-    expect(f.git(f.repo,["ls-tree","-r","--name-only",`${commit}:specs/archive/${f.taskId}`]).split("\n").filter(Boolean).sort()).toEqual(["archive-exemption.json","decision-log.md","extra.md","spec.md"]);
+    expect(f.git(f.repo,["ls-tree","-r","--name-only",`${commit}:specs/archive/${f.taskId}`]).split("\n").filter(Boolean).sort()).toEqual(["archive-exemption.json","decision-log.md","extra.md","spec.md","step-consumer-design.md"]);
     expect(f.git(f.repo,["show",`${commit}:specs/archive/${f.taskId}/decision-log.md`])).toBe(decision.toString().replace(/\n$/,""));
     expect(rows(f,commit)).toContain("A\tsrc/feature.mjs");
     // The task push happened before the merge and has its own receipt; the
@@ -75,6 +95,24 @@ it("isolated archive before delivery rejects a hand-deleted source with a stale 
   const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
   await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
   rmSync(materials,{recursive:true});
+  mkdirSync(join(f.wt,"specs","archive",f.taskId),{recursive:true});
+  writeFileSync(join(f.wt,"specs","archive",f.taskId,"spec.md"),"stale archive bytes\n");
+  // Real reading with the original input: once the whole material root is
+  // hand-deleted the declared steps cannot be judged at all, so the execution
+  // gate rejects with its named code before source drift is reachable.
+  await expect(executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000}))
+    .rejects.toMatchObject({code:"STEP_EVIDENCE_UNREADABLE"});
+  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
+  expect(f.git(f.repo,["ls-remote","--heads","origin","refs/heads/main"]).split(/\s/)[0]).toBe(base);
+});
+
+it("isolated archive before delivery keeps source-drift rejection while the material root stays readable",async()=>{
+  const f=await fixture(),materials=join(f.wt,"specs",f.taskId),base=f.git(f.repo,["rev-parse","HEAD"]);
+  writeFileSync(join(materials,"extra.md"),"# extra\n");
+  const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
+  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  rmSync(join(materials,"spec.md"));rmSync(join(materials,"extra.md"));
   mkdirSync(join(f.wt,"specs","archive",f.taskId),{recursive:true});
   writeFileSync(join(f.wt,"specs","archive",f.taskId,"spec.md"),"stale archive bytes\n");
   const handDeleted=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
@@ -580,6 +618,12 @@ it("bound delivery claims: a later green capture that is not the declared Phase 
   expect(body.claims.verified.status).toBe("fail");
   expect(body.claims.verified.reasons.join(" ")).toMatch(/exit is 1, not 0/);
   expect(body.claims.verified.evidence).toMatchObject(red);
+  // P3/T017: the failure names both rounds' commands and the later original, so
+  // "the shortcut was green" can never be read as "the gate was green".
+  const laterReason=body.claims.verified.reasons.join(" ");
+  expect(laterReason).toMatch(/later capture/);
+  expect(laterReason).toContain(JSON.stringify(f.gateArtifact.command));
+  expect(laterReason).toContain(JSON.stringify(shortcutArtifact.command));
   expect(body.claims.accepted.status).toBe("fail");
   expect(body.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
   const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
@@ -621,6 +665,9 @@ it("bound delivery claims: only a re-run of the declared gate replaces the red c
   const resignedBody=claimBody(resigned);
   expect(resignedBody.claims.implemented).toMatchObject({status:"pass",evidence:green});
   expect(resignedBody.claims.verified).toMatchObject({status:"pass",evidence:green});
+  // P3/T016: passing has no failure code at either the claim or the report level.
+  expect(resignedBody.claims.verified.code).toBeNull();
+  expect(resignedBody.claim_codes.verified).toBeNull();
   expect(resignedBody.claims.accepted.reasons.join(" ")).toMatch(/readback/);
   expect(resignedBody.claims.accepted.reasons.join(" ")).not.toMatch(/gate-results original/);
 });
@@ -800,4 +847,118 @@ it("restores the archived materials when the delivery commit is rejected so the 
   const retry=await withGraph(GRAPH_UNCHANGED,()=>executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:2000}));
   expect(retry.status,JSON.stringify(retry.error)).toBe("completed");
   expect(f.git(f.repo,["ls-tree","-r","--name-only",`${retry.records.find(row=>row.operation==="commit").source_head}`,"--",`specs/archive/${f.taskId}`])).toContain("extra.md");
+});
+
+// --- P3 ORACLE-CHECK-IDENTITY: the reader only reads the record's own
+// `gate_identity`; a missing identity is a named failure at that exact
+// original, and no unknown record ever falls back to an earlier green capture.
+const shaOf=path=>createHash("sha256").update(readFileSync(path)).digest("hex");
+
+it("P3-AC-001: deleting the latest declared gate's identity fails at that original and never falls back",async()=>{
+  const f=await claimsFixture();
+  await captureVerify(f,{argv:f.captured.argv,slug:"owned-gate-second"});
+  const markers=gateMarkersOf(f);
+  expect(markers).toHaveLength(2);
+  const latest=markers.at(-1);
+  // SETUP: rewriteGate resolves through f.gate, which is the earlier capture
+  // after a second capture; the patch must land on the latest original or the
+  // evidence assertion would compare a stale sha against fresh bytes.
+  const f2=rewriteGate({...f,gate:latest},artifact=>{delete artifact.gate_identity;});
+  expect(f2.gate.ref).toBe(latest.ref);
+  expect(f2.gate.sha256).not.toBe(latest.sha256);
+  const run=runClaims(f2);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.verified.status,"状态仍是 fail，不是第三态").toBe("fail");
+  expect(body.claims.verified.reasons.join(" ")).toMatch(/身份缺失|no gate identity/);
+  expect(body.claim_codes.verified).toBe("GATE_IDENTITY_MISSING");
+  expect(body.claims.verified.evidence).toEqual(f2.gate);
+  expect(body.claims.verified.evidence).not.toEqual(markers[0]);
+  const p=await prepareDeliveryClosePlan({taskDir:f2.taskDir});
+  const c=await confirmClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  const result=await executeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
+  expect(result.status).toBe("failed");
+  expect(result.operation).toBe("claims");
+  expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
+  expect(result.error.message).toContain("GATE_IDENTITY_MISSING");
+  expect(readbackFiles(f2)).toEqual([]);
+});
+
+it("P3-AC-002: a record with no gate_identity key is 未取得, the close refuses, and the original bytes never change",async()=>{
+  const f=await claimsFixture();
+  const f2=rewriteGate(f,artifact=>{delete artifact.gate_identity;delete artifact.gate_unbound;delete artifact.gate_unwrap_depth;});
+  const file=join(f2.taskDir,f2.gate.ref),shaBefore=shaOf(file);
+  const run=runClaims(f2);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.verified.status).toBe("fail");
+  expect(body.claims.verified.reasons.join(" "),"缺键只能判未取得").toMatch(/未取得/);
+  expect(body.claim_codes.verified).toBe("GATE_IDENTITY_MISSING");
+  expect(body.claims.verified.evidence).toEqual(f2.gate);
+  expect(shaOf(file),"读侧从不写回原件").toBe(shaBefore);
+  const p=await prepareDeliveryClosePlan({taskDir:f2.taskDir});
+  const c=await confirmClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  const result=await executeClosePlan({taskDir:f2.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
+  expect(result.status).toBe("failed");expect(result.operation).toBe("claims");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
+  expect(shaOf(file),"close 拒绝后原件字节不变").toBe(shaBefore);
+  // The automated counterexample: a hand-written identity without rebinding the
+  // facts pointer is still refused by the recorded sha256, never accepted.
+  const artifact=JSON.parse(readFileSync(file,"utf8"));
+  artifact.gate_identity={phase_id:"P1",phase_ref:"phases/P1-owned.md",gate_cmd_sha256:f.gateArtifact.gate_identity.gate_cmd_sha256};
+  writeFileSync(file,`${JSON.stringify(artifact,null,2)}\n`);
+  const forged=runClaims(f2);expect(forged.status).toBe(1);
+  expect(claimBody(forged).claims.verified.reasons.join(" ")).toMatch(/original bytes differ from the recorded sha256/);
+});
+
+it("P3-AC-005: an unreadable latest original is reported as 原件不可读 and is never skipped for an earlier green capture",async()=>{
+  const f=await claimsFixture();
+  await captureVerify(f,{argv:f.captured.argv,slug:"owned-gate-second"});
+  const markers=gateMarkersOf(f);const latest=markers.at(-1);
+  const file=join(f.taskDir,latest.ref),shaBefore=shaOf(file);
+  chmodSync(file,0o000);
+  try{
+    const run=runClaims(f);expect(run.status).toBe(1);
+    const body=claimBody(run);
+    expect(body.claims.verified.status).toBe("fail");
+    expect(body.claims.verified.reasons.join(" ")).toMatch(/原件不可读/);
+    expect(body.claim_codes.verified).toBe("GATE_ORIGINAL_UNREADABLE");
+    expect(body.claims.verified.evidence).toEqual(latest);
+    expect(body.claims.verified.evidence).not.toEqual(markers[0]);
+  }finally{chmodSync(file,0o644);}
+  expect(shaOf(file),"还原后原件字节与操作前相同").toBe(shaBefore);
+});
+
+it("P3-AC-006: a double-layer sh -c bash -c capture is bound to the declared gate with unwrap depth 2",async()=>{
+  const f=await claimsFixture();
+  const script=join(f.root,"owned-gate.mjs");
+  const captured=await captureVerify(f,{shell:`bash -c '${process.execPath} ${script}'`,slug:"owned-gate-double"});
+  // The real capture wraps shell text as ["/bin/sh","-c",<text>].
+  expect(captured.argv.slice(0,2)).toEqual(["/bin/sh","-c"]);
+  expect(captured.argv[2]).toContain("bash -c");
+  expect(captured.exit_code).toBe(0);
+  const markers=gateMarkersOf(f);const latest=markers.at(-1);
+  const artifact=JSON.parse(readFileSync(join(f.taskDir,latest.ref),"utf8"));
+  expect(artifact.gate_identity).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
+  expect(artifact.gate_unwrap_depth).toBe(2);
+  expect(artifact.gate_unbound).toBeNull();
+  const run=runClaims(f);const body=claimBody(run);
+  expect(body.claims.verified).toMatchObject({status:"pass",evidence:latest});
+  expect(body.claim_codes.verified).toBeNull();
+});
+
+it("P3-AC-002: an unknown gate_unbound value is 未取得 and is never skipped for an earlier capture",async()=>{
+  const f=await claimsFixture();
+  await captureVerify(f,{argv:f.captured.argv,slug:"owned-gate-second"});
+  const markers=gateMarkersOf(f);const latest=markers.at(-1);
+  // Only `null` is the writer's known negative ("not any declared gate"). Any
+  // other non-null reason is unknown and must stop at this original.
+  const f2=rewriteGate({...f,gate:latest},artifact=>{artifact.gate_identity=null;artifact.gate_unbound="future-writer-reason";});
+  expect(f2.gate.ref).toBe(latest.ref);
+  const run=runClaims(f2);expect(run.status).toBe(1);
+  const body=claimBody(run);
+  expect(body.claims.verified.status).toBe("fail");
+  expect(body.claims.verified.reasons.join(" ")).toMatch(/未取得/);
+  expect(body.claim_codes.verified).toBe("GATE_IDENTITY_UNOBTAINED");
+  expect(body.claims.verified.evidence).toEqual(f2.gate);
+  expect(body.claims.verified.evidence).not.toEqual(markers[0]);
 });

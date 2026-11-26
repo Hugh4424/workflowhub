@@ -1,5 +1,7 @@
 # 真实入口库存（CARD-04）
 
+> **历史快照**：本件是截至 2026-11-23 的历史快照，当前入口以 `node tools/cli/stage-runtime.mjs --help` 的实际输出为准；文内「最后实跑」列记录的最近一次真实实跑为 2026-09-26，之后未逐条复跑，本表不随代码自动更新。
+
 本表登记入口及可核对的执行事实。`最后实跑` 只写有原始命令、输出和时间的记录；`未核实` 不等于从未运行。入口存在、测试收集、业务验收通过是三件事。来源为 CARD-04 `decision-log.md` D-006、`spec.md` DER-07/DER-08 与 P1/T002。`ENTRYPOINT.md` 在本 worktree 和 Git 跟踪文件中均不存在，故不把它当作已核实的入口来源；现用 `tools/cli/stage-runtime.mjs`、`runtime/interface/runtime-facade.mjs`、`package.json` 和 `README.md` 核对。
 
 ## 显式入口

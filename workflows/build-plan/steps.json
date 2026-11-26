@@ -77,8 +77,12 @@
           "uri_or_path": "facts.jsonl"
         },
         {
-          "kind": "test",
-          "uri_or_path": "quality/tests/2026-11-24-130-p04-first-card-skill-read.json"
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#first-card-skill-read"
+        },
+        {
+          "kind": "material",
+          "uri_or_path": "phases/index.md"
         }
       ],
       "method_anchor": "step-spec-plan",
@@ -165,7 +169,7 @@
     {
       "step_id": 12,
       "step_slug": "closeout",
-      "observable_result": "分组：回核与收口；主会话先取得当前计划的真实确认，未答保草稿；按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：human确认、成本原件、handoff独立读回。 确认展示：各Phase验收总额、软硬上限来源、拆分、等待分账、缺项与独立重算原件；仍超硬需真实确认，未答不自动批准。",
+      "observable_result": "分组：回核与收口；主会话先取得当前计划的真实确认，未答保草稿；按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发；单元复盘是Phase内动作，单元完成时当场记一条，阶段末只汇总，不新增阶段门、stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：human确认、成本原件、handoff独立读回。 确认展示：各Phase验收总额、软硬上限来源、拆分、等待分账、缺项与独立重算原件；仍超硬需真实确认，未答不自动批准。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

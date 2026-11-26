@@ -23,22 +23,61 @@
 // move-map 登记」尚未实现，不是导入、语法或夹具错误。真实读取回执由验收阶段用现有
 // captureCommand 产生；本文件不伪造回执，只断言「缺回执」的具名失败路径。
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = realpathSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".."));
 const NODE = process.execPath;
 const CLI = join(ROOT, "tools/cli/check-stage-steps.mjs");
+const TEMP_BASE = existsSync("/private/tmp") ? "/private/tmp" : undefined;
+
+// The default roots are an isolated task + material fixture owned by this test:
+// the old default pointed at a historical task library that no longer exists, so
+// the "public first card" run failed on an unreadable path instead of on the
+// contract. The fixture is a real git repo (the checker's --commit must equal
+// the material worktree HEAD) committed with one phase row. A broken copy is
+// made per test where a mutation is needed.
+function isolatedMaterialFixture() {
+  assert.ok(TEMP_BASE, "P4 首卡默认根需要 /private/tmp 隔离任务与材料根");
+  const base = realpathSync(mkdtempSync(join(TEMP_BASE, "p4-plan-first-card-default-")));
+  const repo = join(base, "repo");
+  const taskId = "delivery-quality-plan-20261123";
+  const material = join(repo, "specs", taskId);
+  mkdirSync(join(material, "phases"), { recursive: true });
+  const git = args => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git(["init", "-q", "-b", "main"]);
+  git(["config", "user.name", "p4 default fixture"]);
+  git(["config", "user.email", "fixture@local.invalid"]);
+  writeFileSync(join(material, "decision-log.md"), "# Decision\n\n- 推荐级别：复杂\n");
+  writeFileSync(join(material, "spec.md"), "# Spec\n\n- **FR-001**：受控结果可读。\n");
+  writeFileSync(join(material, "phases/index.md"), `# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| \`P1\` | \`phases/P1-受控结果.md\` | \`phase-P1\` | \`src/alpha.mjs\` | \`none\` | build-code |\n`);
+  writeFileSync(join(material, "phases/P1-受控结果.md"), "# Phase P1 — 受控结果\n\n### T001 — 受控结果\n\n- **文件 / 符号**：`src/alpha.mjs` symbol: renderResult。\n");
+  git(["add", "."]);
+  git(["commit", "-qm", "isolated material"]);
+  const head = git(["rev-parse", "HEAD"]);
+  const taskPath = join(base, "storage", "Projects", "workflowhub", "tasks", taskId);
+  mkdirSync(join(taskPath, "quality", "tests"), { recursive: true });
+  writeFileSync(join(taskPath, "task.json"), `${JSON.stringify({
+    schema_version: "1.0.0", project_name: "workflowhub", task_id: taskId,
+    target_repo_root: repo, activation_cohort: "post", record_model: "vnext-single-write",
+  }, null, 2)}\n`);
+  writeFileSync(join(taskPath, "facts.jsonl"), "");
+  return { base, repo, material, taskPath, head };
+}
+const FIXTURE = isolatedMaterialFixture();
+after(() => rmSync(FIXTURE.base, { recursive: true, force: true }));
 const MATERIAL_ROOT = process.env.WORKFLOWHUB_P4_MATERIAL_ROOT
   ? realpathSync(process.env.WORKFLOWHUB_P4_MATERIAL_ROOT)
-  : join(ROOT, "specs/delivery-quality-plan-20261123");
+  : FIXTURE.material;
 const TASK_ROOT = process.env.WORKFLOWHUB_P4_TASK_ROOT
   ? realpathSync(process.env.WORKFLOWHUB_P4_TASK_ROOT)
-  : "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/delivery-quality-plan-20261123";
-const TEMP_BASE = existsSync("/private/tmp") ? "/private/tmp" : undefined;
+  : FIXTURE.taskPath;
+const MATERIAL_CWD = process.env.WORKFLOWHUB_P4_MATERIAL_ROOT
+  ? execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: MATERIAL_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim()
+  : FIXTURE.repo;
 const SKILL_REF = "skills/phase-maker/SKILL.md#八步";
 // 完成态词表取报告实际状态：judgment「已完成」与 state「completed」。
 const COMPLETED_JUDGMENT = "已完成";
@@ -151,7 +190,7 @@ function stepArgs({ repoRoot = ROOT, taskPath = TASK_ROOT, receipt } = {}) {
     ...(receipt ? [`--current-read-receipt=${receipt}`] : [])];
 }
 
-const HEAD = headFromGitFiles(ROOT);
+const HEAD = FIXTURE.head;
 const STEPS = JSON.parse(readText("workflows/build-plan/steps.json"));
 const STEP_SIX = STEPS.steps.find(step => step.step_id === 6);
 
@@ -378,6 +417,35 @@ test("ORACLE-PLAN-FIRST 公开首卡：真实 CLI 输出首个读取指针与真
     `公开首卡没有实际读到 ${SKILL_REF}：${JSON.stringify(observed ?? null)}`);
 });
 
+test("ORACLE-PLAN-FIRST 改坏必红：删 phases/index.md 后公开首卡读回不完整并点名缺件", () => {
+  const index = join(MATERIAL_ROOT, "phases/index.md");
+  const moved = join(MATERIAL_ROOT, "phases/index.md.p4-broken");
+  renameSync(index, moved);
+  try {
+    const run = spawnCli(["--stage=build-plan", "--step=6", "--card", "--json",
+      `--task-path=${TASK_ROOT}`, `--material-root=${MATERIAL_ROOT}`, `--repo-root=${ROOT}`,
+      `--commit=${HEAD}`]);
+    assert.equal(run.status, 0, `删索引后公开首卡入口退出 ${run.status}：${clip(run.output)}`);
+    const json = parseJson(run.stdout);
+    const baseline = json?.card?.reading_baseline;
+    assert.equal(baseline?.complete, false,
+      `删 phases/index.md 后 reading_baseline 仍完整：${JSON.stringify(baseline?.paths ?? [])}；` +
+      "默认根若指旧任务或隔离根失效，这条反向断言抓不到缺件");
+    const broken = (baseline?.paths ?? []).find(item => item?.ref === "phases/index.md");
+    assert.equal(broken?.observed, false, "删索引后 phases/index.md 仍记为已读，反向断言失效");
+    assert.match(String(broken?.reason ?? ""), /phases\/index\.md|ENOENT|不可读/,
+      `缺件原因没有点名 phases/index.md：${broken?.reason ?? "（空）"}`);
+  } finally {
+    renameSync(moved, index);
+  }
+  const restored = spawnCli(["--stage=build-plan", "--step=6", "--card", "--json",
+    `--task-path=${TASK_ROOT}`, `--material-root=${MATERIAL_ROOT}`, `--repo-root=${ROOT}`,
+    `--commit=${HEAD}`]);
+  assert.equal(restored.status, 0, `恢复 phases/index.md 后公开首卡入口退出 ${restored.status}：${clip(restored.output)}`);
+  assert.equal(parseJson(restored.stdout)?.card?.reading_baseline?.complete, true,
+    "恢复 phases/index.md 后 reading_baseline 仍不完整，恢复路径未生效");
+});
+
 test("ORACLE-PLAN-FIRST 负控：移去当次读取回执 → 具名指到第 6 步，步骤六不记完成", t => {
   assert.ok(TEMP_BASE, "缺供件负控需要 /private/tmp 隔离任务根");
   const store = mkdtempSync(join(TEMP_BASE, "p4-first-card-task-"));
@@ -411,7 +479,7 @@ test("ORACLE-PLAN-FIRST 负控：移去当次读取回执 → 具名指到第 6 
     // 回执存在但与当次声明不匹配：仍须点名第 6 步和不匹配的锚，不退成笼统失败。
     const wrongAnchor = "p4-no-such-anchor";
     const receipt = {
-      cwd: ROOT,
+      cwd: MATERIAL_CWD,
       argv: [NODE, "tools/cli/check-stage-steps.mjs",
         `--read-step-skill=skills/phase-maker/SKILL.md#${wrongAnchor}`,
         "--stage=build-plan", "--step=6", `--task-path=${taskPath}`,

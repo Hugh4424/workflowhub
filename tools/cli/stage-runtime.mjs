@@ -14,7 +14,7 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessProbeArgv, materialFingerprint } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessMode, readinessProbeArgv, materialFingerprint, readinessFingerprint } from "../../runtime/stage/stage-content-contracts.mjs";
 import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex, isPhaseMaterialFile } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
@@ -1162,7 +1162,9 @@ export function buildGateResultArtifact({ taskId, taskPath, worktreeRoot, receip
   const gateIdentity = gateIdentityFromCapture({ phases, command: { argv: receipt.argv }, phaseId });
   return {
     schema_version: "gate-results.v1",
-    gate_identity: gateIdentity,
+    gate_identity: gateIdentity.identity,
+    gate_unbound: gateIdentity.unbound,
+    gate_unwrap_depth: gateIdentity.depth,
     capture_route: "verify:execute",
     capture_surface: "stage-runtime verify --action=execute (capture-tests)",
     task_id: taskId,
@@ -1284,13 +1286,6 @@ function readinessOwner(rows) {
   return owners.length ? owners.join(", ") : "计划负责人";
 }
 
-function readinessProbeKind(mode) {
-  const text = String(mode ?? "").toLowerCase();
-  if (text.includes("机器") || text.includes("machine")) return "machine";
-  if (text.includes("人") || text.includes("human") || text.includes("manual")) return "human";
-  return "unknown";
-}
-
 // Only a structured EACCES/EPERM error code classifies a permission failure.
 // Output text is auxiliary: a normal failed probe that merely prints
 // "permission denied" stays a failed probe, never a permission conclusion.
@@ -1346,13 +1341,20 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
   if (!parsed.ok) throw new Error(`ORACLE-PHASE-READINESS: ${parsed.errors.join("; ")}`);
   if (table.error) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness ${table.error}`);
   if (!table.rows.length) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness table has no probe rows (missing probe; owner=计划负责人)`);
+  const readinessRows = table.rows.map((row) => Object.freeze({ ...row, kind: readinessMode(row.mode) }));
+  // 2026-11-26 方案 C: the readiness binding is the judged table plus the real
+  // state of each probe target, not the whole material snapshot. The gate
+  // original below keeps using materialFingerprint for its own contract.
   const material_sha256 = materialFingerprint({ spec, index, phases });
+  const readiness_sha256 = readinessFingerprint({ phasePath: phaseFile, rows: readinessRows, cwd: context.workspace.worktreeRoot });
   const previous = latestReadiness(context, phaseId);
   if (previous && previous.record === null) {
     throw new Error(`ORACLE-PHASE-READINESS: latest readiness original is not readable: ${previous.ref} `
       + `(owner=${readinessOwner(table.rows)}; repair or archive it, then rerun the same entry)`);
   }
-  if (previous && previous.record.material_sha256 === material_sha256) {
+  const previousReadiness = previous?.record?.readiness_sha256 ?? null;
+  const previousScheme = previous?.record?.schema_version === "readiness.v2" && typeof previousReadiness === "string";
+  if (previous && previousScheme && previousReadiness === readiness_sha256) {
     if (previous.record.status === "pass" && !previous.marker) {
       return Object.freeze({ ref: previous.ref, record: previous.record, reused: true,
         write_set_reconciliation: parsed.facts?.write_set_reconciliation ?? null });
@@ -1364,17 +1366,25 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
         + `expected pass (owner=${readinessOwner(table.rows)})`);
     }
   } else if (previous) {
+    // Two named reasons: a legacy record cannot be compared under the new key
+    // (fingerprint scheme changed), while a v2 record is bound to judged
+    // objects and only their real change makes it stale.
     const stale = Object.freeze({
-      schema_version: "readiness.v1",
+      schema_version: "readiness.v2",
       phase: phaseId,
+      readiness_sha256,
       material_sha256,
       previous_ref: previous.ref,
-      previous_material_sha256: previous.record.material_sha256 ?? null,
+      previous_readiness_sha256: previousReadiness,
+      previous_schema_version: previous.record.schema_version ?? null,
+      stale_kind: previousScheme ? "judged-objects" : "fingerprint-scheme",
       probe: "0 machine; 0 human",
       status: "stale",
       runner: READINESS_RUNNER,
       at: new Date().toISOString(),
-      stale_reason: "material bytes changed after the recorded pass",
+      stale_reason: previousScheme
+        ? "judged readiness rows or probe target state changed after the recorded pass"
+        : "fingerprint scheme changed (readiness.v1 full-material snapshot -> readiness.v2 judged readiness objects)",
       recover: Object.freeze({
         action: "rerun-same-entry",
         command: "run --action=execute (same entry)",
@@ -1385,8 +1395,8 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
       owner: readinessOwner(table.rows),
     });
     const written = await writeReadinessOriginal(context, phaseId, stale);
-    throw new Error(`ORACLE-PHASE-READINESS: stale readiness result ${previous.ref} is bound to material_sha256 `
-      + `${stale.previous_material_sha256 ?? "unknown"}, current materials are ${material_sha256}; `
+    throw new Error(`ORACLE-PHASE-READINESS: stale readiness result ${previous.ref} is bound to readiness_sha256 `
+      + `${previousReadiness ?? "unknown"} (${stale.stale_reason}); current readiness objects are ${readiness_sha256}; `
       + `recorded stale original ${written.ref} (owner=${stale.owner}). `
       + `Recovery: rerun this same entry (run --action=execute) against the current materials; `
       + `the recovered pass records recovered_from=${written.ref} and its executor/time, while the stale original stays unchanged.`);
@@ -1398,7 +1408,7 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
     if (!row.command) throw new Error(`ORACLE-PHASE-READINESS: ${label} has an empty command`);
     if (!row.evidence) throw new Error(`ORACLE-PHASE-READINESS: ${label} lacks evidence`);
     if (!row.owner) throw new Error(`ORACLE-PHASE-READINESS: ${label} lacks owner`);
-    const kind = readinessProbeKind(row.mode);
+    const kind = readinessMode(row.mode);
     if (kind === "unknown") throw new Error(`ORACLE-PHASE-READINESS: ${label} has unknown judgement mode ${JSON.stringify(row.mode)}`);
     if (kind === "human") {
       // Human rows stay unverified; they never block dispatch and never claim a pass.
@@ -1428,7 +1438,7 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
     const actual = captured.exit_code;
     const passed = expected === null ? actual !== 0 : actual === expected;
     const probe = Object.freeze({
-      phase: phaseId, material_sha256, probe: row.command, status: passed ? "pass" : "failed",
+      phase: phaseId, readiness_sha256, probe: row.command, status: passed ? "pass" : "failed",
       expected: row.expected, exit_code: actual, signal: captured.signal ?? null,
       timed_out: captured.timed_out === true, argv, cwd: context.workspace.worktreeRoot,
       owner: row.owner, evidence: row.evidence, runner: READINESS_RUNNER,
@@ -1443,11 +1453,14 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
     }
     probes.push(probe);
   }
+  // Single count source: the stored human rows, counted by their own status.
+  const humanUnverified = humanRows.filter((row) => row.status === "unverified").length;
   const record = Object.freeze({
-    schema_version: "readiness.v1",
+    schema_version: "readiness.v2",
     phase: phaseId,
+    readiness_sha256,
     material_sha256,
-    probe: `${probes.length} machine; ${humanRows.length} human`,
+    probe: `${probes.length} machine; ${humanRows.length} human; 人判未验证＝${humanUnverified}`,
     status: "pass",
     runner: READINESS_RUNNER,
     at: new Date().toISOString(),
@@ -1467,7 +1480,7 @@ async function evaluateBuildCodeReadiness(context, materials, phaseId, changeSco
   });
   const written = await writeReadinessOriginal(context, phaseId, record);
   // A pass is published only after the original reads back with the same binding.
-  if (written.readBack?.status !== "pass" || written.readBack?.material_sha256 !== material_sha256
+  if (written.readBack?.status !== "pass" || written.readBack?.readiness_sha256 !== readiness_sha256
     || !Array.isArray(written.readBack?.probes) || written.readBack.probes.length !== probes.length) {
     throw new Error(`ORACLE-PHASE-READINESS: readiness original read-back does not match the executed probes: ${written.ref}`);
   }
@@ -1545,8 +1558,9 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       phase_progress: phaseProgress,
       record_ref: written.ref,
       action: written.action,
-      // Report-only fact; never persisted to readiness.v1 or the stage row.
+      // Report-only facts; never persisted to the readiness original or the stage row.
       write_set_reconciliation: readiness.write_set_reconciliation ?? null,
+      human_unverified: readiness.record.human_rows.filter((row) => row?.status === "unverified").length,
     });
   });
 }

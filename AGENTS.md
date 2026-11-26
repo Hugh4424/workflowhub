@@ -45,7 +45,7 @@
 
 ### 测试硬规则
 
-- 只跑受影响针对性测试；禁止全量回归：禁止无范围地跑全量 `vitest`、`npm test` 或 `test:safe`。
+- 测试范围与全量回归禁令以[标准工作方法](docs/standard-workflow.md#build-code-测试与质量)为唯一执行底座，本文件不复述；例外见下条。
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
@@ -89,16 +89,17 @@
 
 ## 项目专业规范索引
 
-最后更新：2026-10-25。各原专业owner维护，consumer为规划/实现/独立验收agent。索引只导航；逐类核实际版本/范围/缺口，不复制规则。
+最后更新：2026-11-25。各域 owner 维护本域 README 的五列表（外部引用行除外，该行只列实质源指针）；本表一域一行、只写指针，不写规则正文。域内具体技能与正文由各域 README 的锚点列给出。
 
-| 类别 | 实质来源与用途 | 时机／owner与consumer |
+| 域 | 实质源入口 | 何时读 / 谁读 |
 | --- | --- | --- |
-| 设计 | [原八类职责](skills/project-norm-init/SKILL.md#规范职责)、[来源准备](skills/design-source-readiness/SKILL.md)、[页面组件词汇](skills/answer-as-page/SKILL.md#组件词汇与取舍)及[驾驶舱合同](skills/answer-as-page/SKILL.md#当前任务驾驶舱)；结构样式归[原模板](skills/answer-as-page/templates/overview-template.html) | 出页/设计准备；原设计内容owner；make-decision/build-code 终末页面caller及render-answer-page模板reader |
-| 前端 | [组件质量](skills/frontend-component-quality/SKILL.md)、[前端测试](skills/frontend-testing/SKILL.md)、[页面DATA与输出合同](skills/answer-as-page/SKILL.md#依赖与边界)、[回灌安全](skills/answer-as-page/SKILL.md#回灌安全) | 交互准备/验收；原方法/renderer owner；阶段caller与render-answer-page.mjs；导航不改HTML/renderer |
-| 后端 | [入口](specs/backend/README.md) → [架构](specs/backend/architecture.md) | 模块/依赖/存储选择前；运行时架构owner；实现与审查者 |
-| 接口 | [入口](specs/api/README.md) → [合同](specs/api/contract.md) | public调用/校验/错误选择前；原public owner；CLI/task调用者 |
-| 验收 | [入口](specs/acceptance/README.md) → [规范](specs/acceptance/acceptance.md) | oracle/用例准备前；task及质量owner；独立测试/OCR/build-code 终末 |
-| 外部引用 | [逐项台账与角色分工](specs/archive/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账)、[整包记录样张](skills/external/README.md) | 新增或变更外部内容前；采用卡与登记owner；实施者、后续卡及独立reader |
+| 设计 | [设计域规则表](specs/design/README.md) | 出页、设计准备与独立设计审查前；规划/实现 agent、design-review caller |
+| 前端 | [前端域规则表](specs/frontend/README.md) → [前端工程正文](specs/frontend/frontend.md) | 前端交互准备、实现与验收前；实现/审查 agent、render-answer-page.mjs；导航不改 HTML/renderer |
+| 后端 | [后端域规则表](specs/backend/README.md) | 模块/依赖/存储/并发选择前；实现与代码审查者 |
+| 接口 | [接口域规则表](specs/api/README.md) | public 调用、校验、错误与兼容选择前；CLI/task 调用者 |
+| 验收 | [验收域规则表](specs/acceptance/README.md) | oracle、用例、证据与完成判读前；独立测试/OCR/build-code 终末 |
+| 代码改动 | [代码改动域规则表](specs/code-changes/README.md) | 动代码、改接口、加技能或交记录前；实现/审查 agent |
+| 外部引用 | [整包记录样张](skills/external/README.md)、[逐项台账](specs/archive/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账) | 新增或变更外部内容前；采用卡与登记 owner、后续卡与独立 reader |
 
 ## 当前目录职责
 
@@ -124,6 +125,12 @@
 - 审查事实由 review-record-route 单一 producer 保存；调用与回读时读 [标准工作方法“build-code 测试与质量”](docs/standard-workflow.md#build-code-测试与质量) 的 wh-review/OCR、不可用检测、同源补充、原始失败与有效单源发现边界；不换执行者，不以 provider 失败冒质量通过。
 - 退役登记保决定、未决项及理由/决定人/来源，供人读交接；不增机器 reader/字段。
 
+### P3 检查记录与就绪的字段登记（2026-11-26）
+
+- `convergence.gap_codes`（`tools/cli/check-stage-steps.mjs`）：`gaps` 文本的并行结构化码。名字只由 `GAP_CODE` 一处定义，值域 `GAP_CODES` 与退出表 `GAP_CODE_EXIT` 都从它派生；分类器 `gapFailureCode` 也返回这些名字，不再写字面量。唯一 consumer 是两个 CLI 的退出判定（`check-stage-steps` 的 `convergenceExitCode(...)` 与 `run-checks` 的两处同缝调用）；owner＝P3 实现者。替代关系：旧退出直接读 `gaps` 中文字串（前缀/证据/方向），现改为只读 `gap_codes` 与冻结表；人读文本 `gaps` 保留，33 行既有断言不动，旧退出读法已删除。表外码与非数组是具名输入错误，不静默退 0；`UNCLASSIFIED` 由用户 2026-11-25 裁决只记录。删除条件：出现带 schema 版本的退出字段，或后续阶段把退出判定迁到唯一新 reader，且两处 CLI 与四个测试文件都不再读它。
+- `gate_unbound` / `gate_unwrap_depth`（`runtime/task/delivery-claims.mjs` 计算，`tools/cli/stage-runtime.mjs` 写进 gate-results 原件）：声明门捕获的「未取得原因」与剥离层数。唯一 consumer 是 `selectDeclaredGate` 的「未取得」判定与 AC-P3-006 的层数断言；owner＝P3 实现者。替代关系：此前这两类事实只在内存在，读侧看不见；现在进持久原件，读侧只读它、不重算命令。删除条件：写侧改为签名式/不可伪造的身份绑定（新机制，需先登记 consumer 与 owner）后，读侧不再需要这两个字段。
+- `claim_codes`（`runtime/task/delivery-claims.mjs`）：三个 delivery claim 的具名失败码，`claims.<name>.code` 的顶层投影。consumer 是 close 拒绝消息前缀与 `tools/cli/check-delivery-claims.mjs` 的 JSON 输出；owner＝P3 实现者。替代关系：此前只有中英文原因串，码是原因串的机器可读投影，原因串保留。删除条件：出现不可伪造的写侧身份后 claim 判定改为签名校验，码面由新 reader 承接。
+
 ## vNext 永久实施边界
 
 - post 的 `make-decision` 允许写读 `decision-log.md`、`spec.md`、纯指针 `phases/index.md` 与索引内独立 Phase；这是对 N6「只许 decision-log」材料边界的显式覆盖，用于轻档在同一阶段完成规格与实施，理由与影响见 [ADR-0051](docs/adr/0051-light-tasks-complete-inside-make-decision.md)。允许集合不改变复杂流程的必需材料或阶段身份。`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
@@ -133,7 +140,7 @@
 - public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。
 - reports immutable；M14–M17 只读保留/归档。新增生产文件、命令、schema 或持久对象必须同时写明唯一 consumer、owner、替代关系和删除条件；不得新增双写、永久 compatibility bridge 或 history runtime branch。
 
-规范同步：build-code每Phase收口及verify终末、reflection写经验前、closeout任务收口前实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/隔离缺口不冒完成；权利事实与个人研究适用范围沿下条专业源判读。
+规范同步：build-code每Phase收口、verify终末、reflection写经验前、closeout任务收口前，以及任一域 README 五列表的规则状态或正文锚点变更后，实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/隔离缺口不冒完成；权利事实与个人研究适用范围沿下条专业源判读。
 
 引用版本、归档绑定、权利或失败/覆盖证据，以及处理个人研究使用范围前，先读[KR-EVID-001](specs/acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，由验收专业owner维护，catalog/经验判重/独立reader消费；更新2026-10-28。
 

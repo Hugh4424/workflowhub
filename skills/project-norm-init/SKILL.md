@@ -7,9 +7,17 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 
 在 build-plan 设计准备、build-code 每Phase开工及 build-code 终末 验收对象准备时，按实际职责读取设计/前端/后端/接口/验收五类规范；UI细分仍保下列八类职责。build-prd 作者经现有 readiness/render 方法消费本入口的来源指针。它是 no stage、no gate 的可搬运方法，不执行产品 UI、不打 quality score。
 
+## 规则的建与读
+
+规则表＝`specs/<域>/` 下含逐字五列表头（列名以 `node <workflowhub 包根>/tools/cli/rule-tables.mjs init` 生成的头为准，唯一来源是决策日志第 670 行）的 `.md`；声明＝`AGENTS.md` 里指向该文件的链接（带 `#` 的是正文引用，不是表指针）。AGENTS 里任何 `specs/` 链接若既不是规则表、也不是任何已登记行的正文，检查器报 `TABLE_INVALID`；只按链接认，不按 AGENTS 表头认。读写该域前先跑 `node <workflowhub 包根>/tools/cli/rule-tables.mjs init --root <项目根> --domain <域>`（create-only、幂等），再 `lookup --root <项目根> --domain <域>` 取行；读的顺序固定为 AGENTS 指针 → `specs/<域>/` 五列表 → 命中行锚点 → 唯一正文，不按技能里的默认文件路径兜底读第二处。
+
+- 写阶段（build-code 每 Phase、终末、reflection 前经 norm-sync）先建后读；缺表先按上一行建，建不了记 `结构不完整（rule_table incomplete）— <原始错误>` 与提供者，本类读结论记 `unavailable`，只停依赖该规则的选择，其余继续。
+- 只读阶段（build-plan、build-prd）不建：缺表记 `规则表未建（rule_table absent）` 并给 init 命令；表在而 0 行记 `no_registered_rule`；不写「找不到规范」。
+- 结构只写最小集合（`specs/<域>/README.md` 与 AGENTS 指针行），不写任何规则正文；规则正文仍归原专业 owner 的真实写权限。
+
 ## 规范职责
 
-本入口只定位来源、接线专业 owner、显露缺口。先读目标项目AGENTS规范索引，再按本次职责取五类当前唯一实质来源；等价源优先，不机械生成五个文件。八类正文由各事实原专业 owner 生成或维护；文件名是缺少同职责实质来源时的默认落点，有等价内容就复用。来源记录类、实际路径与稳定 section/page anchor、作用域、version、owner、真实 consumer、适用或冲突与影响；标题 slug 不能假装已有稳定 anchor。
+本入口只定位来源、接线专业 owner、显露缺口。先按「规则的建与读」确认目标项目该域规则表存在（AGENTS 只放指针），再按本次职责取五类当前唯一实质来源；等价源优先，不机械生成五个文件。八类正文由各事实原专业 owner 生成或维护；文件名是缺少同职责实质来源时的默认落点，有等价内容就复用。来源记录类、实际路径与稳定 section/page anchor、作用域、version、owner、真实 consumer、适用或冲突与影响；标题 slug 不能假装已有稳定 anchor。
 
 | 类 | 正文或真实源 | 专业方法 | 原 owner | consumer |
 | --- | --- | --- | --- | --- |
@@ -18,7 +26,7 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 | ③组件及设计代码对应 | specs/design/components.md；工程独立内容确需时 specs/frontend/components.md，否则归 frontend.md | WenjiaWang/ui-designer 的 frontend-design + `skills/frontend-component-quality/SKILL.md` | 组件设计与前端 owner | 真实 wrapper/API/type、实现/测试 |
 | ④布局与场景 | specs/design/layouts.md；独立工程内容确需时 specs/frontend/layouts.md，否则归 frontend.md | WenjiaWang/ui-designer 的 information-architecture + frontend-design | 布局/信息架构 owner | renderer、实际 DOM/CSS/滚动/浮层 |
 | ⑤通用交互 | specs/design/interaction.md；控件内合同引用组件源 | WenjiaWang/ui-designer 的 ui-interaction-states | 交互/组件行为 owner | 规划、测试、verify reader |
-| ⑥前端工程 | specs/frontend/frontend.md；引用配置/架构/ADR | WenjiaWang/spec-driven-production 分责/更新；现前端工程方法 | 前端工程 owner | 实现、构建、工程验证 |
+| ⑥前端工程 | 先读 specs/frontend/README.md 入口，再读 specs/frontend/frontend.md 正文；引用配置/架构/ADR | WenjiaWang/spec-driven-production 分责/更新；现前端工程方法 | 前端工程 owner | 实现、构建、工程验证 |
 | ⑦内容与设计工艺 | specs/design/craft.md；词义和值引用原源 | WenjiaWang/ui-designer 的 design-brief + frontend-design 文案方法 | 内容设计 owner | 组件、文案、专业 reader |
 | ⑧质量判据 | 确需独立正文时 specs/design/quality.md；工程/运行共用 specs/frontend/ui-quality.md | `skills/frontend-testing/SKILL.md` + `skills/isolated-browser-qa/SKILL.md` | 设计/工程/运行质量原 owner | 独立设计、代码及运行验证 |
 
@@ -48,13 +56,13 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 
 ## 非UI规范与索引
 
-- 后端：从项目AGENTS到 `specs/backend/README.md` → `architecture.md`，核模块职责、依赖/存储边界、并发与失败owner；用当前架构/公开入口的实质源，不从HTTP存在推微服务。
-- 接口：从 `specs/api/README.md` → `contract.md`，定位输入/输出原合同、校验、错误、版本/兼容及真实caller；具体字段、状态和协议仍在唯一public contract。
-- 验收：从 `specs/acceptance/README.md` → `acceptance.md`，核oracle、实际输入/环境、证据原件与未覆盖；已有质量治理协议优先引用，不复制字段/schema/账本。
+- 后端：从 AGENTS 指针到 `specs/<域>/` 规则表，选「什么时候读」命中行，按锚点读唯一正文（默认正文 `architecture.md`）；表未建按「规则的建与读」建或记 `rule_table absent`；0 行写 `no_registered_rule`。核模块职责、依赖/存储边界、并发与失败owner；用当前架构/公开入口的实质源，不从HTTP存在推微服务。
+- 接口：从 AGENTS 指针到 `specs/<域>/` 规则表，选「什么时候读」命中行，按锚点读唯一正文（默认正文 `contract.md`）；表未建按「规则的建与读」建或记 `rule_table absent`；0 行写 `no_registered_rule`。定位输入/输出原合同、校验、错误、版本/兼容及真实caller；具体字段、状态和协议仍在唯一public contract。
+- 验收：从 AGENTS 指针到 `specs/<域>/` 规则表，选「什么时候读」命中行，按锚点读唯一正文（默认正文 `acceptance.md`）；表未建按「规则的建与读」建或记 `rule_table absent`；0 行写 `no_registered_rule`。核oracle、实际输入/环境、证据原件与未覆盖；已有质量治理协议优先引用，不复制字段/schema/账本。
 
 各类保用途、读取时机、实际路径/稳定节、version/作用域、owner、consumer和最后更新。新正文作者按职责选 [后端架构](templates/backend-architecture.md)、[接口合同](templates/api-contract.md)、[验收](templates/acceptance.md) 样张；原八模板不减条款。模板只是写法，现runtime resolver/发布器消费bundle.files，不引入新installer或control面。
 
-当来源missing/stale/冲突时写该类影响与原owner，暂停依赖该规则的选择，其余类继续；未核为unknown，不把非UI当三类均N/A。规范索引只维护指针，不另存规则/状态/测试结论；真实新项目输入仍须原owner提供，不能用模板完成冒实际规范已生成。
+当来源missing/stale/冲突时写该类影响与原owner，暂停依赖该规则的选择，其余类继续；未核为unknown，不把非UI当三类均N/A。规范索引只维护指针，不另存规则/状态/测试结论；真实新项目输入仍须原owner提供，不能用模板完成冒实际规范已生成。缺表不等于缺规则：表在而 0 行记 `no_registered_rule`；表缺记 `rule_table absent` 并给 build-code 要跑的命令，不写「找不到规范」；未登记段落不当规则。
 
 ## 方法
 
@@ -82,7 +90,7 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 
 tokens/IA/brief 是单文件 Markdown；固定 frontend-design 闭包是 SKILL.md 和 [LICENSE.txt](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/frontend-design/LICENSE.txt)，没有需要安装的脚本。许可按 [THIRD_PARTY_NOTICES](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/THIRD_PARTY_NOTICES.md) 分层：tokens/IA/brief 来自 designer-skills 固定 c259656c76d9758d7ead46b0d2f125cbe84f8665，[原根 LICENSE](https://raw.githubusercontent.com/julianoczkowski/designer-skills/c259656c76d9758d7ead46b0d2f125cbe84f8665/LICENSE) 为 Apache2.0；固定 frontend-design 自带 Apache2.0。states 为本地原创、没有可核的单独复制 grant，保持副本/分发权限 unknown，不能借其它子项许可推广全包。本次只在线引用阅读并用项目事实原创专业结果；复制、安装或 vendor 需另有真实授权与相应资源许可，不因 HTTP200 或引用可读就获准。
 
-专家可 read/glob/grep 当前已允许项目、读取具名固定公开原文；外部脚本、平台写入、CSS/API 修改不在本入口授权内。只有 build-code 的原正文 owner 已有明确写集时才 write/edit 该正文。网络不可达由主会话恢复获准读取或提供合法原件；原输入由用户/项目维护者提供；复制许可由实际权利 owner 提供。三种起点逐类使用同一专业方法；缺新项目真实目标/栈只保该条件 incomplete，不停已有规范/实现两路，也不宣八类完整生成。
+专家可 read/glob/grep 当前已允许项目、读取具名固定公开原文；外部脚本、平台写入、CSS/API 修改不在本入口授权内。只有 build-code 的原正文 owner 已有明确写集时才 write/edit 该正文；建结构只写最小集合（`specs/<域>/README.md` 与 AGENTS 指针行），不写任何规则正文，规则正文仍归原专业 owner 的真实写权限。网络不可达由主会话恢复获准读取或提供合法原件；原输入由用户/项目维护者提供；复制许可由实际权利 owner 提供。三种起点逐类使用同一专业方法；缺新项目真实目标/栈只保该条件 incomplete，不停已有规范/实现两路，也不宣八类完整生成。
 
 **SDD/材料评估条件指针**：⑥分责或专业更新需要时读 [固定 SDD SKILL](https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/SKILL.md) 与 [execution](https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/references/execution.md)，适配到现 spec/Phase/facts，不迁六材料双写/重开状态。材料准备需要 GUIDE/AUDIT 时沿 [固定材料原方法](https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval/resolve/b62e87f3f91868033106b21f6398f0fd6d3d2043/skills/material-agent-readiness-eval-markdown/SKILL.md) 读取当前模式和其具名闭包，采用/查新/许可/真实执行由当前采用 owner（本任务 P6）维护在 reuse-registry/catalog。公开 GUIDE 可人读应用；AUDIT 必须有合法获准执行入口、完整原 scripts/资源和实际输出，缺条件保 unavailable、提供者和下一动作，不自建评分冒原能力。它的执行缺口与新项目缺真实输入分开记录，未采用不说已采用。
 
@@ -106,7 +114,7 @@ tokens/IA/brief 是单文件 Markdown；固定 frontend-design 闭包是 SKILL.m
 
 ## 完成边界
 
-全部适用类有真实来源、专业 owner、consumer 和路由或明确缺项、影响与恢复；八类不是文件数。legacy_inventory 逐项说明扫描/人读范围和 unknown，不把人工判断覆盖机器事实。下游读回实际来源/适用规则和失败条件；实际专家未执行或只做部分内容就保原限制，不把接线清单当完整专业产物。未读代码、未跑 Preview、未测页面不宣通过；浏览器验证由 skills/isolated-browser-qa/SKILL.md 的隔离路线执行。
+全部适用类有真实来源、专业 owner、consumer 和路由或明确缺项、影响与恢复；八类不是文件数。legacy_inventory 逐项说明扫描/人读范围和 unknown，不把人工判断覆盖机器事实。下游读回实际来源/适用规则和失败条件；实际专家未执行或只做部分内容就保原限制，不把接线清单当完整专业产物。完成还须结构可读：本次适用域的规则表存在或记录了 absent/incomplete 与提供者，表行数与锚点可逐行回读。未读代码、未跑 Preview、未测页面不宣通过；浏览器验证由 skills/isolated-browser-qa/SKILL.md 的隔离路线执行。
 
 ## 写作规范
 

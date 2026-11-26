@@ -235,7 +235,7 @@ function levelInput(decisionLog, read, limits) {
   let entry;
   try { entry = JSON.parse(entrySource.raw); } catch { limits.push("入口调用原件不是可核返回；交当前 make-decision 来源 owner"); }
   const flags = ["boundary_clear","single_outcome","limited_impact","major_architecture","migration","permission","security"];
-  const actual = entry?.flags ?? entry?.result?.flags;
+  const actual = entry?.flags ?? entry?.result?.flags ?? entry?.output?.flags;
   if (!actual || !flags.every(key => typeof actual[key] === "boolean")) entrySource.verified = false;
   const facts = {};
   for (const key of ["scope","change_kind","independent_units","risk","credentials","dependencies","acceptance"]) {
