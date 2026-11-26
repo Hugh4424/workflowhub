@@ -1501,7 +1501,7 @@ export function checkAcceptanceObject(input, context = {}) {
   资源来源：复用仓内两处退出点与真实旧 gap 形状，`mkdtemp` 内造样本。
   为什么不能再简：只测带 `kind` 的正例判不出中文子串依赖是否已删；不测旧形态判不出兜底是否越界。
   未执行记 `incomplete`，写判定者、观察协议与证据落点；`unavailable` 须给原因与恢复条件。
-  通过：带 `kind` 且文案改成同义时退 1 并给 `gap_codes`；无 `kind` 的旧 gap 落 `UNCLASSIFIED`，**只记录、不拦**（用户 2026-11-25 裁决），退出码不受它影响。
+  通过：带 `kind` 且文案改成同义时退 1 并给 `gap_codes`；无 `kind` 的旧 gap 落 `UNCLASSIFIED`，**只记录、不拦**（用户 2026-11-25 裁决，2026-11-26 再次确认；见 `decision-log.md`「2026-11-26 用户裁决」裁决二），退出码不受它影响。
   失败：把退出点改回匹配中文字串（例如 `未收敛：` 前缀），同义文案那条必须退 0；若此时仍判退 1 即兜底被删，本条失败。
   证据：quality/tests/p3-gap-kind.output。
 
