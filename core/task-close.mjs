@@ -20,6 +20,11 @@ const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr
 const AUTH = fileURLToPath(new URL("../runtime/interface/git-authorize.mjs", import.meta.url));
 const SIDECARS = ["quality/", "evidence/", ".multica/", "qa-artifacts/"];
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// The four gap classes are a closed set owned by the gap-triage contract: 设计／
+// 实现／验收标准／资源. The close gate below judges only membership; owner,
+// action and evidence stay human-read in the report, and an `incomplete` gap
+// that carries a class is explicitly allowed through.
+const GAP_CLASSES = new Set(["设计", "实现", "验收标准", "资源"]);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function failure(code, message) { return Object.assign(new Error(message), { code }); }
 function gitEnv() {
@@ -489,6 +494,9 @@ function preparePr(c, input, fields) {
   return { ...probePrSupport(c, { ...fields, sourceHead: fields.source.head, pendingChanges: fields.source.changes }), head: fields.head, base: fields.base, title: input?.title ?? defaults.title, body: input?.body ?? defaults.body };
 }
 function validatePlan(plan, c) {
+  // Unknown keys stay readable: a plan written before `gap_triage` existed has
+  // no such key, and an empty declaration is judged at the execute gate, never
+  // here. Only the declared-gap shape is parsed while a plan is assembled.
   if (!plan || typeof plan !== "object" || plan.task_id !== c.manifest.task_id || plan.project_name !== c.manifest.project_name || plan.target_repo_root !== c.root) throw failure("CLOSE_PLAN_IDENTITY", "close plan identity mismatch");
   const expected = plan.mode === "planning" ? ["commit", "merge", "push", "cleanup"] : plan.mode === "post-cleanup-archive" ? ["archive", "push"]
     : plan.mode === "ordinary" && plan.pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"];
@@ -553,6 +561,29 @@ function authorize(c, operation, action, input) {
   }
   catch (error) { let native; try { native = JSON.parse(String(error.stderr)); } catch { throw error; } throw failure(native.code ?? "AUTHORIZATION_FAILED", native.message ?? String(error.stderr)); }
 }
+// Shape only: a declared-gap list must be an array of rows with a non-empty
+// id. A row whose class is absent or blank is kept as `null` so the class
+// decision happens at the execute gate, not while a plan is being written.
+function parseGapTriage(value) {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw failure("GAP_TRIAGE_UNCLASSIFIED", "declared gap triage must be a list of {id, class} rows");
+  return value.map((row) => {
+    const id = row && typeof row === "object" && typeof row.id === "string" ? row.id.trim() : "";
+    if (!id) throw failure("GAP_TRIAGE_UNCLASSIFIED", "every declared gap needs a non-empty id");
+    return { id, class: typeof row.class === "string" && row.class.trim() ? row.class : null };
+  });
+}
+// The single machine judgement: every declared gap carries one of the four
+// closed classes. Only declarations are judged; the gate never reads materials
+// to look for unreported gaps and never rejects a classified `incomplete`.
+function assertGapTriage(plan) {
+  const rows = plan.gap_triage ?? [];
+  const unclassified = rows.filter((row) => !GAP_CLASSES.has(row.class))
+    .map((row) => `${row.id}:${row.class ?? "(none)"}`);
+  if (unclassified.length) {
+    throw failure("GAP_TRIAGE_UNCLASSIFIED", `every declared gap needs one of ${[...GAP_CLASSES].join("/")}; unclassified: ${unclassified.join(", ")}`);
+  }
+}
 export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMode, priorPlanRef, archiveDeclarationRef } = {}) {
   assertPostWriter(taskDir);
   if (priorPlanRef !== undefined || archiveDeclarationRef !== undefined) {
@@ -597,13 +628,16 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   // confirmation binds an action the user can actually read.
   const taskBranchPush = mode === "ordinary" && pr?.status !== "available"
     ? { step: "push-task", operation: "push", branch: taskBranch, remote, ordering: "before merge", scope: "this plan's push authorization" } : undefined;
+  // Same conditional-expansion shape as `task_branch_push`: a caller that does
+  // not declare gaps writes no key, so old plans and fixtures keep their bytes.
+  const gapTriage = parseGapTriage(delivery.gap_triage);
   const plan = { task_id: c.manifest.task_id, project_name: c.manifest.project_name, mode, archive_before_commit: mode === "ordinary", target_repo_root: c.root,
     worktree_root: c.worktree, task_branch: taskBranch, target_branch: targetBranch, target_head: baseline,
     remote, remote_target_head: remoteTarget.oid, remote_task_head: remoteOid(c.root, remote, taskBranch).oid,
     spec_source_path: delivery.spec_source_path ?? `specs/${c.manifest.task_id}`, spec_archive_path: delivery.spec_archive_path ?? `specs/archive/${c.manifest.task_id}`,
     preserve_existing_workspace: c.explicit, source, steps: mode === "planning" ? ["commit", "merge", "push", "cleanup"]
       : pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"],
-    ...(taskBranchPush ? { task_branch_push: taskBranchPush } : {}), ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
+    ...(taskBranchPush ? { task_branch_push: taskBranchPush } : {}), ...(gapTriage ? { gap_triage: gapTriage } : {}), ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
   validatePlan(plan, c);
   realDirectory(join(c.worktree, plan.spec_source_path));
   const planRef = await writeEvidence(c, "close-plan", plan);
@@ -917,6 +951,16 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
   acceptedConfirmation(c, planRef, confirmationRef, plan);
   const directory = evidenceDirectory(c.taskDir);
   return withLock(dirname(directory), "close.execution", async () => {
+    // Both rejection layers run inside the close lock and before the first
+    // written record, in the documented order 缺步硬门 → 缺口分诊 (identity and
+    // authorization were judged above). Reading them under the lock keeps the
+    // facts from changing between judgement and record. The declared-step gate
+    // is the execution-path counterpart of the early gate in closeDelivery, so
+    // prepare→confirm→manual-close→execute cannot bypass it; the confirmed
+    // plan's `target_branch` is authoritative here, and the early gate's
+    // delivery hint never overrides this judgement.
+    await assertDeclaredStepsComplete(taskDir, { target_branch: plan.target_branch }, { recordClaim: "不写本次 close 动作记录、不发起 Git 动作" });
+    assertGapTriage(plan);
     // The current task's real claims are re-read from their originals before
     // any Git action. A failed or missing claim rejects the close instead of
     // publishing a success it cannot source; nothing is deleted on rejection.
@@ -1254,7 +1298,7 @@ function declaredStepMaterialRoot(taskDir, manifest, targetBranch) {
     try { return lstatSync(join(candidate, "decision-log.md")).isFile(); } catch { return false; }
   }) ?? null;
 }
-async function assertDeclaredStepsComplete(taskDir, delivery = {}) {
+async function assertDeclaredStepsComplete(taskDir, delivery = {}, { recordClaim = "不写 plan、确认或 close 记录" } = {}) {
   const manifest = JSON.parse(readFile(taskDir, "task.json"));
   const targetBranch = delivery.target_branch ?? "main";
   const materialRoot = declaredStepMaterialRoot(taskDir, manifest, targetBranch);
@@ -1271,16 +1315,16 @@ async function assertDeclaredStepsComplete(taskDir, delivery = {}) {
   }
   const coverage = declaredStepCoverage(report, { failClosed: true });
   if (coverage.evaluable !== true && coverage.definition_unavailable) {
-    throw failure("STEP_EVIDENCE_UNDEFINED", `收口前读不到步骤定义：${coverage.definition_unavailable.stages.join("、")}；声明步骤无法判定，不写 plan、确认或 close 记录`);
+    throw failure("STEP_EVIDENCE_UNDEFINED", `收口前读不到步骤定义：${coverage.definition_unavailable.stages.join("、")}；声明步骤无法判定，${recordClaim}`);
   }
   if (coverage.exit_code !== 0) {
     const missing = (coverage.declared ?? []).map(row => `${row.source}#${row.step_slug}（${row.state}）`).join("；");
     // Distinguish the two causes of a rejection: a declared-step gap names the
     // steps; the pre-existing make-decision named-evidence gap is not a declared
     // step, so it must not be reported as "declared steps: unavailable".
-    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；不写 plan、确认或 close 记录`);
-    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", "收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；不写 plan、确认或 close 记录");
-    throw failure("STEP_EVIDENCE_INCOMPLETE", "收口前步骤判定未通过（未取得具名缺步原因）；不写 plan、确认或 close 记录");
+    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；${recordClaim}`);
+    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；${recordClaim}`);
+    throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前步骤判定未通过（未取得具名缺步原因）；${recordClaim}`);
   }
 }
 // The supplied real user reply covers the displayed action set. Record each
@@ -1288,9 +1332,13 @@ async function assertDeclaredStepsComplete(taskDir, delivery = {}) {
 // known HEAD changes still require a fresh native record under that scope.
 export async function closeDelivery({ taskDir, delivery, closeMode, replyText, priorPlanRef, archiveDeclarationRef, signal } = {}) {
   assertPostWriter(taskDir);
-  // The declared-step gate runs before any close plan, confirmation or close
-  // record exists, and only covers closeDelivery. The prepare→confirm→
-  // manual-close→execute path is a recorded residual (R16), not covered here.
+  // Two declared-step gates cover this chain. The early gate here runs before
+  // any close plan, confirmation or close record exists and uses the caller's
+  // delivery hint (`delivery.target_branch`). The execution gate in
+  // executeClosePlan runs inside the close lock against the confirmed plan's
+  // `target_branch`, and it is authoritative: it is the only one that judges at
+  // the point where records could still change the facts. Both are the same
+  // assertDeclaredStepsComplete; neither relaxes the other.
   await assertDeclaredStepsComplete(taskDir, delivery);
   const prepared = await prepareDeliveryClosePlan({ taskDir, delivery, closeMode, priorPlanRef, archiveDeclarationRef });
   const confirmed = await confirmClosePlan({ taskDir, planRef: prepared.plan_ref, replyText });

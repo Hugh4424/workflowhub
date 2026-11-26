@@ -1,7 +1,27 @@
 // Extract ordinary native confirmation/authorization; old quality/snapshot permit graph retires.
 import{afterEach,expect,it}from"vitest";import{execFileSync,spawnSync}from"node:child_process";import{chmodSync,existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,realpathSync,rmSync,writeFileSync}from"node:fs";import{tmpdir}from"node:os";import{basename,dirname,join}from"node:path";import{fileURLToPath}from"node:url";import{bootstrapTask}from"../../tools/cli/task-bootstrap.mjs";
 const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
-async function fixture(existing=false){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-current-close-")));roots.push(root);const repo=join(root,"repo"),bare=join(root,"origin.git"),storage=join(root,"storage"),home=join(root,"home");for(const d of[repo,bare,storage,home])mkdirSync(d);const env={...process.env,HOME:home,WORKFLOWHUB_TASK_DIR:storage};for(const k of Object.keys(env))if(k.startsWith("GIT_"))delete env[k];const git=(cwd,args)=>execFileSync("git",args,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close"]);git(repo,["config","user.email","owned@test.invalid"]);writeFileSync(join(repo,"README.md"),"owned base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);const taskId="owned-close";let target=repo;if(existing){target=join(root,"existing");git(repo,["worktree","add","-q","-b",`task/workflowhub/${taskId}`,target,"main"]);}const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":target},{env,home}),wt=boot.workspace.worktree_root,taskDir=boot.task_path;const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Current decision\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned actual delivery\n");writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:taskId,stage:"verify-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");return{root,repo,bare,storage,wt,taskDir,taskId,git};}
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this file keeps
+// judging its own subject instead of tripping the gate. Evidence shape follows
+// the P9 hard-gate sample; no assertion or expectation is relaxed.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],["build-code","write-red-tests"],["build-code","implement-change"],["build-code","inspect-and-route-actual-tests"],["build-code","run-tests"],["build-code","inspect-acceptance-and-ui"],["build-code","scan-diff"],["build-code","review-change"],["build-code","analyze-review-findings"]];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),`${JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})}\n`);
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const path=join(taskDir,"facts.jsonl"),raw=existsSync(path)?readFileSync(path,"utf8"):"";
+  const rows=raw.trim()?raw.trim().split("\n").map(line=>JSON.parse(line)):[];
+  rows.push({record_kind:"step_claims",task_id:id,created_at:"2026-10-20T00:00:00Z",evidence:{value:claims}});
+  writeFileSync(path,rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
+async function fixture(existing=false){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-current-close-")));roots.push(root);const repo=join(root,"repo"),bare=join(root,"origin.git"),storage=join(root,"storage"),home=join(root,"home");for(const d of[repo,bare,storage,home])mkdirSync(d);const env={...process.env,HOME:home,WORKFLOWHUB_TASK_DIR:storage};for(const k of Object.keys(env))if(k.startsWith("GIT_"))delete env[k];const git=(cwd,args)=>execFileSync("git",args,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close"]);git(repo,["config","user.email","owned@test.invalid"]);writeFileSync(join(repo,"README.md"),"owned base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);const taskId="owned-close";let target=repo;if(existing){target=join(root,"existing");git(repo,["worktree","add","-q","-b",`task/workflowhub/${taskId}`,target,"main"]);}const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":target},{env,home}),wt=boot.workspace.worktree_root,taskDir=boot.task_path;const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Current decision\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned actual delivery\n");writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:taskId,stage:"verify-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");seedStepEvidence(taskDir,materials,taskId);return{root,repo,bare,storage,wt,taskDir,taskId,git};}
 import{prepareDeliveryClosePlan,confirmClosePlan,authorizeClosePlan,executeClosePlan,inspectDeliveryCloseState}from"../../core/task-close.mjs";
 it("keeps rejection and timeout blocked without inventing a human reply or changing Git",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),head=f.git(f.repo,["rev-parse","HEAD"]);const rejected=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,outcome:"rejected",replyText:"Do not execute this owned plan."});expect(rejected.status).toBe("blocked");await expect(executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:rejected.confirmation_ref})).rejects.toMatchObject({code:"CONFIRMATION_REJECTED"});const timeout=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,outcome:"timeout"});expect(timeout.status).toBe("blocked");await expect(confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,outcome:"timeout",replyText:"invented reply"})).rejects.toMatchObject({code:"CONFIRMATION_REPLY"});expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(head);});
 it("binds authorizations to the displayed plan and rejects operations outside its actual action set",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});await expect(authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,operations:["unlisted-operation"]})).rejects.toMatchObject({code:"AUTH_SCOPE"});const grants=await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,operations:["commit"]});expect(grants).toHaveLength(1);expect(JSON.parse(readFileSync(grants[0].path,"utf8"))).toMatchObject({operation:"commit",confirmation_ref:c.confirmation_ref});});
@@ -37,7 +57,7 @@ it("isolated archive before delivery moves the whole materials directory into th
     const commit=partial.records.find(row=>row.operation==="commit").source_head;
     // Commit already contains the whole directory and the delivery bytes.
     expect(f.git(f.repo,["ls-tree","-r","--name-only",commit,"--",`specs/${f.taskId}`])).toBe("");
-    expect(f.git(f.repo,["ls-tree","-r","--name-only",`${commit}:specs/archive/${f.taskId}`]).split("\n").filter(Boolean).sort()).toEqual(["archive-exemption.json","decision-log.md","extra.md","spec.md"]);
+    expect(f.git(f.repo,["ls-tree","-r","--name-only",`${commit}:specs/archive/${f.taskId}`]).split("\n").filter(Boolean).sort()).toEqual(["archive-exemption.json","decision-log.md","extra.md","spec.md","step-consumer-design.md"]);
     expect(f.git(f.repo,["show",`${commit}:specs/archive/${f.taskId}/decision-log.md`])).toBe(decision.toString().replace(/\n$/,""));
     expect(rows(f,commit)).toContain("A\tsrc/feature.mjs");
     // The task push happened before the merge and has its own receipt; the
@@ -75,6 +95,24 @@ it("isolated archive before delivery rejects a hand-deleted source with a stale 
   const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
   await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
   rmSync(materials,{recursive:true});
+  mkdirSync(join(f.wt,"specs","archive",f.taskId),{recursive:true});
+  writeFileSync(join(f.wt,"specs","archive",f.taskId,"spec.md"),"stale archive bytes\n");
+  // Real reading with the original input: once the whole material root is
+  // hand-deleted the declared steps cannot be judged at all, so the execution
+  // gate rejects with its named code before source drift is reachable.
+  await expect(executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000}))
+    .rejects.toMatchObject({code:"STEP_EVIDENCE_UNREADABLE"});
+  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
+  expect(f.git(f.repo,["ls-remote","--heads","origin","refs/heads/main"]).split(/\s/)[0]).toBe(base);
+});
+
+it("isolated archive before delivery keeps source-drift rejection while the material root stays readable",async()=>{
+  const f=await fixture(),materials=join(f.wt,"specs",f.taskId),base=f.git(f.repo,["rev-parse","HEAD"]);
+  writeFileSync(join(materials,"extra.md"),"# extra\n");
+  const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
+  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
+  await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  rmSync(join(materials,"spec.md"));rmSync(join(materials,"extra.md"));
   mkdirSync(join(f.wt,"specs","archive",f.taskId),{recursive:true});
   writeFileSync(join(f.wt,"specs","archive",f.taskId,"spec.md"),"stale archive bytes\n");
   const handDeleted=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FORMAL_DEVELOPMENT_STAGES, WORKFLOW_STAGES } from '../../runtime/stage/stage-registry.mjs';
@@ -35,6 +35,26 @@ function terminalRing(extra={}) {
 }
 const ring=item=>evaluateRing({task_id:'owned-p9',rings:{9:item}},9,{value:'complex',declared:true});
 
+// The declared-step gate (core/task-close.mjs) reads real step claims and the
+// material's step-consumer declaration. Fixtures seed both so this file keeps
+// judging its own subject instead of tripping the gate. Evidence shape follows
+// the P9 hard-gate sample; no assertion or expectation is relaxed.
+const GATE_STEPS=[["make-decision","module-convergence"],["build-plan","spec-plan"],["build-code","write-red-tests"],["build-code","implement-change"],["build-code","inspect-and-route-actual-tests"],["build-code","run-tests"],["build-code","inspect-acceptance-and-ui"],["build-code","scan-diff"],["build-code","review-change"],["build-code","analyze-review-findings"]];
+function seedStepEvidence(taskDir,materials,id){
+  mkdirSync(join(taskDir,"quality","evidence"),{recursive:true});
+  const claims=[],table=[];
+  for(const[stage,slug]of GATE_STEPS){
+    const source=`workflows/${stage}/steps.json`,ref=`quality/evidence/${slug}.json`;
+    writeFileSync(join(taskDir,ref),`${JSON.stringify({task_id:id,source,step_slug:slug,reader:"owned close fixture",inputs:["controlled observation"],observation:"controlled observation read back",criteria_ref:`workflows/${stage}/SKILL.md#方法`,conclusion:"completed",limits:[]})}\n`);
+    claims.push({kind:"quality_evidence",source,step_slug:slug,ref,sha256:"0".repeat(64),command:"read controlled claim",exit_code:0,failure_signature:"none"});
+    table.push(`| [${stage} steps:1](<../../${source}#L1>) \`${slug}\` | 受控观察 | human | 同 source 只替泛句 |`);
+  }
+  writeFileSync(join(materials,"step-consumer-design.md"),`# 步骤消费者\n\n${table.join("\n")}\n`);
+  const path=join(taskDir,"facts.jsonl"),raw=existsSync(path)?readFileSync(path,"utf8"):"";
+  const rows=raw.trim()?raw.trim().split("\n").map(line=>JSON.parse(line)):[];
+  rows.push({record_kind:"step_claims",task_id:id,created_at:"2026-10-20T00:00:00Z",evidence:{value:claims}});
+  writeFileSync(path,rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
+}
 async function cliFixture() {
   const root=realpathSync(mkdtempSync(join(tmpdir(),'p9-terminal-cli-')));roots.push(root);
   const repo=join(root,'repo'),storage=join(root,'storage'),home=join(root,'home'),bin=join(root,'bin'),attachments=join(root,'attachments');
@@ -55,6 +75,7 @@ async function cliFixture() {
   writeFileSync(join(materialRoot,'spec.md'),'# Owned complete specification\nAC-001: first and final implementation are both visible\n');
   writeFileSync(join(materialRoot,'phases/index.md'),'# Phase index\n');
   writeFileSync(join(wt,'README.md'),'after first and final phase\n');
+  seedStepEvidence(bound.task_path,materialRoot,'p9-terminal');
   return {root,env,wt,taskDir:bound.task_path};
 }
 function publicTerminal(f,override={}) {

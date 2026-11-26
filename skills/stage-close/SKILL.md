@@ -9,7 +9,7 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 ## 1. 核输入与未完成范围
 
-复杂任务的 build-code caller 提供唯一实际 final-report 的 ref/sha256，不猜最新文件。关闭 reader 先逐项读任务/材料/HEAD 身份、各 AC 原档位、未完成项与真实尝试、独立终末原件和失败；缺 ref、错任务或有缺口却声称全部完成时，明确缺口并交原 owner 修正，不宣称通过。报告生成时的 BOUND002 pending 可由后置独立原件指同一报告精确字节闭合，原报告不覆写。status 的有限投影不替代此读取，也不是 Git 或清理授权。
+复杂任务的 build-code caller 提供唯一实际 final-report 的 ref/sha256，不猜最新文件。关闭 reader 先逐项读任务/材料/HEAD 身份、各 AC 原档位、未完成项与真实尝试、独立终末原件和失败；缺 ref、错任务或有缺口却声称全部完成时，明确缺口并交原 owner 修正，不宣称通过。报告生成时的 BOUND002 pending 可由后置独立原件指同一报告精确字节闭合，原报告不覆写。status 的有限投影不替代此读取，也不是 Git 或清理授权。每条未完成项另核类别属四类之一、证据、owner 与关闭动作或恢复条件；只写「缺材料」不分四类按未分诊算，交原 owner 重写。
 
 写PR/交付说明前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是PR 读者与交付验收者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
 
@@ -21,7 +21,7 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 主线同步预检：在PR及任务合并前，以caller声明的实际目标分支（通常`main`）、任务分支和remote为准；有remote时用`git ls-remote --heads <remote> refs/heads/<target-branch>`核具名目标分支tip。tracking ref OID与该tip不同时只fetch该具名分支并读回；后续`<target>`统一使用已核实同OID的tracking ref或OID。远端不可读或ref仍不一致就标unavailable，不拿旧ref冒充当前。用`git merge-base <target> <task>`、`git rev-list --left-right --count <target>...<task>`和`git log --left-right --oneline <target>...<task>`找双方独有提交；用`git diff --name-status <merge-base>..<target>`只看目标分支独有路径，再结合当前task材料和真实consumer判断是否影响本任务依赖的契约、同一消费者或集成基线。支持时用`git merge-tree --write-tree <target> <task>`预演冲突并保留退出和冲突路径；不要用两端tip的tree diff冒充一方独有变化，也不要只按ahead/behind计数决定合并。目标独有变更确实影响本任务或集成要求同步时，确认任务worktree干净后把目标分支普通merge进任务分支，并按`skills/resolving-merge-conflicts/SKILL.md`逐项保留双方行为、跑受影响检查及独立复核；无关变更且无依赖时记录独有提交/路径、预演结果和无需同步理由，不为分叉强行merge。冲突无法解释或超出授权写集时停该merge并交原owner。目标tip变化时重新核差异；该预检是事实判断，不新增gate或状态对象。
 
-实现、质量/验收、发布、Git交付、物理清理各自说明。有效finding按caller合同处置，无法修复/未验证保持incomplete；不自行accepted_risk，也不把质量缺失单独当停止安全交付的许可证门。只读历史证据不改。完成：每个待执行动作有当前身份、实际目标、已授权范围或具体缺口，未完成质量/保留材料可定位。
+实现、质量/验收、发布、Git交付、物理清理各自说明。有效finding按caller合同处置，无法修复/未验证保持incomplete，并逐条给类别、证据、owner、关闭动作或恢复条件；类别只是路由，不改档位、不放宽 AC；不自行accepted_risk，也不把质量缺失单独当停止安全交付的许可证门。只读历史证据不改。完成：每个待执行动作有当前身份、实际目标、已授权范围或具体缺口，未完成质量/保留材料可定位。
 
 ## 2. 逐动作核授权，复用现有record/consume
 
@@ -135,7 +135,7 @@ execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name
 
 完成：最终scope和真实答复原ref可读，归档/保留逐项实际结果可定位；拒绝或未答无对应副作用。
 
-收口执行前，`core/task-close.mjs` 从当前任务原件重读三种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹）、验证声明读同次 gate 退出 0 与捕获回执、接受声明读 `quality/evidence/verdict.json` 的独立签字人、被审材料指纹、所审 gate 引用和实际下游读回。gate 红、缺证据、签字人属于实施作者、签后材料字节变化或没有读回时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。声明通过时在同一 close 证据区写 `close-claims-readback`，记录本次实际读回的门、签字、材料指纹与计划。只读核对用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。质量签字只证明被审材料，不代 Git 授权；commit/push/merge/archive/cleanup 仍逐项按本节取得并保存真实范围答复。
+收口执行前，`core/task-close.mjs` 从当前任务原件重读三种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹）、验证声明读同次 gate 退出 0 与捕获回执、接受声明读 `quality/evidence/verdict.json` 的独立签字人、被审材料指纹、所审 gate 引用和实际下游读回。gate 红、缺证据、签字人属于实施作者、签后材料字节变化或没有读回时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。声明通过时在同一 close 证据区写 `close-claims-readback`，记录本次实际读回的门、签字、材料指纹与计划。只读核对用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。质量签字只证明被审材料，不代 Git 授权；commit/push/merge/archive/cleanup 仍逐项按本节取得并保存真实范围答复。同一收口链路有两道步骤门与一道缺口分类门：`closeDelivery` 在写 plan 前先判声明步骤（早门，用 caller 的 delivery 分支）；`execute` 在锁内、写本次 close 动作记录前再判同一声明步骤（执行门，用已确认计划的 `target_branch`，以它为准），缺步以 `STEP_EVIDENCE_*` 拒绝并点名，不写本次 close 动作记录、不发起 Git 动作；锁内紧接着判缺口分类：`plan.gap_triage` 每条 `class` 非空且在四类闭集内，否则以 `GAP_TRIAGE_UNCLASSIFIED` 拒绝并点名 `id:class`。两道门都不拒已带类别的 `incomplete`。
 
 ## 7. 安全移除、分支删除与逐项读回
 
@@ -157,7 +157,7 @@ if (!await removal.verify(after)) throw new Error('worktree removal not verified
 
 worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`git branch -d -- <实际任务分支>`删除已合入本地任务分支，禁止`-D`。删除同名远端任务分支前用`git ls-remote --heads`核真实存在/OID和已交付范围，再按本次远端删除授权record/consume后普通`git push <remote> --delete <实际任务分支>`；不存在记不存在，不造失败或删除成功。清理授权必须明确覆盖远端同名分支删除；范围不含则保留，不借push授权扩大。不得force/强推、整树丢弃或删除main/existing workspace。
 
-交回caller逐项清单：实施/质量/业务验收/发布的真实状态；代码图、文档图各自的更新/无变化/失败回执；commit/push-task/PR/merge/push；两路推送各自的 branch/HEAD 与 consumed 回执；归档/具名保留；worktree/本地分支/远端同名分支清理；交接「阶段复盘」行：只核该行存在、行内路径以当前 task 根可打开、每条晋升带旧错 path#L 与失败读数；不复述条目、不判晋升对错；每项实际命令/退出/原件及未完成owner/条件。caller据此保存已有正式事实与stage-handoff，报告实际不可变handoff绝对路径，本方法不另写第二进度对象。动作失败、unknown或skipped保原样，不用总计绿填平。
+交回caller逐项清单：实施/质量/业务验收/发布的真实状态；代码图、文档图各自的更新/无变化/失败回执；commit/push-task/PR/merge/push；两路推送各自的 branch/HEAD 与 consumed 回执；归档/具名保留；worktree/本地分支/远端同名分支清理；交接「阶段复盘」行：只核该行存在、行内路径以当前 task 根可打开、每条晋升带旧错 path#L 与失败读数；不复述条目、不判晋升对错；每项实际命令/退出/原件及未完成项类别/owner/恢复条件。caller据此保存已有正式事实与stage-handoff，报告实际不可变handoff绝对路径，本方法不另写第二进度对象。动作失败、unknown或skipped保原样，不用总计绿填平。
 
 完成：每项声明都与实际效果及原件对应，本次自建临时物只清具名且确定可再生项；历史raw/review、未知/私有/未交付字节和父材料例外仍可读。真实PR服务、用户选择或外部平台未执行时明确未覆盖。
 
