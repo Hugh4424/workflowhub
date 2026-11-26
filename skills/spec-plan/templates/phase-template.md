@@ -889,7 +889,7 @@ SIGKILL 不可捕获：下一次只对本任务记录的前缀调用 `cleanupSta
 | 读集 | 暂无机器读者读模板字段；同名 spec 字符串由 `tests/acceptance/card-03-current.mjs:491` 核（只核 spec，不核模板值） | 计划作者 | 模板字段出现检查器时改由检查器读 |
 | 接口符号清单 | 机器读＝`tests/acceptance/card-03-current.mjs:26`／`:482`（只核模板含该词，不核值）；人读＝独立审查者与实现者 | 计划作者 | 该字段退出模板时同批删该测试断言 |
 | 合并责任 | 机器读＝`tests/acceptance/card-03-current.mjs:26`／`:482`（只核模板含该词，不核值）；人读＝主会话派发者与审查者 | 计划作者 | 该字段退出模板时同批删该测试断言 |
-| progress_cursor | 机器读＝`tests/acceptance/card-03-current.mjs:26`／`:482`（只核模板含词）＋`tools/cli/stage-runtime.mjs:681`（读 `facts.jsonl` 的 `phase_progress_cursor_only`）；卡上字面值不读 | build-code 游标 owner | 模板字段退出时同批删断言 |
+| progress_cursor | 机器读＝`tests/acceptance/card-03-current.mjs:26`／`:482`（只核模板含词）＋`tools/cli/stage-runtime.mjs:681`（读 `facts.jsonl` 的 `phase_progress` 字段，取 `phase_id`／`base_head`）；卡上字面值不读 | build-code 游标 owner | 模板字段退出时同批删断言 |
 | acceptance_cost_total / phase_budget / execution_budget 数值 | 机器读＝`tests/contract/acceptance-plan.test.mjs:248`、`tests/contract/retirement-registry.test.mjs:77-89`（只核字段名与可选性，不核数值）；数值人读＝复盘与审查 | 计划负责人 | 预算校准改为机器读时补数值断言 |
 | 三笔账 | 方法读者＝`skills/spec-plan/SKILL.md:66`、`workflows/build-plan/SKILL.md:78`／`:110`（要求算，不读模板值）；暂无机器读者 | 计划作者 | 成本账进入机器检查时改由检查器读 |
 | 未知半径（`skills/phase-maker/SKILL.md`） | 机器读＝`tests/contract/phase-author-first-card.test.mjs:169-199`（只核 phase-maker 正文含词，不读卡上值）；人读＝回读者与计划作者 | phase-maker owner | 出现读卡上值的检查器时改由检查器读 |
