@@ -53,6 +53,10 @@ openTask从已定位包的runtime/task/task-handle.mjs导入，taskRoot/projectN
 
 ## 4. 提交、推送任务分支与PR
 
+**提交先行（用户 2026-11-26 要求，硬序）**：进入本节的推送、PR、合并之前，**所有**交付字节必须已在任务分支提交完毕——代码、材料、归档移动（`archive_before_commit` 时的归档提交）、知识图 payload 一并落盘，`git status --porcelain` 为空。
+本方法**不允许**在计划建好之前手工 `git push`：远端相对计划记录的 `remote_task_head` 会漂移，`push-task` 步骤将以 `REMOTE_TASK_DRIFT` 拒绝，计划失效且归档提交已发生、无法干净重放。推送只经由本节及第 2 节授权的计划内 `push-task` 步骤执行，每次记录 consumed 原件。
+固定次序：**提交齐（含归档与图）→ push-task → PR → merge → 目标分支 push → cleanup**。任何在提交齐之前发生的推送都算流程偏差，须在原会话如实记录，不得以「先推一下试试」绕过。
+
 对照当前材料、真实diff和允许写集，按具名路径stage，再读回索引。提交授权record/consume后执行普通commit；若无改动保真实no-change原因，不造空提交冒实施。读回commit/tree、branch/HEAD和clean状态。提交后任何新字节回本步骤核，不漏掉当前材料或本次图变化。
 
 无 PR 的普通路线在提交后、合并前单独推送任务分支：任务分支与目标分支各用自身 branch/HEAD 经 `runtime/interface/git-authorize.mjs` record/consume，各留 consumed 回执；不把目标推送授权冒充任务分支发布，也不重复已成功的第一次推送。
