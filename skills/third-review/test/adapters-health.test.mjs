@@ -73,8 +73,18 @@ test("Codex uses stable stdio app-server thread and turn protocol", async () => 
   assert.deepEqual({ ok: parsed.ok, text: parsed.text, session_id: parsed.session_id }, { ok: true, text: "CODEX_FINAL", session_id: "codex-thread" });
 });
 
-test("Codex continuation sends thread/resume for the same session", () => {
-  const plan = codex.resume(provider(fakeAppServer), temp(), "codex-thread", "continue");
+test("Codex accepts a whole findings JSON when the completion event is absent", () => {
+  const plain = '{"findings":[]}';
+  const parsed = codex.parse(plain);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.text, plain);
+  assert.equal(parsed.parse_note, "plain_findings_json");
+  assert.equal(codex.parse('{"not_findings":[]}').ok, false);
+  assert.equal(codex.parse(`${plain}\n{"type":"turn.failed","error":{"message":"x"}}`).ok, false);
+  assert.equal(codex.parse('{"findings":[]} trailing').ok, false);
+});
+
+test("Codex continuation sends thread/resume for the same session", () => {  const plan = codex.resume(provider(fakeAppServer), temp(), "codex-thread", "continue");
   assert.equal(JSON.parse(plan.input).session, "codex-thread");
 });
 

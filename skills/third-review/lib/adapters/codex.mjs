@@ -75,10 +75,23 @@ export function createCodexProbe({ url, fetchImpl = fetch } = {}) {
   };
 }
 
+function plainFindingsJson(stdout) {
+  const text = typeof stdout === "string" ? stdout.trim() : "";
+  if (!text.startsWith("{") || !text.endsWith("}")) return null;
+  let value; try { value = JSON.parse(text); } catch { return null; }
+  return value && typeof value === "object" && !Array.isArray(value) && Array.isArray(value.findings) ? text : null;
+}
+
 function parse(stdout) {
   let session = null; let text = null; let usage = null; let done = false;
   for (const item of lines(stdout)) { if (item.type === "thread.started") session ??= nonempty(item.thread_id); if (item.type === "item.completed" && item.item?.type === "agent_message") text = nonempty(item.item.text ?? item.item.content) ?? text; usage ??= item.usage ?? null; done ||= ["turn.completed", "thread.completed"].includes(item.type); }
-  return text && done ? { ok: true, text, session_id: session, usage } : invalid("Codex emitted no completed final message");
+  if (text && done) return { ok: true, text, session_id: session, usage };
+  // Some Codex app-server builds print the completed answer as one findings
+  // JSON object without the turn.completed event. Accept only a whole-object
+  // findings payload; event streams, failed turns and partial text stay invalid.
+  const plain = plainFindingsJson(stdout);
+  if (plain !== null) return { ok: true, text: plain, session_id: session, usage, parse_note: "plain_findings_json" };
+  return invalid("Codex emitted no completed final message");
 }
 
 function executionPlan(provider, cwd, session, prompt) {
