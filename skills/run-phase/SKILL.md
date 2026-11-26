@@ -56,7 +56,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 ## 第 4 步：按实际差异选测试面
 
 - **输入**：真实 changed files、当前 Phase 的测试声明、既有实现与消费者。
-- **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。路线含自动触发或对外发送时，同读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」，按四段写证到哪段，并在交付里写明拒绝的接收侧记录与原使用方读回由谁出。
+- **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。路线含自动触发或对外发送时，同读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」，按其判法与证据要求执行；本步只指路，不复述判法。
 - **交付**：实际差异到测试面的对应关系、选择理由、风险场景与排除原因。
 - **拒认**：按目录名猜测试面、拿计划路线代替实际 changed files、图或选择器代替真实 oracle。
 - **失败**：图缺失、歧义或目标不存在时如实记 exit 与 unknown，安全回原文与真实测试；图不作质量许可。

@@ -45,7 +45,7 @@
 
 ### 测试硬规则
 
-- 只跑受影响针对性测试；禁止全量回归：禁止无范围地跑全量 `vitest`、`npm test` 或 `test:safe`。
+- 测试范围与全量回归禁令以[标准工作方法](docs/standard-workflow.md#build-code-测试与质量)为唯一执行底座，本文件不复述；例外见下条。
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
@@ -140,7 +140,7 @@
 - public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。
 - reports immutable；M14–M17 只读保留/归档。新增生产文件、命令、schema 或持久对象必须同时写明唯一 consumer、owner、替代关系和删除条件；不得新增双写、永久 compatibility bridge 或 history runtime branch。
 
-规范同步：build-code每Phase收口及verify终末、reflection写经验前、closeout任务收口前，以及任一域 README 五列表的规则状态或正文锚点变更后，实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/隔离缺口不冒完成；权利事实与个人研究适用范围沿下条专业源判读。
+规范同步：build-code每Phase收口、verify终末、reflection写经验前、closeout任务收口前，以及任一域 README 五列表的规则状态或正文锚点变更后，实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/隔离缺口不冒完成；权利事实与个人研究适用范围沿下条专业源判读。
 
 引用版本、归档绑定、权利或失败/覆盖证据，以及处理个人研究使用范围前，先读[KR-EVID-001](specs/acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，由验收专业owner维护，catalog/经验判重/独立reader消费；更新2026-10-28。
 
