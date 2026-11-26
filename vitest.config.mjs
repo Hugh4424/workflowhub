@@ -55,6 +55,9 @@ export default defineConfig({
       // stylelint-fixtures 用 node:test 且要求 PAPERBUILDER_FRONTEND；Vitest 收集期
       // 会把它当空套件并 throw，故排除；其证据命令仍由 node --test 直接调用。
       "skills/frontend-component-quality/tests/stylelint-fixtures.test.mjs",
+      // P3 拆包技能接线的 node:test 契约文件（证据命令用 node --test 直接调用），
+      // 实跑 vitest 报 No test suite found，故排除，避免整树 vitest 当空套件收集。
+      "tests/contract/task-breakdown-wiring.test.mjs",
     ],
     // Fail the run when a filter matches no files, so a mis-typed path can never
     // produce a false-green exit 0 (see memory: vitest-run-path-false-green-exit0).

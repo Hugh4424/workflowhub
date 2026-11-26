@@ -298,6 +298,19 @@ skills:
     local_changes: workflowhub 原生；每包最多 3 个子代理（超限即判失败）；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；卡校验按真表格行判十一格，验收四件（通过条件、失败条件、反例、证据）每件要有实际内容、写「无」按缺项算、失败条件只写在反例句里也按缺项算，同一段并存通过与失败判词判失败；加 --bind 时核四份角色原件是四个不同文件、各写 agent+dispatched_at 且与卡末 调用= 一致、派发时间不晚于原件写盘时间也不是未来时间、sha256 对得上、冷读六问/对抗九问编号齐、reviewed_card_sha256 等于当前卡版本、审查者与设计者不同人、modality/来源身份取合法值、答复原文与调用来源按整令牌在包级原件里找到；status 在无卡或无可评估卡时按失败报并留具名缺口；脚本只做机械检查，形状对得上不等于审查质量够，语义归人读。P6/T009 核真：make-decision 的 skill-deps.yaml 已把本技能登记为阶段依赖（P3/5f192573 随新默认流程接线），故 used_by_stages 保持 [make-decision] 而非置空；本技能仍无 steps.json 步骤节点，只由该阶段依赖与散文条件入口消费。2026-11-25 升 0.3.0（minor）：本任务 P10/P11 增真实原答与跨包供件读法、一包同源冷读+对抗两路及独立异源审和卡节摘要绑定；保持主会话唯一写手与两轮封顶，不新增机器第六件或第二审查路径。
     dependency_closure: ["skills/decision-log","skills/material-writing","skills/talk-with-zhipeng","skills/wh-review","skills/unit-kernel"]
     update_policy: 随 make-decision 合同变更审查
+  - name: task-breakdown
+    path: skills/task-breakdown/SKILL.md
+    local_version: 0.1.0
+    last_reviewed_at: "2026-11-26"
+    status: native
+    metrics_enabled: true
+    purpose: 三阶段开头把需求拆成可核单元的必读方法：一手来源、源条目当覆盖分母、逐需求五问、每包人话卡
+    design_idea: 方法只写一份放可搬运技能；入口只放一句指针；轻档用子流程步骤表的技能字段当机器缝；覆盖按「源−覆盖」与「覆盖−源」双向重算，任一方向非空即判未覆盖、不写完整，不靠把表填满
+    used_by_stages: [make-decision, build-prd, build-plan]
+    upstream: []
+    local_changes: workflowhub 原生；方法正文九条加四份中文 references；本技能不进 skill-deps.yaml，dependency_closure 留空以免扩大三阶段 portable payload，但入口句会被 promptSkillReferences 扫进三阶段发布闭包；2026-11-26 首建 0.1.0。used_by_stages 写三阶段是声明面（三处入口前言按 grep 读）；四个根 steps.json 禁改，故 check-skill-consistency 报 actual=[]，真实机器消费者是三个子流程 steps.json 的 skill 与三处入口前言，不是根表。
+    dependency_closure: []
+    update_policy: 删除条件——当拆包方法被并入其它技能正文且入口指针同时改写、或出现替代的拆包技能时，删本技能、三处入口指针与三份子流程 skill 声明，并重生成 repo-skills.manifest.json；随决策与规格合同变更审查
   - name: unit-kernel
     path: skills/unit-kernel/SKILL.md
     local_version: 1.1.0
