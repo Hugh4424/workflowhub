@@ -136,7 +136,7 @@ test('ORACLE-P1-INTAKE reusable registry points at the vendored capabilities', (
 });
 
 test('ORACLE-P1-INTAKE PRD stops forbidding what the accepted decision now allows', () => {
-  const prd = read('specs/workflowhub-ui-frontend-release-20261020/prd.md');
+  const prd = read('specs/archive/workflowhub-ui-frontend-release-20261020/prd.md');
   expect(prd, 'ORACLE-P1-INTAKE the old blanket ban must be replaced by the accepted copy rule').not.toContain('不复制未知许可语料');
   expect(prd).toMatch(/skills\/external\//u);
   expect(prd).toMatch(/未声明许可|许可状态/u);

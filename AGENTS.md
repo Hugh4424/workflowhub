@@ -99,7 +99,7 @@
 | 接口 | [接口域规则表](specs/api/README.md) | public 调用、校验、错误与兼容选择前；CLI/task 调用者 |
 | 验收 | [验收域规则表](specs/acceptance/README.md) | oracle、用例、证据与完成判读前；独立测试/OCR/build-code 终末 |
 | 代码改动 | [代码改动域规则表](specs/code-changes/README.md) | 动代码、改接口、加技能或交记录前；实现/审查 agent |
-| 外部引用 | [整包记录样张](skills/external/README.md)、[逐项台账](specs/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账) | 新增或变更外部内容前；采用卡与登记 owner、后续卡与独立 reader |
+| 外部引用 | [整包记录样张](skills/external/README.md)、[逐项台账](specs/archive/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账) | 新增或变更外部内容前；采用卡与登记 owner、后续卡与独立 reader |
 
 ## 当前目录职责
 

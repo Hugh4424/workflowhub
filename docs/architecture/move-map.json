@@ -9618,8 +9618,8 @@
       "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
-      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "source": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "destination": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
       "status": "retain",
       "role": "production",
       "responsibility": "当前C09两页可运行原型入口；不承接NEW_COPY最终实现",
@@ -9633,38 +9633,38 @@
       "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
-      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
+      "source": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
+      "destination": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
       "status": "retain",
       "role": "production",
       "responsibility": "当前有稿深色布局与交互状态样式；不新增设计权威",
       "owner": "当前C09 P4 T013设计执行者",
-      "consumer": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "consumer": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
+        "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
       ],
       "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
       "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
-      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
+      "source": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
+      "destination": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
       "status": "retain",
       "role": "production",
       "responsibility": "原生DOM两页与本地示例行为；无真实网络/业务写入",
       "owner": "当前C09 P4 T013设计执行者",
-      "consumer": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "consumer": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
+        "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
       ],
       "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
       "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
-      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
+      "source": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
+      "destination": "specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
       "status": "retain",
       "role": "production",
       "responsibility": "原型入口、消费/数据/验证边界交接",

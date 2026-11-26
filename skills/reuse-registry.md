@@ -180,7 +180,7 @@ figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.
 
 ## 外部引用登记方法
 
-新增或变更外部内容时，采用卡writer读[PRD逐项台账与角色分工](../specs/workflowhub-ui-frontend-release-20261020/prd.md#新增或变更外部内容时谁写哪一处)，先定位真实采用范围与消费者；登记owner写[catalog](catalog.yaml)，方法owner维护正文与本索引，规范owner维护AGENTS导航。C03方法读[两条链资产检查](frontend-component-quality/SKILL.md#两条链资产检查c03)；本索引只导航，不转述来源、版本、许可或落地状态。
+新增或变更外部内容时，采用卡writer读[PRD逐项台账与角色分工](../specs/archive/workflowhub-ui-frontend-release-20261020/prd.md#新增或变更外部内容时谁写哪一处)，先定位真实采用范围与消费者；登记owner写[catalog](catalog.yaml)，方法owner维护正文与本索引，规范owner维护AGENTS导航。C03方法读[两条链资产检查](frontend-component-quality/SKILL.md#两条链资产检查c03)；本索引只导航，不转述来源、版本、许可或落地状态。
 
 ## C05 两路设计消费者
 
