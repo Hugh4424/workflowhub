@@ -2209,15 +2209,16 @@ export function checkAcceptanceObject(input, context = {}) {
   关联 FR-CODE-P10。
   判定方式：只能人读；判定时点：P10 提交后。
   落点：P10/T063 与 `phases/P10-真实使用者.md`。
-  验证：独立读者读 P10 第 9 项 24 行 blocked 表，逐条核缺什么与恢复条件；抽三条（任务三 AC-020、任务一 AC-CLOSE-001、任务二 9 条中的一条）对照归档原件（任务三 closeout、任务一 closeout `:720-735`、`p12/context.md:8`）复核。
-  环境与数据：本任务材料第 9 项（24 行）、三份归档只读原件；任务二无 closeout，其 2 项 pass 名单未取得（owner＝任务二 owner）。
+  验证：独立读者读 P10 第 9 项 **25** 行 blocked 表，逐条核缺什么与恢复条件；抽三条（`AC-007`、`AC-P5-001`、`AC-EVID-001`）对照归档原件复核。
+  环境与数据：本任务材料第 9 项（**25** 行）、三份归档只读原件（任务一 closeout `:720-735`、任务二 closeout `:41/:44`、任务三 closeout）。
   谁判：独立读者（非写者），P10 提交后。
   承接：结论写 P10/T063 完成记录与 `quality/tests/p10-blocked-ledger.md`。
-  成本：executor=独立读者；estimate_min=30；hard_cap_min=70；resources=24 行 blocked 表、三份归档原件；observation=条数是否为 24、每条是否有缺什么与恢复条件、有无写成 pass 或漏列；retry_cap=1；evidence_tier=人读复读。
+  成本：executor=独立读者；estimate_min=30；hard_cap_min=70；resources=25 行 blocked 表、三份归档原件；observation=条数是否为 **25**、每条是否有缺什么与恢复条件、有无写成 pass 或漏列；retry_cap=1；evidence_tier=人读复读。
   资源来源：复用本任务材料与归档只读原件，不重写 closeout。
-  为什么不能再简：只数 24 行判不出恢复条件；不抽核会漏掉与原件不一致（例如把 inconclusive 记成 pass）。
+  为什么不能再简：只数条数判不出恢复条件；不抽核会漏掉与原件不一致（例如把 inconclusive 记成 pass）。
+  订正说明（2026-11-26，计划负责人席位由主会话代行）：正文四处原写「24 行」与旧抽样（AC-020／AC-CLOSE-001／任务二一条），与标题的 25 及实际台账（抽 AC-007／AC-P5-001／AC-EVID-001）不符；「任务二无 closeout」也不实（该任务 closeout `:41/:44` 有 2 条 pass）。只订正计数与抽样，判据强度未变。
   未执行记 `incomplete`，写判定者、观察协议与证据落点；`unavailable` 须给原因与恢复条件。
-  通过：24 行齐全、每条有缺什么与恢复条件、抽样三条与原件一致、无 pass。
+  通过：**25** 行齐全、每条有缺什么与恢复条件、抽样三条与原件一致、无 pass。
   失败：把任务三 AC-015 的 inconclusive 写成 pass（或漏掉任务一 AC-MAT-001 一行），读者必须判失败。
   证据：quality/tests/p10-blocked-ledger.md。
 
