@@ -408,9 +408,9 @@
     "semantic_hash": "8e362f803de87efa21e3d8935c842656"
   },
   "core/task-close.mjs": {
-    "mtime": 1795743641.7125137,
-    "seen": 1795770862.775241,
-    "ast_hash": "2d40bb24c389921cdf5fc5a92efc6d18",
+    "mtime": 1795773894.0739615,
+    "seen": 1795776158.303165,
+    "ast_hash": "53ca083fcca6f36b510e5a158576cfb9",
     "semantic_hash": ""
   },
   "docs/architecture/control-plane-inventory.json": {
@@ -4188,9 +4188,9 @@
     "semantic_hash": ""
   },
   "tests/integration/vnext-delivery-close.test.mjs": {
-    "mtime": 1795663185.9724276,
-    "seen": 1795770862.776173,
-    "ast_hash": "c35a2f62e439c446bb3db460a4b95a00",
+    "mtime": 1795775364.4061356,
+    "seen": 1795776158.3037372,
+    "ast_hash": "1c01dfec04068d086a6c9f8d4af704cb",
     "semantic_hash": ""
   },
   "tests/integration/wh-review-v3-broker-contract.test.mjs": {
@@ -14904,9 +14904,9 @@
     "semantic_hash": ""
   },
   "skills/stage-close/SKILL.md": {
-    "mtime": 1795749556.1360245,
-    "seen": 1795770862.7766411,
-    "ast_hash": "56384038ffafb38fba71d759b195f74c",
+    "mtime": 1795776066.3194945,
+    "seen": 1795776158.304032,
+    "ast_hash": "4b14fa50028a8a8d569cac9b7548a7cf",
     "semantic_hash": ""
   },
   "skills/ui-copy-discipline/SKILL.md": {
@@ -17724,9 +17724,9 @@
     "semantic_hash": ""
   },
   "runtime/task/delivery-claims.mjs": {
-    "mtime": 1795765925.406169,
-    "seen": 1795770862.775362,
-    "ast_hash": "5e05ecaacba6c892f964f9cb34c3b863",
+    "mtime": 1795773578.1389744,
+    "seen": 1795776158.303241,
+    "ast_hash": "594976d491674695381ef2afb99db3eb",
     "semantic_hash": ""
   },
   "skills/decision-maker/scripts/dispatch.mjs": {
@@ -17766,9 +17766,9 @@
     "semantic_hash": ""
   },
   "tools/cli/check-delivery-claims.mjs": {
-    "mtime": 1795663185.9809318,
-    "seen": 1795770862.7761972,
-    "ast_hash": "2b33a4fc5e3283d8763d41f4d47026f4",
+    "mtime": 1795773618.9290016,
+    "seen": 1795776158.303752,
+    "ast_hash": "1c03dad9c5b6c51cad4ba1f1bf412637",
     "semantic_hash": ""
   },
   "tools/cli/check-replay.mjs": {
@@ -19290,69 +19290,69 @@
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P1-\u56db\u6280\u80fd\u89d2\u8272\u6539\u9020.md": {
-    "mtime": 1795754249.048369,
-    "seen": 1795770862.7777689,
-    "ast_hash": "59a585621c85087920aace7ecf216788",
+    "mtime": 1795771666.096111,
+    "seen": 1795776158.304787,
+    "ast_hash": "c6627f699180dabeabc430ac423c37f4",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P2-\u5165\u53e3\u7981\u4ee4\u4e0e\u4e00\u6b21\u5ba1\u67e5.md": {
-    "mtime": 1795754215.0206723,
-    "seen": 1795770862.7777689,
-    "ast_hash": "970adbb46a00a3c3338c5f55c16c239d",
+    "mtime": 1795771666.1627486,
+    "seen": 1795776158.304787,
+    "ast_hash": "26424233acd59bb287524c292243c91c",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P3-\u62c6\u5305\u6280\u80fd\u63a5\u7ebf.md": {
-    "mtime": 1795754215.0222402,
-    "seen": 1795770862.77777,
-    "ast_hash": "e1c1518e687246776f097a9f4a9ed905",
+    "mtime": 1795771666.2186048,
+    "seen": 1795776158.3047879,
+    "ast_hash": "ce315ab266e0b687d293ef4844a271a3",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P4-\u8ba1\u5212\u5c42\u4e09\u95ee\u95ed\u73af.md": {
-    "mtime": 1795739061.6300333,
-    "seen": 1795770862.777771,
-    "ast_hash": "ad4f989ae8fe5aab74c0df5a836263a9",
+    "mtime": 1795771666.2771688,
+    "seen": 1795776158.3047879,
+    "ast_hash": "26ebc684a168f9dafbb981cf88a48872",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P5-\u6267\u884c\u8bc1\u636e\u5951\u7ea6.md": {
-    "mtime": 1795742032.1357028,
-    "seen": 1795770862.777772,
-    "ast_hash": "ae5cef06269d996de3bca9c4a4e7157f",
+    "mtime": 1795771666.3332741,
+    "seen": 1795776158.304789,
+    "ast_hash": "a3abfda41f710f5a7287da39456a48f1",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P6-\u7248\u672c\u5bf9\u8d26\u4e0e\u95e8\u8986\u76d6.md": {
-    "mtime": 1795745516.5308561,
-    "seen": 1795770862.7777731,
-    "ast_hash": "fd3d0d2d81c8f370759390d419d8541f",
+    "mtime": 1795771666.389587,
+    "seen": 1795776158.30479,
+    "ast_hash": "73280f79d7889f826a90375dd31977a5",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P7-\u95ee\u9898\u6d88\u5931\u9a8c\u6536.md": {
-    "mtime": 1795748048.21728,
-    "seen": 1795770862.7777731,
-    "ast_hash": "625d9b88fc6f6a87fcded122576ab900",
+    "mtime": 1795771666.4513974,
+    "seen": 1795776158.30479,
+    "ast_hash": "7d4a39f19541c3c5767ec949811a34d4",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P8-\u524d\u7f6e\u4efb\u52a1\u4e0e\u5168AC\u6536\u53e3.md": {
-    "mtime": 1795762593.6005952,
-    "seen": 1795770862.777774,
-    "ast_hash": "8024f7eb79f14bb58aed724e9f5567de",
+    "mtime": 1795771666.5080516,
+    "seen": 1795776158.304791,
+    "ast_hash": "fc96d7e09b9cca24f7f83fa2f898945d",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/P9-\u5305\u7ea7\u8986\u76d6\u8865\u9f50\u4e0e\u6839\u6cbb.md": {
-    "mtime": 1795754873.3034127,
-    "seen": 1795770862.777775,
-    "ast_hash": "ad211aad7d966f338bffc85e1ba3b835",
+    "mtime": 1795771666.565191,
+    "seen": 1795776158.304791,
+    "ast_hash": "70f8cc5bcf119e8cb5c91b4eb9bca8fe",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/phases/index.md": {
-    "mtime": 1795758345.6757283,
-    "seen": 1795770862.777775,
-    "ast_hash": "ea46bcdad1c9c118a7724f221f06318b",
+    "mtime": 1795771333.721888,
+    "seen": 1795776158.3047922,
+    "ast_hash": "efe0afc92d635cc79c632d19726fef51",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/spec.md": {
-    "mtime": 1795770365.4231732,
-    "seen": 1795770862.7777762,
-    "ast_hash": "8d74183f3dd2ff5dcb2ee3e6ae9f5d1c",
+    "mtime": 1795771306.6778038,
+    "seen": 1795776158.3047922,
+    "ast_hash": "c6e3dd61d4d137b623a48b39b7b25e2d",
     "semantic_hash": ""
   },
   "specs/delivery-quality-acceptance-20261126/step-consumer-design.md": {
