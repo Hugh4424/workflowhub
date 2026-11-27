@@ -259,13 +259,32 @@ function readableEvidenceRoots(roots) {
   });
 }
 
+const DECLARED_SHA256 = /^(.*?)\s+@sha256=([0-9a-f]{64})$/i;
+
+// A declaration span is either a bare path or `<path> @sha256=<64hex>`. The
+// anchor is optional: an unanchored path is still a path, but it can only ever
+// be `unverified/no-run-binding` (same name, not necessarily this run).
 function declaredEvidencePaths(value) {
   const text = String(value ?? "").trim();
   const spans = inlinePaths(text);
   const candidates = spans.length > 0 ? spans : [text.replace(/[（(][\s\S]*$/, "").trim()];
-  return [...new Set(candidates
-    .map((token) => token.replace(/^\s*(?:`+\s*)?planned\s*[:：]\s*/i, "").trim())
-    .filter((token) => token !== "" && !/\s/.test(token) && /[/\\.]/.test(token)))];
+  const parsed = [];
+  for (const candidate of candidates) {
+    const stripped = candidate.replace(/^\s*(?:`+\s*)?planned\s*[:：]\s*/i, "").trim();
+    if (stripped === "") continue;
+    const anchored = DECLARED_SHA256.exec(stripped);
+    const token = anchored ? anchored[1].trim() : stripped;
+    if (token === "" || /\s/.test(token) || !/[/\\.]/.test(token)) continue;
+    parsed.push(Object.freeze({ path: token, declared_sha256: anchored ? anchored[2].toLowerCase() : null }));
+  }
+  const seen = new Set(), unique = [];
+  for (const item of parsed) {
+    const key = `${item.path}\0${item.declared_sha256 ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique;
 }
 
 function taskEvidenceRoot(token, taskRecordRoot) {
@@ -276,30 +295,65 @@ function taskEvidenceRoot(token, taskRecordRoot) {
   catch { return null; }
 }
 
-function checkEvidencePath(token, roots, taskRecordRoot) {
-  if (isAbsolute(token)) {
-    try {
-      return statSync(token).isFile()
-        ? Object.freeze({ status: "verified", resolved: token })
-        : Object.freeze({ status: "missing", reason: "not a regular file" });
-    } catch (error) {
-      return Object.freeze({ status: "missing", reason: error.code ?? error.message });
-    }
+const unverified = (reason) => Object.freeze({ status: "unverified", reason });
+
+// A declaration is "this run" only when at least one anchor (declared @sha256 or
+// a task facts quality_evidence sha256) matches the bytes read now. The four
+// status names are fixed; the diagnostic subclass is the first reason word.
+function anchoredCheck(token, resolved, bytes, resolutionSource, binding) {
+  const declared = typeof binding?.declared_sha256 === "string" && binding.declared_sha256.trim() !== ""
+    ? binding.declared_sha256.toLowerCase() : null;
+  const facts = Array.isArray(binding?.facts_sha256)
+    ? binding.facts_sha256.filter((value) => typeof value === "string" && value.trim() !== "").map((value) => value.toLowerCase())
+    : [];
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (declared === null && facts.length === 0) {
+    return unverified("no-run-binding: 声明与任务记录都没有本次字节指纹");
   }
-  for (const root of roots) {
+  if ((declared !== null && declared === actual) || facts.includes(actual)) {
+    return Object.freeze({ status: "verified", resolved, ...(resolutionSource ? { resolution_source: resolutionSource } : {}) });
+  }
+  const expected = declared ?? facts[0] ?? "";
+  return unverified(`content-mismatch: 声明 ${expected.slice(0, 8)}… 实际 ${actual.slice(0, 8)}…`);
+}
+
+export function checkEvidencePath(token, roots, taskRecordRoot, binding = Object.freeze({})) {
+  if (plannedEvidence(token)) return Object.freeze({ status: "planned", reason: "declared planned" });
+  if (/[{*?}]/.test(token)) return unverified(`not-single-path: ${token} 不是单一可打开路径`);
+  if (isAbsolute(token)) {
+    let stats;
+    try { stats = statSync(token); }
+    catch (error) { return Object.freeze({ status: "missing", reason: error.code ?? error.message }); }
+    if (!stats.isFile()) return Object.freeze({ status: "missing", reason: "not a regular file" });
+    let bytes;
+    try { bytes = readFileSync(token); }
+    catch (error) { return unverified(`unreadable: ${error.code ?? error.message}`); }
+    return anchoredCheck(token, token, bytes, null, binding);
+  }
+  for (const root of Array.isArray(roots) ? roots : []) {
     const candidate = resolve(root, token);
-    try {
-      if (statSync(candidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate });
-    } catch { /* keep searching the remaining declared roots */ }
+    let stats;
+    try { stats = statSync(candidate); }
+    catch { continue; /* ENOENT, ENOTDIR, broken links: keep scanning the remaining roots */ }
+    if (!stats.isFile()) continue; /* a directory or device in one root never hides a later root's file */
+    let bytes;
+    try { bytes = readFileSync(candidate); }
+    catch (error) { return unverified(`unreadable: ${error.code ?? error.message}`); }
+    return anchoredCheck(candidate, candidate, bytes, null, binding);
   }
   const taskRoot = taskEvidenceRoot(token, taskRecordRoot);
-  if (taskRoot && !roots.includes(taskRoot)) {
+  if (taskRoot && !(Array.isArray(roots) && roots.includes(taskRoot))) {
     const candidate = resolve(taskRoot, token);
     try {
       const realRoot = realpathSync(taskRoot), realCandidate = realpathSync(candidate);
       const rel = relative(realRoot, realCandidate);
       const contained = rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-      if (contained && statSync(realCandidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate, resolution_source: "task_root" });
+      if (contained && statSync(realCandidate).isFile()) {
+        let bytes;
+        try { bytes = readFileSync(realCandidate); }
+        catch (error) { return unverified(`unreadable: ${error.code ?? error.message}`); }
+        return anchoredCheck(candidate, candidate, bytes, "task_root", binding);
+      }
     } catch { /* Keep the original missing evidence result, including escaping links. */ }
   }
   return Object.freeze({ status: "missing", reason: "not found under any declared root" });
@@ -1050,6 +1104,34 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   const archiveMaterial = /(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? "");
   const evidenceRoots = readableEvidenceRoots(evidenceSearchRoots(reviewReadScope, material_path));
   const evidenceFacts = { verified: [], planned: [], missing: [], unverified: [] };
+  // Anchor ②: the current task facts' quality_evidence sha256 values. Read once;
+  // an absent/unreadable facts file is an empty table, never an error here.
+  // The writer stores the receipt's hash when receipt_ref exists, so that sha256
+  // belongs to the receipt only; attaching it to ref would be a false mismatch.
+  const factsShaByRef = new Map();
+  if (typeof task_record_root === "string" && isAbsolute(task_record_root)) {
+    try {
+      const raw = readFileSync(resolve(task_record_root, "facts.jsonl"), "utf8");
+      for (const line of raw.trimEnd().split(/\r?\n/)) {
+        if (line.trim() === "") continue;
+        let row;
+        try { row = JSON.parse(line); } catch { continue; }
+        if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
+        const entries = Array.isArray(row.evidence?.value) ? row.evidence.value : [];
+        for (const entry of entries) {
+          if (entry === null || typeof entry !== "object" || entry.kind !== "quality_evidence" || typeof entry.sha256 !== "string") continue;
+          const hasReceipt = typeof entry.receipt_ref === "string" && entry.receipt_ref.trim() !== "";
+          const refs = hasReceipt ? [entry.receipt_ref] : [entry.ref];
+          for (const ref of refs) {
+            if (typeof ref !== "string" || ref.trim() === "") continue;
+            const list = factsShaByRef.get(ref) ?? [];
+            list.push(entry.sha256);
+            factsShaByRef.set(ref, list);
+          }
+        }
+      }
+    } catch { /* missing facts.jsonl keeps the map empty; no invented anchor */ }
+  }
   let selectedPhaseScopeValid = false;
   const indexedPaths = new Set();
   const writeOwners = new Map();
@@ -1147,27 +1229,31 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     } else if (plannedEvidence(evidenceValue)) {
       // An explicit known gap is not a pass and not an error: it stays visible
       // in facts so a planned path can never masquerade as generated evidence.
-      const [plannedPath = evidenceValue] = declaredEvidencePaths(evidenceValue);
+      const [planned] = declaredEvidencePaths(evidenceValue);
       evidenceFacts.planned.push(Object.freeze({
-        phase_id: expectedId, path: plannedPath, statement: evidenceValue,
+        phase_id: expectedId, path: planned?.path ?? evidenceValue, statement: evidenceValue,
       }));
     } else {
       const declaredPaths = declaredEvidencePaths(evidenceValue);
       if (declaredPaths.length === 0) {
         evidenceFacts.unverified.push(Object.freeze({
           phase_id: expectedId, path: null,
-          reason: "evidence_path declares no concrete path", statement: evidenceValue,
+          reason: "not-single-path: evidence_path declares no concrete path", statement: evidenceValue,
         }));
       }
-      for (const token of declaredPaths) {
+      for (const declaredPath of declaredPaths) {
+        const token = declaredPath.path;
         if (!isAbsolute(token) && evidenceRoots.length === 0 && !taskEvidenceRoot(token, task_record_root)) {
           evidenceFacts.unverified.push(Object.freeze({
             phase_id: expectedId, path: token,
-            reason: "no readable material, repository, or task root",
+            reason: "no-run-binding: no readable material, repository, or task root",
           }));
           continue;
         }
-        const checked = checkEvidencePath(token, evidenceRoots, task_record_root);
+        const checked = checkEvidencePath(token, evidenceRoots, task_record_root, {
+          declared_sha256: declaredPath.declared_sha256 ?? undefined,
+          facts_sha256: factsShaByRef.get(token) ?? [],
+        });
         if (checked.status === "verified") {
           evidenceFacts.verified.push(Object.freeze({
             phase_id: expectedId, path: token, resolved: checked.resolved,
@@ -1180,7 +1266,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
           // mode there, and a missing old path must not become a new gate.
           evidenceFacts.unverified.push(Object.freeze({
             phase_id: expectedId, path: token,
-            reason: "archive material keeps historical evidence out of the current gate",
+            reason: "no-run-binding: archive material keeps historical evidence out of the current gate",
+          }));
+          continue;
+        }
+        if (checked.status === "unverified") {
+          evidenceFacts.unverified.push(Object.freeze({
+            phase_id: expectedId, path: token, reason: checked.reason,
           }));
           continue;
         }

@@ -56,7 +56,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：计划冻结的目标测试、oracle、`DO NOT TOUCH`、当前 Phase 的真实行为契约。
 - **首动作**：读冻结断言与 oracle 来源，实跑冻结目标测试，保存命令、cwd、退出码和原始输出；确认失败发生在目标断言，而不是导入、环境或配置。
-- **交付**：真 RED 原件；导入、环境、配置这类装置失败另记，不算目标 RED；无真 RED 不进实现（不进第 3 步）；补写的行为测试先定明确 oracle；纯材料任务按 G-2 写检查或真实不适用理由。
+- **交付**：真 RED 原件；导入、环境、配置这类装置失败另记，不算目标 RED；无真 RED 不进实现（不进第 3 步）；补写的行为测试先定明确 oracle；纯材料任务按 G-2 写检查或真实不适用理由。位置：摘要 `quality/evidence/step-evidence/build-code-2-write-red-tests.json`；实体：`quality/tests/` 的既有 RED 捕获（按本条既有规定保存）；读者：`check-stage-steps` 的动态槽与 build-code 终末承接按 `source`+`step_slug` 读它。
 - **拒认**：没有目标断言失败、把导入失败当目标 RED（装置失败另记，不算目标 RED）、先实现再补测、为换绿弱化断言。
 - **失败**：真实失败先读 `skills/diagnosing-bugs/SKILL.md` 保留反馈回路与根因修复，再回本步；改冻结断言先走 TCR 与独立审查。
 
@@ -65,7 +65,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：目标失败、首卡、允许写集与真实接口。
 - **首动作**：在允许文件／符号内做最小纵切，先接公开入口与真实消费者，用真实输入跑到真实输出；只做让目标断言转绿的最小改动。
-- **交付**：可观察的真实改动、实际 diff、目标行为原件；内部函数返回不算演示；错误明确暴露，不吞异常。
+- **交付**：可观察的真实改动、实际 diff、目标行为原件；内部函数返回不算演示；错误明确暴露，不吞异常。位置：摘要 `quality/evidence/step-evidence/build-code-3-implement-change.json`；实体：git 实体（实际 diff，按本条既有规定保存）；读者：同上；终末 `diff` 另读实际 diff。
 - **拒认**：只铺内部层、把内部函数返回当演示（不能算公开演示）、越出写集、用兜底掩盖错误、把计划缺口自行改成产品选择。
 - **失败**：计划或方向缺口一次列清影响、风险与需 owner 回答的问题，交 build-plan 或 make-decision；不受影响的安全部分继续。
 
@@ -74,7 +74,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：真实 changed files、当前 Phase 的测试声明、既有实现与消费者。
 - **首动作**：按 `skills/knowledge-graph/SKILL.md` 查实际波及面并首次读源码；用 `skills/test-routing-advisor/SKILL.md` 选 simple/feature/fullstack，再选一条具体测试路线。路线含自动触发或对外发送时，同读 `skills/backend-testing/SKILL.md` 的「自动作业与对外传输」，按其判法与证据要求执行；本步只指路，不复述判法。
-- **交付**：实际差异到测试面的对应关系、选择理由、风险场景与排除原因。
+- **交付**：实际差异到测试面的对应关系、选择理由、风险场景与排除原因。位置：摘要 `quality/evidence/step-evidence/build-code-4-inspect-and-route-actual-tests.json`；实体：`quality/tests/` 的测试路线与实际输出（按本条既有规定保存）；读者：同上（无专属机器 reader）。
 - **拒认**：按目录名猜测试面、拿计划路线代替实际 changed files、图或选择器代替真实 oracle。
 - **失败**：图缺失、歧义或目标不存在时如实记 exit 与 unknown，安全回原文与真实测试；图不作质量许可。
 
@@ -83,7 +83,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：Phase 声明的逐面命令、`gate_cmd`、真实测试环境与输入。
 - **首动作**：逐面跑字面命令，用既有 `task.captureCommand` 或 `verify --action=execute` 保存 cwd、argv、exit、signal、超时/取消、原输出与清理事实。
-- **交付**：每面的实际结果、失败归因、原件引用与未跑面的「哪一面／卡在哪／什么条件下能跑」。
+- **交付**：每面的实际结果、失败归因、原件引用与未跑面的「哪一面／卡在哪／什么条件下能跑」。位置：摘要 `quality/evidence/step-evidence/build-code-5-run-tests.json`；实体：`quality/tests/<ts>-*.json`／`*.output` 的 verify 捕获（按本条既有规定保存）；读者：同上；终末 `actualCommands` 读命令捕获原件。
 - **拒认**：无范围全量回归、环境或收集失败冒充目标 RED、exit 0 自动当业务通过、重复保存同字节输出。
 - **失败**：外部不可重试失败第一次即零重试，停该外部路径并记恢复条件；其余安全面继续，证据沿既有 capture。
 
@@ -92,7 +92,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：适用 AC、真实命令或服务、实际入口、UI 任务的两尺寸截图与真实消费者。
 - **首动作**：对每条 AC 跑真实场景，逐项对照 oracle、可观察效果与失败反例；UI 任务按 1440×900 与 390×844 实际截图并排看。
-- **交付**：每条 AC 的实际结果、原始输出、输入/环境、覆盖限制；UI 另留通过、差异、用户接受偏差与不可用项。
+- **交付**：每条 AC 的实际结果、原始输出、输入/环境、覆盖限制；UI 另留通过、差异、用户接受偏差与不可用项。位置：摘要 `quality/evidence/step-evidence/build-code-6-inspect-acceptance-and-ui.json`；实体：`quality/evidence/p<N>/` 的截图与差异（按本条既有规定保存）；读者：同上；第 8 步独立审查者按 `skills/wh-review/SKILL.md` 的输入逐条读，build-code 终末承接写进 final-report 的逐条承接。
 - **拒认**：只拿内部函数或模拟效果冒真实结果、缺截图或差异说通过、把功能测试通过当视觉通过、实现者自签偏差。
 - **失败**：真实服务缺失、未执行、部分或不可用保持原样并记负责人与恢复条件，不补默认通过。
 
@@ -101,7 +101,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：当前真实 diff、声明写集、真实消费者、接口两端、状态与资源生命周期。
 - **首动作**：由原 diff 所有人继续运行原扫描，逐项核对写集、消费者、错误传播、并发原子性与资源释放；UI 适用时读页面审计来源并留组件复用与沉淀结论。
-- **交付**：实际收敛用的具名差异、疑点、真实消费者与边界观察；UI 另交七项界面判定字段。
+- **交付**：实际收敛用的具名差异、疑点、真实消费者与边界观察；UI 另交七项界面判定字段。位置：摘要 `quality/evidence/step-evidence/build-code-7-scan-diff.json`；实体：`quality/evidence/` 的 diff 扫描记录（按本条既有规定保存）；读者：同上（无专属机器 reader）。
 - **拒认**：只有空自述、只给目录或文件清单、把扫描写权转给审查者、缺证据说 UI 完成。
 - **失败**：工具、浏览器或截图不可用记 unavailable 与真实原因；来源、样本或场景缺失不宣称 UI 完成。
 
@@ -110,7 +110,7 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：已就绪的实际差异、当前 Phase 承接 AC、声明测试面、实际执行原件与审查重点。
 - **首动作**：按 `skills/wh-review/SKILL.md` 与标准工作方法的审查点发起一次独立审查；同时派独立上下文的同源补充轴，Standards 与 Spec 两栏各由不同上下文的执行者完成并各留原件，各轴并排保留，不合并排名。
-- **交付**：审查执行者、来源、三维读数、真实终态、原件与覆盖限制；不可用保留检测输出与原始失败。
+- **交付**：审查执行者、来源、三维读数、真实终态、原件与覆盖限制；不可用保留检测输出与原始失败。位置：摘要 `quality/evidence/step-evidence/build-code-8-review-change.json`；实体：`quality/reviews/` 的审查原件（按本条既有规定保存）；读者：同上；`stage-runtime` 终末评估读 `quality/reviews/` 原件。
 - **两方回报**：审查回报列 finding 与未解决项，测试回报列命令、退出码、失败归因与覆盖限制；两方回报须在开发最后确认之前汇合，开发确认只表示写主无待改项，不替代两方回报。
 - **拒认**：拿同源意见冒异源、缺覆盖或空 findings 当通过、用成功轴覆盖失败轴、审查者与实现者同人。
 - **失败**：provider 不可用、失败、超时、取消或无效输出按既有 wh-review 口径保原失败，不换执行者、不写通过；其余安全修复继续。
@@ -120,12 +120,14 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：审查与测试两方实际回件、原 finding 原文、当前 Phase 的受影响 file/case。
 - **首动作**：逐条保留原文并按内核 R5 四态处置；有效问题回原实施会话，先列受影响 file/case，再只跑该集合并写实际结果。
-- **交付**：每条 finding 的处置与理由、受影响复验原件、Phase Done 的缺口清单；残余：即该缺口清单（剩余失败、owner、下一 Phase），不另写；`failures` 按现有执行清单五要素追加。
+- **交付**：每条 finding 的处置与理由、受影响复验原件、Phase Done 的缺口清单；残余：即该缺口清单（剩余失败、owner、下一 Phase），不另写；`failures` 按现有执行清单五要素追加。位置：摘要 `quality/evidence/step-evidence/build-code-9-analyze-review-findings.json`；实体：`quality/evidence/build-code/execution-checklist-<phase>.md`（按本条既有规定保存）；读者：同上；`runFailureRecordChecks`（`tools/cli/run-checks.mjs:534-570`）只对带 P6 那两条清单检查项的 Phase 读清单 failures 段，其余 Phase 只由动态槽与终末承接读 facts 条目与摘要。
 - **晚发现与同因**：晚发现即迟到有效发现，回原 Phase、由原开发修复，不另开 Phase、不丢弃、不得只带到期终审；同因时先停重复动作：同一失败重复或一轮没有新事实，按既有阈值分诊；改断言走原请求，oracle 身份不换。
 - **终末边界**：终末外部单审不在本段；push、merge、归档与删除归 stage-close，本段不执行。
 - **提交身份**：审后只做一次正常提交，记 commit sha 与 author 并绑定两方回报 ref，末段据此核同一开发；迟到发现按补提交单列。
 - **拒认**：只改处置状态、只改行号或夹具当新事实、拿未绑定的答复记接受风险、两方未回报就宣布完成。
 - **失败**：确实无法在当前范围解决时写影响、证据、原因与剩余选项，继续不受影响的工作；严重风险交真实用户，不自行接受。
+
+三条共用规约：① 同一步一份，文件名与 `workflows/build-code/steps.json` 的 `step_slug` 同源，不改名、不加日期前缀、不按执行者分叉；② 登记走既有写入口 `runtime/interface/record-step-evidence.mjs`（`--ref`／`--command`／`--exit-code`／`--receipt`），它写进 facts 的 `quality_evidence` 条目，这就是「本次运行」的事实来源；③ `step-evidence` JSON 的 `reader` 字段是本步**读回执行者身份**（任务四里今天全是收口补录者），不是消费者；消费者只写「读者：」一段，不得借读者栏把它洗成执行者。
 
 ## 效率条款
 

@@ -237,15 +237,38 @@ const isMain = process.argv[1]
 // A planned evidence path is an explicit known gap: not a failure, but it must
 // not hide behind errors=0. Missing paths already fail the validator below, and
 // this same line keeps their count visible next to the named errors.
+const UNVERIFIED_LABELS = Object.freeze({
+  unreadable: "打不开",
+  "content-mismatch": "内容不符",
+  "no-run-binding": "没有本次锚",
+  "not-single-path": "不是单一可打开路径",
+});
+
+function unverifiedReasonSummary(items) {
+  const counts = new Map();
+  for (const item of items ?? []) {
+    const word = String(item?.reason ?? "").split(":")[0];
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([word, count]) => `${UNVERIFIED_LABELS[word] ?? word} ${count}`).join("、");
+}
+
 function logEvidencePathSummary(facts) {
   // The validator returns facts: null for structural input errors; those errors
   // are already printed, so there is no evidence breakdown to add.
   const evidence = facts?.evidence_paths;
-  if (!evidence || (evidence.planned_count === 0 && evidence.missing_count === 0)) return;
-  console.log(
-    `[run-checks][material] 证据路径：${evidence.verified_count} 份已生成，`
-    + `${evidence.planned_count} 份 planned（未生成），${evidence.missing_count} 份缺失`,
-  );
+  if (!evidence) return;
+  // Archive material stays quiet: historical paths are not today's gate, and
+  // re-printing them every run trains readers to ignore the line.
+  const quiet = evidence.planned_count === 0 && evidence.missing_count === 0
+    && (evidence.unverified_count === 0 || evidence.archive_diagnostic === true);
+  if (quiet) return;
+  let line = `[run-checks][material] 证据路径：${evidence.verified_count} 份已生成，`
+    + `${evidence.planned_count} 份 planned（未生成），${evidence.missing_count} 份缺失`;
+  if (evidence.unverified_count > 0) {
+    line += `，${evidence.unverified_count} 份验证不了（${unverifiedReasonSummary(evidence.unverified)}）`;
+  }
+  console.log(line);
 }
 
 // Material-only callers have no task flag. A recorded task branch supplies the
@@ -541,7 +564,13 @@ function runFailureRecordChecks(root, facts, recordRoot) {
       continue;
     }
     const checklist = join(recordRoot, "quality", "evidence", "build-code", `execution-checklist-${String(phase.id).toLowerCase()}.md`);
-    if (!existsSync(checklist)) continue;
+    if (!existsSync(checklist)) {
+      // Diagnostic only: the material branch has no certified task root scale to
+      // compute a missing checklist conclusion. The conclusion carrier is the
+      // task-side `limits` list, so this line never enters errors or the exit code.
+      console.log(`[run-checks][material] ${root} ${phase.path} 执行清单缺 ${phase.id}：${checklist}（诊断，不构成结论或退出码）`);
+      continue;
+    }
     let text;
     try { text = readFileSync(checklist, "utf8"); }
     catch (error) {

@@ -3,7 +3,8 @@
 // keeps its existing diagnostic behavior.
 import { afterEach, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,18 +47,25 @@ function material(materials, { archive = false } = {}) {
   return root;
 }
 
+const EVIDENCE_BYTES = "actual evidence\n";
+const EVIDENCE_SHA = createHash("sha256").update(EVIDENCE_BYTES).digest("hex");
+
 function putFile(root, path) {
-  mkdirSync(dirname(join(root, path)), { recursive: true });
-  writeFileSync(join(root, path), "actual evidence\n");
+  const target = join(root, path);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, EVIDENCE_BYTES);
+  return target;
 }
 
 function validate(materials, root) {
   return validatePostPhaseContract({ spec: materials.spec, index: materials.index, phases: materials.phases, material_path: root });
 }
 
+// Every "real file" case must also declare this run's bytes; an unanchored real
+// file is a same-name old file and can only be `unverified/no-run-binding`.
 const phaseEvidence = (path) => path.includes("P1-行为结果")
-  ? "`quality/tests/owned-behavior.output`"
-  : "`quality/evidence/owned-document-readback.md`";
+  ? `\`quality/tests/owned-behavior.output @sha256=${EVIDENCE_SHA}\``
+  : `\`quality/evidence/owned-document-readback.md @sha256=${EVIDENCE_SHA}\``;
 
 test("a real evidence file under the material root passes and is counted", () => {
   const materials = withEvidence(examples(), phaseEvidence);
@@ -149,8 +157,8 @@ test("archive material keeps missing historical paths diagnostic and visible", (
 test("relative evidence resolves through the authenticated worktree and task roots", () => {
   const materials = withEvidence(examples(), (path) =>
     path.includes("P1-行为结果")
-      ? "`quality/evidence/task-only.md`"
-      : "`quality/evidence/repo-only.md`");
+      ? `\`quality/evidence/task-only.md @sha256=${EVIDENCE_SHA}\``
+      : `\`quality/evidence/repo-only.md @sha256=${EVIDENCE_SHA}\``);
   const container = realpathSync(mkdtempSync(join(tmpdir(), "evidence-path-existence-")));
   roots.push(container);
   const taskRoot = join(container, "task");
@@ -200,7 +208,7 @@ test('task-record fallback: non-quality and ../../Knowledge paths keep byte-iden
   mkdirSync(root,{recursive:true});putFile(worktree,'docs/repo-only.md');putFile(taskRoot,'docs/repo-only.md');putFile(taskRoot,'docs/task-only.md');putFile(taskRoot,'quality/legacy.md');
   const legacy='../../Knowledge/Projects/demo/tasks/owned-task/quality/legacy.md',quote=String.fromCharCode(96);
   for(const first of ['docs/repo-only.md','docs/task-only.md']){
-    const materials=withEvidence(examples(),p=>quote+(p.includes('P1-')?first:legacy)+quote),input={...materials,material_path:root};
+    const materials=withEvidence(examples(),p=>quote+(p.includes('P1-')?first:legacy)+` @sha256=${EVIDENCE_SHA}`+quote),input={...materials,material_path:root};
     const before=validatePostPhaseContract(input),after=validatePostPhaseContract({...input,task_record_root:taskRoot});
     expect(JSON.stringify(after)).toBe(JSON.stringify(before));
     expect(after.facts.evidence_paths.verified.find(v=>v.phase_id==='P2').resolved).toBe(join(taskRoot,'quality/legacy.md'));
@@ -237,4 +245,106 @@ test('task-root containment: a symlink resolving inside the task root remains va
 test('task-root containment: existing roots retain their original priority and link behavior',()=>{
   const materials=withEvidence(examples(),phaseEvidence),root=material(materials),outside=join(dirname(root),'outside'),taskRoot=join(dirname(root),'task');putFile(outside,'owned-behavior.output');putFile(root,'quality/evidence/owned-document-readback.md');mkdirSync(join(root,'quality/tests'),{recursive:true});symlinkSync(join(outside,'owned-behavior.output'),join(root,'quality/tests/owned-behavior.output'));putFile(taskRoot,'quality/tests/owned-behavior.output');
   const input={...materials,material_path:root},before=validatePostPhaseContract(input),after=validatePostPhaseContract({...input,task_record_root:taskRoot});expect(after.errors).toEqual([]);expect(JSON.stringify(after)).toBe(JSON.stringify(before));expect(after.facts.evidence_paths.verified[0].resolution_source).toBeUndefined();
+});
+
+// The three run-binding cases the four-state export adds. A real file is not a
+// pass by itself: it must match this run's declared bytes.
+test("a real file without any run binding is unverified, not verified", () => {
+  const materials = withEvidence(examples(), (path) =>
+    path.includes("P1-行为结果")
+      ? "`quality/tests/no-anchor-p1.output`"
+      : "`quality/evidence/no-anchor-p2.md`");
+  const root = material(materials);
+  putFile(root, "quality/tests/no-anchor-p1.output");
+  putFile(root, "quality/evidence/no-anchor-p2.md");
+
+  const result = validate(materials, root);
+  expect(result.ok).toBe(true);
+  expect(result.facts.evidence_paths).toMatchObject({
+    verified_count: 0, planned_count: 0, missing_count: 0, unverified_count: 2, all_verified: false,
+  });
+  expect(result.facts.evidence_paths.unverified.map(({ reason }) => reason.split(":")[0]))
+    .toEqual(["no-run-binding", "no-run-binding"]);
+});
+
+test("a declared anchor that differs from the actual bytes is content-mismatch", () => {
+  const materials = withEvidence(examples(), (path) =>
+    path.includes("P1-行为结果")
+      ? `\`quality/tests/owned-behavior.output @sha256=${"0".repeat(64)}\``
+      : `\`quality/evidence/owned-document-readback.md @sha256=${"0".repeat(64)}\``);
+  const root = material(materials);
+  putFile(root, "quality/tests/owned-behavior.output");
+  putFile(root, "quality/evidence/owned-document-readback.md");
+
+  const result = validate(materials, root);
+  expect(result.ok).toBe(true);
+  expect(result.facts.evidence_paths.unverified_count).toBe(2);
+  expect(result.facts.evidence_paths.unverified.map(({ reason }) => reason.split(":")[0]))
+    .toEqual(["content-mismatch", "content-mismatch"]);
+});
+
+test.skipIf(process.geteuid() === 0)("an unreadable real file is unreadable, not verified", () => {
+  const materials = withEvidence(examples(), phaseEvidence);
+  const root = material(materials);
+  const p1 = putFile(root, "quality/tests/owned-behavior.output");
+  const p2 = putFile(root, "quality/evidence/owned-document-readback.md");
+  chmodSync(p1, 0o000);
+  chmodSync(p2, 0o000);
+  try {
+    const result = validate(materials, root);
+    expect(result.facts.evidence_paths.unverified_count).toBe(2);
+    expect(result.facts.evidence_paths.unverified.map(({ reason }) => reason.split(":")[0]))
+      .toEqual(["unreadable", "unreadable"]);
+  } finally {
+    chmodSync(p1, 0o600);
+    chmodSync(p2, 0o600);
+  }
+});
+
+// R-1: a receipt-type facts entry stores the receipt's sha256, not the claim
+// ref's. Mapping the claim ref to that hash produced a false content-mismatch.
+test("a receipt-type facts anchor is not attached to the claim ref", () => {
+  const claim = (id) => `quality/evidence/step-evidence/build-code-${id}.json`;
+  const materials = withEvidence(examples(), (path) =>
+    path.includes("P1-行为结果") ? `\`${claim(2)}\`` : `\`${claim(3)}\``);
+  const root = material(materials);
+  const taskRoot = join(dirname(root), "task");
+  putFile(taskRoot, claim(2));
+  putFile(taskRoot, claim(3));
+  mkdirSync(join(taskRoot, "quality", "tests"), { recursive: true });
+  writeFileSync(join(taskRoot, "quality", "tests", "receipt.json"), "receipt bytes\n");
+  const receiptSha = createHash("sha256").update("receipt bytes\n").digest("hex");
+  writeFileSync(join(taskRoot, "facts.jsonl"), JSON.stringify({
+    record_kind: "stage", task_id: "owned-task", stage: "build-code",
+    evidence: { value: [2, 3].map((id) => ({
+      kind: "quality_evidence", ref: claim(id),
+      receipt_ref: "quality/tests/receipt.json", sha256: receiptSha,
+    })) },
+  }) + "\n");
+
+  const result = validatePostPhaseContract({ ...materials, material_path: root, task_record_root: taskRoot });
+  expect(result.ok).toBe(true);
+  expect(result.facts.evidence_paths.unverified_count).toBe(2);
+  expect(result.facts.evidence_paths.unverified.map(({ reason }) => reason.split(":")[0]))
+    .toEqual(["no-run-binding", "no-run-binding"]);
+});
+
+test("a ref-only facts anchor still verifies the claim ref", () => {
+  const claim = "quality/evidence/step-evidence/build-code-2-write-red-tests.json";
+  const base = examples();
+  const phases = withEvidence(base, (path) => path.includes("P1-行为结果")
+    ? `\`${claim}\``
+    : "`planned: quality/tests/p2.json`").phases;
+  const materials = { ...base, phases };
+  const root = material(materials);
+  const taskRoot = join(dirname(root), "task");
+  putFile(taskRoot, claim);
+  writeFileSync(join(taskRoot, "facts.jsonl"), JSON.stringify({
+    record_kind: "stage", task_id: "owned-task", stage: "build-code",
+    evidence: { value: [{ kind: "quality_evidence", ref: claim, sha256: EVIDENCE_SHA }] },
+  }) + "\n");
+
+  const result = validatePostPhaseContract({ ...materials, material_path: root, task_record_root: taskRoot });
+  expect(result.ok).toBe(true);
+  expect(result.facts.evidence_paths).toMatchObject({ verified_count: 1, unverified_count: 0, missing_count: 0 });
 });

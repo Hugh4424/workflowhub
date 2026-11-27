@@ -414,7 +414,7 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
     if (body.ok === false && body.errors.length) return {...fileEvidence(ref,source.raw),command:producer.command,exit_code:producer.exit_code,contract_ok:false,contract:body,scan_count:checked.phase_count,basis:[fileEvidence(ref,source.raw),producer],note:"已核实际checker失败；advisory exit不覆盖错误结果"};
     const expectedFrs=[...new Set([...String(spec??"").matchAll(/^-\s+\*\*(FR-[A-Z0-9-]+)\*\*/gm)].map(match=>match[1]))];
     const expectedAcs=[...new Set([...String(spec??"").matchAll(/^-\s+(?:\[[ xX]\]\s+)?\*\*(AC-[A-Z0-9-]+)/gm)].map(match=>match[1]))];
-    let applicable=checked.phase_count === phases.length && same(checked.fr_coverage?.accepted_ids,expectedFrs) && same(checked.ac_coverage?.accepted_ids,expectedAcs);
+    let applicable=checked.phase_count === phases.length && same(checked.fr_coverage?.accepted_ids,expectedFrs) && same(checked.ac_coverage?.accepted_ids,expectedAcs) && (checked.evidence_paths?.missing_count ?? 0) === 0 && (checked.evidence_paths?.unverified_count ?? 0) === 0;
     for (const record of checked.phase_rows) {
       const current=phases.find(phase=>phase.ref === record.path);
       if (!current) {applicable=false;continue;}
@@ -428,7 +428,14 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
       if (dependency !== record.dependency || !same(writes,record.write_set) || field(raw,"gate_cmd") !== record.command || field(raw,"oracle") !== record.oracle || !same(taskIds,record.task_ids)) applicable=false;
       if ([...String(dependency??"").matchAll(/\bP\d+\b/g)].some(match=>!phases.some(phase=>phase.ref.match(/\/P\d+/)?.[0].slice(1) === match[0]))) applicable=false;
     }
-    if (!applicable || !text(phaseIndex)) { limits.push(`${ref}: 受检FR/AC/Phase/task/dependency/command-oracle结构或范围已变化，原适用结论未取得`); unknown={unavailable:true,readable:false}; continue; }
+    if (!applicable || !text(phaseIndex)) {
+      const evidenceMissing = checked.evidence_paths?.missing_count ?? 0;
+      const evidenceUnverified = checked.evidence_paths?.unverified_count ?? 0;
+      limits.push(`${ref}: ${evidenceMissing || evidenceUnverified
+        ? `合同原件的证据路径：缺 ${evidenceMissing} 份、未验证 ${evidenceUnverified} 份，原适用结论未取得`
+        : "受检FR/AC/Phase/task/dependency/command-oracle结构或范围已变化，原适用结论未取得"}`);
+      unknown={unavailable:true,readable:false}; continue;
+    }
     return {...fileEvidence(ref,source.raw),command:producer.command,exit_code:producer.exit_code,contract_ok:original.exit_code === 0 && body.ok === true && body.errors.length === 0,contract:body,scan_count:checked.phase_count,basis:[fileEvidence(ref,source.raw),producer],note:"仅声明级合同及已核结构锚；无关prose/whole-file hash不作新鲜度门"};
   }
   return unknown;
@@ -1035,6 +1042,33 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const missingPhases = phaseRefs.filter(ref=>!phases.some(phase=>phase.ref === ref));
   const sets = writeSets(spec ?? "",phases,missingPhases,phaseIndex);
   if (sets.writeSetUnknown) limits.push(`环 6 ${sets.writeSetUnknown}`);
+  // 执行清单缺件与份数差只写未取得项列表（limits）；环、completion 与
+  // chain_state 一律不动（缺件不降档）。只在任务已进入 build-code 时判。
+  const buildCodeReached = facts.some(row=>row.record_kind === "stage" && row.stage === "build-code");
+  if (buildCodeReached) {
+    if (phaseRefs.length === 0) {
+      limits.push("执行清单份数未取得：phases/index.md 缺可读的 Phase 引用");
+    } else {
+      const checklistDir = join(taskPath,"quality","evidence","build-code");
+      let present = null;
+      try { present = readdirSync(checklistDir); }
+      catch (error) { if (error.code !== "ENOENT") limits.push(`执行清单份数未取得：${checklistDir} 不可读（${error.code ?? error.message}）`); }
+      if (present === null) {
+        limits.push(`执行清单份数未取得：${checklistDir} 不存在`);
+      } else {
+        const expected = new Set(phaseRefs.map(ref=>"p" + ref.match(/\/P(\d+)/)[1]));
+        const actual = new Set(present.map(name=>/^execution-checklist-(p\d+)\.md$/i.exec(name)?.[1]?.toLowerCase()).filter(Boolean));
+        const order = id=>Number(id.slice(1));
+        const missing = [...expected].filter(id=>!actual.has(id)).sort((a,b)=>order(a)-order(b));
+        const extra = [...actual].filter(id=>!expected.has(id)).sort((a,b)=>order(a)-order(b));
+        if (missing.length > 0) {
+          limits.push(`执行清单份数：期望 ${expected.size} 份、实有 ${actual.size} 份、缺 ${missing.length} 份（未解释）`);
+          for (const id of missing) limits.push(`执行清单缺 P${id.slice(1)}`);
+        }
+        for (const id of extra) limits.push(`执行清单多出 P${id.slice(1)}（未解释）`);
+      }
+    }
+  }
   if (diff) {
     diff.phase_write_set = sets.phaseWriteSet;
     diff.spec_write_set = sets.specWriteSet;
