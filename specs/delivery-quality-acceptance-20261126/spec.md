@@ -67,7 +67,7 @@
 
 ### 需求组 5：前置验收、调研拆包与阶段入口（WP7、WP8、WP9）
 
-### 需求组 6：三技能角色节与原始需求翻译契约（WP10）
+### 需求组 6：四技能角色改造与原始需求翻译契约（WP10）
 
 phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读者句，没有可派角色。WP10 要求：phase-maker 每个 Phase 派调研、设计、审查；task-maker 每个任务/分节派调研、设计、审查；run-phase 派开发、独立审查、独立测试。每个角色写清谁、何时派、读什么、交什么、独立性、答不出退回给谁。原始需求必须带原文逐字＋行位＋sha256，并附翻译对照六列（原文句/技能节/角色/原件/读者/失败验收）；冷读加三问、对抗加三问，答不出按阻塞。WP10 先于 WP9：先有角色，入口“必须调用”才有意义。来源：R-024–R-031、U-031、任务 4 P8。
 
@@ -200,7 +200,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 1. 阶段边界与数量由 build-plan 第 6 步的 phase-maker 决定，本文件只给依赖与每组交付面。
 2. 依赖顺序（来源 decision-log:228、`:672-674`）：WP9 → WP8 → WP1 → WP2 → WP3 → WP4 → WP5 → WP6 → WP7，单向无环。
 3. 最小切片：WP9（先禁止主持人自己干）→ WP8（找对问题）→ WP1（定义与存在性）→ WP4（一条真实承诺交得出证据）→ WP6（判这条问题是否消失）。
-4. 需要时加执行建议第 0 阶段：规则见 `workflows/build-plan/SKILL.md` 的相关节；本节不单列 Phase、不称交付。包 10 的 `P1` 是真实交付 Phase（三技能角色节），不是这里的执行建议第 0 阶段。
+4. 需要时加执行建议第 0 阶段：规则见 `workflows/build-plan/SKILL.md` 的相关节；本节不单列 Phase、不称交付。包 10 的 `P1` 是真实交付 Phase（四技能角色改造），不是这里的执行建议第 0 阶段。
 5. 每个阶段交出什么、交给谁：按上表依赖，前一组的中间结果写清消费者与读取方式；Phase 卡只写本阶段增量。
 
 ## 谁先谁后？
@@ -441,7 +441,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 
 ### 6. 依赖图
 
-P1 → P2：P1 落三技能角色表与上下文包模板；P2 的入口句引用角色名与派发时点。P1 是起点，P2–P8 依赖它。
+P1 → P2：P1 落四技能角色表与上下文包模板；P2 的入口句引用角色名与派发时点。P1 是起点，P2–P8 依赖它。
 
 包级（边＝真实输入，不是编号相邻）：
 
@@ -496,25 +496,26 @@ Phase 级（每条边写真实输入）：
 | R-028、R-031 | FR-26 | AC-17 | P1/T008 | ORACLE-P1-JUDGMENTS |
 | R-028、R-031 | FR-26 | AC-17 | P1/T009 | ORACLE-P1-NEGATIVE-CONTROL |
 | R-024、R-031 | FR-25、FR-26、FR-27 | AC-17 | P1/T010 | ORACLE-P1-FOUR-SKILL-ROLES |
-| R-001 | FR-20、FR-21 | AC-14、AC-15 | P2/T012 | ORACLE-P2-DECISION-ONE-REVIEW |
-| R-001 | FR-20、FR-21、FR-23 | AC-14、AC-15 | P2/T013 | ORACLE-P2-MAKEDECISION-ENTRY |
-| R-001 | FR-20、FR-21、FR-25 | AC-14、AC-17 | P2/T014 | ORACLE-P2-BUILDCODE-ENTRY |
-| R-001 | FR-20、FR-24 | AC-14、AC-16 | P2/T015 | ORACLE-P2-BUILDPLAN-ENTRY |
-| R-001 | FR-20、FR-21 | AC-14 | P2/T016 | ORACLE-P2-BUILDPRD-ENTRY |
-| R-001 | FR-24 | AC-16 | P2/T017 | ORACLE-P2-REFLECTION-SECTION |
-| R-001 | FR-24 | AC-16 | P2/T018 | ORACLE-P2-THREE-CLOSEOUTS |
-| R-001 | FR-20、FR-21 | AC-14 | P2/T019 | ORACLE-P2-SMALL-FLOW |
-| R-001 | FR-20 | AC-14 | P2/T020 | ORACLE-P2-READINGS |
-| R-001 | FR-21、FR-22、FR-23 | AC-15 | P2/T021 | ORACLE-P2-AC15-READINGS |
-| R-001 | FR-24 | AC-16 | P2/T022 | ORACLE-P2-UNIT-RECORD |
-| R-001 | FR-24 | AC-16 | P2/T023 | ORACLE-P2-DISPATCH-COST |
-| R-001 | FR-20、FR-21、FR-24 | AC-14、AC-15、AC-16 | P2/T024 | ORACLE-P2-NEGATIVE-READER |
+| R-016、R-021、R-015 | FR-20、FR-21 | AC-14、AC-15 | P2/T012 | ORACLE-P2-DECISION-ONE-REVIEW |
+| R-015、R-016、R-021、R-022 | FR-20、FR-21、FR-23 | AC-14、AC-15 | P2/T013 | ORACLE-P2-MAKEDECISION-ENTRY |
+| R-015、R-016、R-021 | FR-20、FR-21、FR-25 | AC-14、AC-17 | P2/T014 | ORACLE-P2-BUILDCODE-ENTRY |
+| R-015、R-018、R-019、R-020 | FR-20、FR-24 | AC-14、AC-16 | P2/T015 | ORACLE-P2-BUILDPLAN-ENTRY |
+| R-015、R-016、R-021 | FR-20、FR-21 | AC-14 | P2/T016 | ORACLE-P2-BUILDPRD-ENTRY |
+| R-018、R-019、R-020 | FR-24 | AC-16 | P2/T017 | ORACLE-P2-REFLECTION-SECTION |
+| R-018、R-019、R-020 | FR-24 | AC-16 | P2/T018 | ORACLE-P2-THREE-CLOSEOUTS |
+| R-015、R-016、R-021 | FR-20、FR-21 | AC-14 | P2/T019 | ORACLE-P2-SMALL-FLOW |
+| R-015 | FR-20 | AC-14 | P2/T020 | ORACLE-P2-READINGS |
+| R-016、R-021、R-017、R-022、R-023 | FR-21、FR-22、FR-23 | AC-15 | P2/T021 | ORACLE-P2-AC15-READINGS |
+| R-018、R-019、R-020 | FR-24 | AC-16 | P2/T022 | ORACLE-P2-UNIT-RECORD |
+| R-018、R-019、R-020 | FR-24 | AC-16 | P2/T023 | ORACLE-P2-DISPATCH-COST |
+| R-015、R-016、R-021、R-018、R-019、R-020 | FR-20、FR-21、FR-24 | AC-14、AC-15、AC-16 | P2/T024 | ORACLE-P2-NEGATIVE-READER |
 | R-001 | FR-19 | AC-13 | P3/T025 | ORACLE-P3-SKILL-BODY |
 | R-001 | FR-19 | AC-13 | P3/T026 | ORACLE-P3-REFS |
 | R-001 | FR-19 | AC-13 | P3/T027 | ORACLE-P3-REGISTRATION |
 | R-001 | FR-19 | AC-13 | P3/T028 | ORACLE-P3-ENTRY-POINTER |
 | R-001 | FR-19 | AC-13 | P3/T029 | ORACLE-P3-FLOW-SKILL |
 | R-001 | FR-19 | AC-13 | P3/T030 | ORACLE-P3-WIRING-TEST |
+| R-014 | FR-19 | AC-13 | P3/T031 | ORACLE-P3-DERIVED-REFRESH |
 | R-001 | FR-19 | AC-13 | P3/T032 | ORACLE-P3-REPLAY-R1R2 |
 | R-001 | FR-19 | AC-13 | P3/T033 | ORACLE-P3-REPLAY-R3R4 |
 | R-001 | FR-19 | AC-13 | P3/T034 | ORACLE-P3-PACKAGE-CARDS |
@@ -583,9 +584,6 @@ Phase 级（每条边写真实输入）：
 | R-010、R-011 | FR-17 | AC-12 | P8/T137 | ORACLE-P8-SIX-TOKENS |
 | R-010、R-011 | FR-18 | AC-12 | P8/T138 | ORACLE-P8-NOT-A-CHECKER |
 | R-010、R-011 | FR-17 | AC-12 | P8/T139 | ORACLE-P8-CLOSEOUT |
-
-| R-020、R-023 | FR-20、FR-24 | AC-14、AC-16 | P2/T015 | ORACLE-P2-BUILDPLAN-ENTRY |
-| R-014 | FR-19 | AC-13 | P3/T031 | ORACLE-P3-DERIVED-REFRESH |
 
 ### 全局验证策略
 
