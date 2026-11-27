@@ -92,8 +92,8 @@ description: build-code 第 2–9 步的窄执行契约：每步的输入、首�
 
 - **输入**：适用 AC、真实命令或服务、实际入口、UI 任务的两尺寸截图与真实消费者。
 - **首动作**：对每条 AC 跑真实场景，逐项对照 oracle、可观察效果与失败反例；UI 任务按 1440×900 与 390×844 实际截图并排看。
-- **交付**：每条 AC 的实际结果、原始输出、输入/环境、覆盖限制；UI 另留通过、差异、用户接受偏差与不可用项。位置：摘要 `quality/evidence/step-evidence/build-code-6-inspect-acceptance-and-ui.json`；实体：`quality/evidence/p<N>/` 的截图与差异（按本条既有规定保存）；读者：同上；第 8 步独立审查者按 `skills/wh-review/SKILL.md` 的输入逐条读，build-code 终末承接写进 final-report 的逐条承接。
-- **拒认**：只拿内部函数或模拟效果冒真实结果、缺截图或差异说通过、把功能测试通过当视觉通过、实现者自签偏差。
+- **交付**：每条 AC 的实际结果、原始输出、输入/环境、覆盖限制；UI 另留通过、差异、用户接受偏差与不可用项。位置：摘要 `quality/evidence/step-evidence/build-code-6-inspect-acceptance-and-ui.json`；实体：`quality/evidence/p<N>/` 的截图与差异（按本条既有规定保存）；读者：同上；第 8 步独立审查者按 `skills/wh-review/SKILL.md` 的输入逐条读，build-code 终末承接写进 final-report 的逐条承接、读数或未观察原因（口径见 `skills/spec-specify/SKILL.md` 的验收写作节，不在此复述）。
+- **拒认**：只拿内部函数或模拟效果冒真实结果、缺截图或差异说通过、把功能测试通过当视觉通过、实现者自签偏差、把没有读数的合格当完成、把还没观察写成通过。
 - **失败**：真实服务缺失、未执行、部分或不可用保持原样并记负责人与恢复条件，不补默认通过。
 
 <a id="step-scan-diff"></a>
