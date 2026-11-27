@@ -103,17 +103,17 @@
 
 | 命令 | 期望 | 证据 | 机器或人判 | 负责人 |
 | --- | --- | --- | --- | --- |
-| `git rev-parse --show-toplevel` | 0 | `quality/tests/readiness-p7-git.output` | 机器 | 计划负责人 |
-| `git rev-parse HEAD` | 0 | 同上（值写表头；今天实测 `12aaa211f6f4f8f39efa2787ae6ae51282a8743b`） | 机器 | 计划负责人 |
-| `node --version` | 0 | `quality/tests/readiness-p7-node.output` | 机器 | 计划负责人 |
-| `test -r skills/stage-close/SKILL.md` | 0 | `quality/tests/readiness-p7-inputs.output` | 机器 | 计划负责人 |
-| `test -r workflows/build-code/SKILL.md` | 0 | 同上 | 机器 | 计划负责人 |
-| `test -d specs/archive/delivery-quality-foundation-20261122` | 0 | 同上 | 机器 | 计划负责人 |
-| `test -d specs/archive/delivery-quality-code-20261124` | 0 | 同上 | 机器 | 计划负责人 |
-| `shasum -a 256 skills/stage-close/SKILL.md` | 0 | `quality/tests/readiness-p7-sha.output`（改前指纹只作前后对照） | 机器 | 计划负责人 |
-| `uname -s` | 0 | `quality/tests/readiness-p7-env.output` | 机器 | 计划负责人 |
-| 人工核对 `$HOME` 下 `mktemp -d` 副本可跑、`/tmp` 副本报 `original path alias` | 两句读数一致，副本路径写进三态表备注 | `quality/evidence/p7-replay/checks/ac-p7-copy-root.out` | 人 | 计划负责人 |
-| 首卡公开入口：`node tools/cli/check-stage-steps.mjs --stage=build-code --step=<本卡步骤> --card --task-path=<任务根> --material-root=<材料根> --commit=<真实 HEAD>` | 读到 skill 指针与 step_slug；五列由读者在卡上复读 | `quality/tests/readiness-p7-first-card-readback.md` | 人 | 计划负责人 |
+| `git rev-parse --show-toplevel` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `git rev-parse HEAD` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `node --version` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `test -r skills/stage-close/SKILL.md` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `test -r workflows/build-code/SKILL.md` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `test -d specs/archive/delivery-quality-foundation-20261122` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `test -d specs/archive/delivery-quality-code-20261124` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `shasum -a 256 skills/stage-close/SKILL.md` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| `uname -s` | 0 | `quality/tests/readiness-p8.txt` | 机器 | 计划负责人 |
+| 人工核对 `$HOME` 下 `mktemp -d` 副本可跑、`/tmp` 副本报 `original path alias` | 两句读数一致，副本路径写进三态表备注 | `quality/tests/readiness-p8.txt` | 人 | 计划负责人 |
+| 首卡公开入口：`node tools/cli/check-stage-steps.mjs --stage=build-code --step=<本卡步骤> --card --task-path=<任务根> --material-root=<材料根> --commit=<真实 HEAD>` | 读到 skill 指针与 step_slug；五列由读者在卡上复读 | `quality/tests/readiness-p8.txt` | 人 | 计划负责人 |
 
 首卡公开入口与读回：入口就是上一行这条只读命令，读取位置是投影里的 `skill.file#skill.anchor`，不是去执行 Markdown 正文。
 该行今天可能因本任务尚在 build-plan 期而读不到步骤投影；读不到记「未取得＋原因」，不回退成第二套开工项。

@@ -17,7 +17,7 @@
 | `P6` | `phases/P6-版本对账与门覆盖.md` | `这一 Phase 交出什么？` | `runtime/stage/stage-content-contracts.mjs`；`runtime/task/delivery-claims.mjs`；`core/task-close.mjs`；`tools/cli/run-checks.mjs`；`runtime/task/final-chain-runner.mjs`；`workflows/build-code/SKILL.md`；`tests/contract/p5-ac-status-parse.test.mjs`；`tests/contract/p5-three-read-sites.test.mjs`；`tests/contract/p5-report-reconciliation.test.mjs`；`tests/contract/p5-delivery-reuse.test.mjs`；`tests/contract/p5-gate-coverage.test.mjs` | `P5` | P7 作者；P8 终末重跑者；独立审查者；四问读者 |
 | `P7` | `phases/P7-问题消失验收.md` | `这一 Phase 交出什么？` | `skills/spec-specify/SKILL.md`；`skills/run-phase/SKILL.md`；`workflows/build-code/SKILL.md`；`skills/spec-plan/templates/phase-template.md` | `P6` | P8 作者、独立审查角色 |
 | `P8` | `phases/P8-前置任务与全AC收口.md` | `这一 Phase 交出什么？` | `skills/stage-close/SKILL.md`；`workflows/build-code/SKILL.md` | `P7` | 整任务验收者、独立审查角色 |
-| `P9` | `phases/P9-包级覆盖补齐与根治.md` | `这一 Phase 交出什么？` | `skills/phase-maker/SKILL.md`；`workflows/build-plan/SKILL.md`；`skills/wh-review/SKILL.md`；`specs/delivery-quality-acceptance-20261126/spec.md`；`phases/P1-四技能角色改造.md`；`phases/P2-入口禁令与一次审查.md`；`phases/P3-拆包技能接线.md`；`phases/P8-前置任务与全AC收口.md`；`quality/evidence/build-plan/package-coverage-ledger.md` | `P8` | P8 作者、独立审查者 |
+| `P9` | `phases/P9-包级覆盖补齐与根治.md` | `这一 Phase 交出什么？` | `skills/phase-maker/SKILL.md`；`workflows/build-plan/SKILL.md`；`skills/wh-review/SKILL.md`；`specs/delivery-quality-acceptance-20261126/spec.md`；`phases/P1-四技能角色改造.md`；`phases/P2-入口禁令与一次审查.md`；`phases/P3-拆包技能接线.md`；`phases/P8-前置任务与全AC收口.md`；`quality/evidence/build-plan/package-coverage-ledger.md` | `P8` | 独立审查角色、整任务验收者 |
 
 ## 并行与合并导航（人读指针）
 
