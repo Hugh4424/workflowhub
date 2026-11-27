@@ -526,7 +526,11 @@ export function reportReconciliation({ taskPath = null, reportBytes = null, acSt
   const raw = Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes);
   const sha = sha256(Buffer.isBuffer(bytes) ? bytes : Buffer.from(raw, "utf8"));
   let declaredTotal = null, counts = {}, source = "unknown", nonPassRows = null;
-  const jsonSection = /```json\s*\r?\n([\s\S]*?)```/m.exec(raw);
+  // More than one machine-readable section means the report states several
+  // conflicting facts; the first one is not the report's answer.
+  const jsonSections = [...raw.matchAll(/```json\s*\r?\n([\s\S]*?)```/g)];
+  const jsonSection = jsonSections.length === 1 ? jsonSections[0] : null;
+  if (jsonSections.length > 1) reason = "multiple-json-sections";
   if (jsonSection) {
     try {
       const parsed = JSON.parse(jsonSection[1]);
@@ -554,7 +558,12 @@ export function reportReconciliation({ taskPath = null, reportBytes = null, acSt
     }
   }
   if (source === "unknown") {
-    return Object.freeze({ ...empty, ref, sha256: sha, reason: "summary-line-not-found", skipped_step_evidence: skippedStepEvidence });
+    return Object.freeze({
+      ...empty, ref, sha256: sha,
+      reason: reason ?? "summary-line-not-found",
+      json_sections: jsonSections.length,
+      skipped_step_evidence: skippedStepEvidence,
+    });
   }
   const values = Object.values(counts);
   const partsSum = values.length ? values.reduce((left, right) => left + right, 0) : null;
@@ -566,8 +575,16 @@ export function reportReconciliation({ taskPath = null, reportBytes = null, acSt
     if (!Number.isInteger(cardCounts[status])) continue;
     if (cardCounts[status] !== value) { mismatches.push({ status, report: value, card: cardCounts[status] }); sameAsCard = false; }
   }
+  // A card status the report never mentions used to disappear here. It is not a
+  // same-status count difference, so it is named separately: `status_mismatches`
+  // keeps the like-for-like pairs, `absent_from_report` names the omissions.
+  const absentFromReport = [];
+  for (const [status, value] of Object.entries(cardCounts)) {
+    if (!Number.isInteger(value) || value === 0 || Object.hasOwn(counts, status)) continue;
+    absentFromReport.push({ status, report: 0, card: value });
+  }
   const consistent = declaredTotal !== null && partsSum === declaredTotal
-    && (plain(acStatus) ? declaredTotal === acStatus.total_declared && sameAsCard : true);
+    && (plain(acStatus) ? declaredTotal === acStatus.total_declared && sameAsCard && absentFromReport.length === 0 : true);
   const reportedNonPass = Object.entries(counts).filter(([status]) => status !== "pass").reduce((left, [, value]) => left + value, 0);
   const coverageLimits = [];
   if (Number.isInteger(nonPassRows) && nonPassRows !== reportedNonPass) {
@@ -578,9 +595,11 @@ export function reportReconciliation({ taskPath = null, reportBytes = null, acSt
     declared_total: declaredTotal, parts_sum: partsSum, diff,
     status_counts: Object.freeze({ ...counts }),
     status_mismatches: Object.freeze(mismatches.map((item) => Object.freeze(item))),
+    absent_from_report: Object.freeze(absentFromReport.map((item) => Object.freeze(item))),
     non_pass_rows: nonPassRows, reported_non_pass: reportedNonPass,
     consistent, coverage_limits: Object.freeze(coverageLimits),
     reported_declared_total: declaredTotal,
+    json_sections: jsonSections.length,
     skipped_step_evidence: Object.freeze(skippedStepEvidence),
   });
 }
@@ -839,17 +858,32 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
     captureOriginals.push({ ref: marker.ref, artifact });
     captures.push(Object.freeze({ ref: marker.ref, gate_identity: artifact.gate_identity ?? null }));
   }
-  const evidenceReuse = captureOriginals.map(({ ref, artifact }) => Object.freeze({
-    ref,
-    ...evidenceReuseKey({
-      argv: artifact.argv, cwd: artifact.cwd, inputs: artifact.inputs, scope: artifact.material_files,
-      tool: artifact.capture_route ?? null, observed_at: artifact.started_at,
-      version: {
-        material_sha256: artifact.material_sha256, source_commit: artifact.head, target_commit: null,
-        environment_sha256: artifact.environment_sha256,
-      },
-    }),
-  }));
+  // The reuse verdict needs a comparison partner, so the reader supplies one:
+  // the immediately earlier capture of the same command (same key). The first
+  // capture of a command has no prior record and stays `unknown/no-prior-record`
+  // rather than pretending to be reusable.
+  const reuseInput = (artifact) => ({
+    argv: artifact.argv, cwd: artifact.cwd, inputs: artifact.inputs, scope: artifact.material_files,
+    tool: artifact.capture_route ?? null, observed_at: artifact.started_at,
+    version: {
+      material_sha256: artifact.material_sha256, source_commit: artifact.head, target_commit: null,
+      environment_sha256: artifact.environment_sha256,
+    },
+  });
+  const reuseOrder = captureOriginals
+    .map((item) => ({ ...item, started: String(item.artifact.started_at ?? "") }))
+    .sort((left, right) => left.started.localeCompare(right.started) || left.ref.localeCompare(right.ref));
+  const priorByKey = new Map();
+  const reuseByRef = new Map();
+  for (const { ref, artifact } of reuseOrder) {
+    const input = reuseInput(artifact);
+    const base = evidenceReuseKey(input);
+    const previous = base.key === null ? null : priorByKey.get(base.key) ?? null;
+    const verdict = previous === null ? base : evidenceReuseKey({ ...input, previous });
+    reuseByRef.set(ref, Object.freeze({ ref, ...verdict }));
+    if (base.key !== null) priorByKey.set(base.key, { key: base.key, verification_version: base.verification_version, scope: base.scope });
+  }
+  const evidenceReuse = captureOriginals.map(({ ref }) => reuseByRef.get(ref));
 
   const claims = {};
   let gate = null, verdict = null, verdictRef = null;

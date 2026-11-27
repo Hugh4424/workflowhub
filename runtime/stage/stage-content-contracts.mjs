@@ -1103,8 +1103,13 @@ export function acCardStatuses({ spec = "", phases = {} } = {}) {
       sources: Object.freeze(sources.map((source) => Object.freeze({ path: source.path, line: source.line, shape: source.shape, raw_status: acceptanceSlotGrades(source.value).grades[0] ?? null }))),
     }));
   }
-  const counts = { pass: 0, incomplete: 0, partial: 0, inconclusive: 0, unavailable: 0, inconsistent: 0 };
-  for (const entry of entries) if (Object.hasOwn(counts, entry.status)) counts[entry.status] += 1;
+  // Every verdict word the slot parser accepts has a key here; a legal `fail` /
+  // `missing` / `deferred` must never be dropped from the total.
+  const counts = Object.fromEntries(ACCEPTANCE_STATUS_WORDS.map((word) => [word, 0]));
+  const counted = new Set();
+  for (const entry of entries) if (Object.hasOwn(counts, entry.status)) { counts[entry.status] += 1; counted.add(entry.id); }
+  // An entry whose status is outside the table is a named gap, not a silent loss.
+  const uncounted = entries.filter((entry) => !counted.has(entry.id)).map((entry) => ({ id: entry.id, status: entry.status }));
   const cardFiles = new Set(Object.keys(phases ?? {}));
   const readCards = new Set();
   for (const source of slots.values()) for (const item of source) readCards.add(item.path);
@@ -1121,6 +1126,7 @@ export function acCardStatuses({ spec = "", phases = {} } = {}) {
     conflicts,
     variants,
     pass_without_ref: entries.filter((entry) => entry.status === "pass" && !entry.clean).map((entry) => entry.id),
+    uncounted,
     unparsed,
   };
   // The fingerprint binds card bytes only. `refs[].status`/`clean` come from the
@@ -1342,6 +1348,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   // belongs to the receipt only; attaching it to ref would be a false mismatch.
   const factsShaByRef = new Map();
   if (typeof task_record_root === "string" && isAbsolute(task_record_root)) {
+    // Task identity comes from the same task root's manifest; without it no row
+    // can be attributed and the anchor table stays empty.
+    let taskRecordId = null;
+    try {
+      const manifest = JSON.parse(readFileSync(resolve(task_record_root, "task.json"), "utf8"));
+      if (manifest !== null && typeof manifest === "object" && typeof manifest.task_id === "string") taskRecordId = manifest.task_id;
+    } catch { /* unreadable manifest: no task identity, no anchors */ }
     try {
       const raw = readFileSync(resolve(task_record_root, "facts.jsonl"), "utf8");
       for (const line of raw.trimEnd().split(/\r?\n/)) {
@@ -1350,8 +1363,26 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         try { row = JSON.parse(line); } catch { continue; }
         if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
         const entries = Array.isArray(row.evidence?.value) ? row.evidence.value : [];
+        // Only a stage row of THIS task can bind an anchor. A quality_evidence
+        // entry left by another task may hold the same bytes, but it cannot
+        // attest this task's run. When the manifest is unreadable the row's own
+        // non-empty task_id is the only identity available; a mismatch is always
+        // rejected.
+        if (row.record_kind !== "stage") continue;
+        if (typeof row.task_id !== "string" || row.task_id.trim() === "") continue;
+        if (taskRecordId !== null && row.task_id !== taskRecordId) continue;
         for (const entry of entries) {
           if (entry === null || typeof entry !== "object" || entry.kind !== "quality_evidence" || typeof entry.sha256 !== "string") continue;
+          // Execution binding: a current writer entry names its declared step,
+          // its executed command and an integer exit. The one legacy shape that
+          // stays acceptable is an entry whose ref is the planner's own
+          // step-evidence original (the pre-run-field contract). Anything else
+          // has no attributable run and must stay `unverified`.
+          const executionBound = typeof entry.step_slug === "string" && entry.step_slug.trim() !== ""
+            && typeof entry.command === "string" && entry.command.trim() !== ""
+            && Number.isInteger(entry.exit_code);
+          const legacyStepEvidence = typeof entry.ref === "string" && entry.ref.startsWith("quality/evidence/step-evidence/");
+          if (!executionBound && !legacyStepEvidence) continue;
           const hasReceipt = typeof entry.receipt_ref === "string" && entry.receipt_ref.trim() !== "";
           const refs = hasReceipt ? [entry.receipt_ref] : [entry.ref];
           for (const ref of refs) {

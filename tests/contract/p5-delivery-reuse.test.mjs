@@ -9,6 +9,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as claims from "../../runtime/task/delivery-claims.mjs";
+const claimsModule = claims;
 import { inspectDeliveryCloseState } from "../../core/task-close.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -124,5 +125,36 @@ describe("close facts carry the two commits", () => {
     expect(state.facts.target_commit_reason).toBe("no-completed-merge");
     expect(state.facts.delivered).toBe(true);
     expect(state.facts.delivery_committed).toBe(true);
+  });
+});
+
+describe("F1: the delivery read face compares against the previous same-command capture", () => {
+  it("reaches true for the second of two identical captures and stays unknown for the first", async () => {
+    const { mkdtempSync, mkdirSync, realpathSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { createHash } = await import("node:crypto");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "p6-reuse-face-")));
+    try {
+      mkdirSync(join(root, "quality/evidence/gate-results"), { recursive: true });
+      writeFileSync(join(root, "task.json"), JSON.stringify({ task_id: "owned", project_name: "workflowhub", target_repo_root: root }));
+      const capture = JSON.stringify({
+        argv: ["node", "tools/cli/run-checks.mjs"], cwd: root,
+        inputs: [{ path: "specs/owned/spec.md", sha256: "a".repeat(64) }],
+        material_files: ["specs/owned/spec.md"], capture_route: "verify:execute",
+        material_sha256: "b".repeat(64), head: "c".repeat(40), environment_sha256: "d".repeat(64),
+        gate_identity: null, started_at: "2026-01-01T00:00:00Z", ended_at: "2026-01-01T00:00:01Z",
+      });
+      const sha = (value) => createHash("sha256").update(value).digest("hex");
+      writeFileSync(join(root, "quality/evidence/gate-results/a.json"), capture);
+      writeFileSync(join(root, "quality/evidence/gate-results/b.json"), capture.replace("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"));
+      writeFileSync(join(root, "facts.jsonl"), JSON.stringify({
+        record_kind: "stage", task_id: "owned", stage: "build-code",
+        source: `; gate: quality/evidence/gate-results/a.json#sha256=${sha(capture)}; gate: quality/evidence/gate-results/b.json#sha256=${sha(capture)}`,
+      }) + "\n");
+      const claims = claimsModule.readDeliveryClaims({ taskPath: root });
+      expect(claims.evidence_reuse.map((item) => item.reuse)).toEqual(["unknown", "true"]);
+      expect(claims.evidence_reuse[0].reasons).toContain("no-prior-record");
+      expect(claims.evidence_reuse[1].still_applicable).toBe(true);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

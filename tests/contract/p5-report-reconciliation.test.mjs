@@ -113,3 +113,25 @@ describe("report reference resolution", () => {
     expect(report.consistent).toBe(false);
   });
 });
+
+describe("F5/F2: the report is read as a whole, and an omitted card status is named", () => {
+  it("refuses to take the first of several json sections", () => {
+    const bytes = Buffer.from([
+      "```json", JSON.stringify({ declared_total: 8, status_counts: { pass: 8 } }), "```",
+      "```json", JSON.stringify({ declared_total: 8, status_counts: { pass: 6, incomplete: 2 } }), "```",
+    ].join("\n"), "utf8");
+    const report = claims.reportReconciliation({ reportBytes: bytes, acStatus: null });
+    expect(report.source).toBe("unknown");
+    expect(report.reason).toBe("multiple-json-sections");
+    expect(report.json_sections).toBe(2);
+    expect(report.consistent).toBe(false);
+  });
+
+  it("names a card status the report never mentions", () => {
+    const bytes = Buffer.from("8 条判据中：**7 pass、1 incomplete**。\n", "utf8");
+    const report = claims.reportReconciliation({ reportBytes: bytes, acStatus: { total_declared: 8, counts: { pass: 7, incomplete: 1, fail: 2 } } });
+    expect(report.status_mismatches).toEqual([]);
+    expect(report.absent_from_report).toEqual([{ status: "fail", report: 0, card: 2 }]);
+    expect(report.consistent).toBe(false);
+  });
+});

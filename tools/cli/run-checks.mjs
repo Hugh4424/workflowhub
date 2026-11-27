@@ -821,6 +821,13 @@ async function runMaterialChecks(root, { stage } = {}) {
           if (item.reason !== "unparsed-grade") continue;
           note(errors, `ac_status ${item.id ?? "unknown"} 状态词无法解析（${item.path ?? "unknown"}:${item.line ?? "?"} ${item.reason}）`);
         }
+        // A card that states fail / missing / deferred is a named result: it must
+        // appear as an error row, not only inside the JSON summary.
+        for (const entry of acStatus.entries ?? []) {
+          if (!["fail", "missing", "deferred"].includes(entry.status)) continue;
+          const first = (entry.sources ?? [])[0];
+          note(errors, `ac_status ${entry.id} 卡面判为 ${entry.status}（${first?.path ?? "unknown"}:${first?.line ?? "?"}；fingerprint=${String(acStatus.fingerprint).slice(0, 12)}）`);
+        }
         for (const id of acStatus.pass_without_ref ?? []) {
           note(errors, `ac_status ${id} pass 但无证据引用（clean_pass=${acStatus.clean_pass}/${acStatus.counts?.pass ?? 0}，fingerprint=${String(acStatus.fingerprint).slice(0, 12)}）`);
         }

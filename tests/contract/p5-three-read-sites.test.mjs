@@ -20,7 +20,7 @@ describe("terminal chain recomputes the same card status", () => {
     const report = runFinalChainCheck({ taskPath: T4, materialRoot: archiveMaterial });
     expect(report.ac_status).toBeTruthy();
     expect(report.ac_status.fingerprint).toMatch(HEX64);
-    expect(report.ac_status.counts).toEqual({ pass: 61, incomplete: 11, partial: 2, inconclusive: 1, unavailable: 1, inconsistent: 2 });
+    expect(report.ac_status.counts).toMatchObject({ pass: 61, incomplete: 11, partial: 2, inconclusive: 1, unavailable: 1, inconsistent: 2 });
     // The stored task-4 contract predates the card status, so it is honestly
     // "unknown" rather than invented as a match.
     expect(report.ac_status.original).toBe("unknown");
