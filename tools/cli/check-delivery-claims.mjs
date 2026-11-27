@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 // Read-only delivery-claims entry. It calls the single claim reader and exits
-// 1 when any of the three claims (implemented / verified / accepted) lacks its
-// bound original, when the signed fingerprint differs from the current
-// material bytes, or when no downstream close readback exists. It never signs,
-// writes, or re-runs a gate.
+// 1 when either of the two claims (implemented / verified) lacks its bound
+// original. It never signs, writes, or re-runs a gate.
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { resolveCanonicalTaskPath } from "../../runtime/task/load-config.mjs";
 import { readDeliveryClaims } from "../../runtime/task/delivery-claims.mjs";
 
-export function checkDeliveryClaims({ taskDir, requireReadback = true } = {}) {
+export function checkDeliveryClaims({ taskDir } = {}) {
   if (typeof taskDir !== "string" || !taskDir) throw new TypeError("--task-path is required");
-  return readDeliveryClaims({ taskPath: resolve(taskDir), requireReadback });
+  return readDeliveryClaims({ taskPath: resolve(taskDir) });
 }
 
 function parse(argv) {

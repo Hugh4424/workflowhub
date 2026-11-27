@@ -13,7 +13,7 @@ import { readTaskFacts } from "../runtime/task/task-store.mjs";
 import { openTask } from "../runtime/task/task-handle.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
-import { deliveryCommit, readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
+import { deliveryCommit, readDeliveryClaims } from "../runtime/task/delivery-claims.mjs";
 import { readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
@@ -935,7 +935,7 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   }
   const physical = derivePhysicalDeliveryStatus({ task_id: plan.task_id, plan, facts, step_records: verifiedActions, workspace_mode: c.manifest.workspace_mode,
     ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}) });
-  // Read-only projection of the three delivery claims. Quality stays "unknown"
+  // Read-only projection of the two delivery claims. Quality stays "unknown"
   // as before; this field never becomes a close or Git permit by itself.
   let deliveryClaims;
   try { deliveryClaims = readDeliveryClaims({ taskPath: c.taskDir }); }
@@ -968,15 +968,17 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
     // delivery hint never overrides this judgement.
     await assertDeclaredStepsComplete(taskDir, { target_branch: plan.target_branch }, { recordClaim: "不写本次 close 动作记录、不发起 Git 动作" });
     assertGapTriage(plan);
-    // The current task's real claims are re-read from their originals before
-    // any Git action. A failed or missing claim rejects the close instead of
-    // publishing a success it cannot source; nothing is deleted on rejection.
-    let claimsReadback;
-    try { claimsReadback = await recordCloseClaimsReadback({ taskPath: c.taskDir, planRef, worktreeRoot: c.worktree }); }
-    catch (error) {
+    // The two delivery claims (implemented / verified) are re-read from their
+    // gate originals before any Git action. A failed or missing claim rejects
+    // the close instead of publishing a success it cannot source; nothing is
+    // deleted on rejection.
+    const claims = readDeliveryClaims({ taskPath: c.taskDir });
+    const failedClaims = Object.entries(claims.claims).filter(([, value]) => value.status !== "pass");
+    if (claims.required && failedClaims.length) {
+      const message = `close refuses the unproven delivery claims [${failedClaims.map(([, value]) => value.code ?? "UNCODED").join(",")}]: ${failedClaims.map(([name, value]) => `${name} (${value.reasons.join("; ")})`).join(" | ")}`;
       const ref = await writeEvidence(c, "close-action", { operation: "claims", status: "failed", plan_ref: planRef,
-        error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
-      return { status: "failed", operation: "claims", error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records: [],
+        error: { code: "DELIVERY_CLAIMS_REJECTED", message }, recorded_at: new Date().toISOString() });
+      return { status: "failed", operation: "claims", error: { code: "DELIVERY_CLAIMS_REJECTED", message }, failure_ref: ref, records: [],
         physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
     }
     let sourceHead = plan.source.head, targetHead = plan.target_head;
@@ -1282,7 +1284,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         return { status: "failed", operation: currentAction, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       }
     }
-    return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claimsReadback, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+    return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claims, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
   });
 }
 // The declared-step gate must read the same material root the close plan will

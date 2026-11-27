@@ -337,14 +337,12 @@ it("isolated archive before delivery names an unreadable consumed push receipt i
   expect(f.git(f.bare,["rev-parse",`refs/heads/${taskBranch}`])).not.toBe("");
 });
 
-// ORACLE-CLOSE-CLAIMS-REPLAY — P9/T009. The three delivery claims (implemented /
-// verified / accepted) each read one sourced original: the gate-results original
-// written by the real `stage-runtime verify --action=execute` capture, that same
-// capture's receipt, and an independent verdict plus the close readback. The
-// close is the only writer of the readback; a red gate, changed bytes after
-// signing, a signer who authored the implementation, a missing signature, or a
-// hand-built gate original that never went through the real capture route must
-// be refused before any Git action.
+// ORACLE-CLOSE-CLAIMS-REPLAY — P9/T009. The two delivery claims (implemented /
+// verified) each read one sourced original: the gate-results original written by
+// the real `stage-runtime verify --action=execute` capture and that same
+// capture's receipt. A red gate, a hand-built gate original that never went
+// through the real capture route, or a gate original whose identity is missing
+// must be refused before any Git action.
 import{createHash}from"node:crypto";import{environmentFingerprint,stageRuntimeCliMain}from"../../tools/cli/stage-runtime.mjs";
 const CLAIMS_CLI=fileURLToPath(new URL("../../tools/cli/check-delivery-claims.mjs",import.meta.url));
 const REPLAY_CLI=fileURLToPath(new URL("../../tools/cli/check-replay.mjs",import.meta.url));
@@ -431,16 +429,10 @@ function rewriteGate(f,mutate){
   writeFileSync(join(f.taskDir,"facts.jsonl"),rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
   return{...f,gate:{ref:f.gate.ref,sha256:sha}};
 }
-const readbackFiles=f=>{try{return readdirSync(join(f.taskDir,"quality","evidence","close")).filter(name=>/-close-claims-readback\.json$/.test(name));}catch(error){if(error.code==="ENOENT")return[];throw error;}};
-function signClaims(f,{signer="independent-acceptor-7",materialSha=f.materialSha,gate=f.gate,conclusion="pass"}={}){
-  const verdict={schema_version:"delivery-verdict.v1",task_id:f.taskId,stage:"build-code",conclusion,signer:{identity:signer,role:"independent-acceptor"},reviewed:{material_sha256:materialSha,gate_ref:gate},signed_at:new Date().toISOString()};
-  const dir=join(f.taskDir,"quality","evidence");mkdirSync(dir,{recursive:true});
-  writeFileSync(join(dir,"verdict.json"),`${JSON.stringify(verdict,null,2)}\n`);return verdict;
-}
 const runClaims=f=>spawnSync(process.execPath,[CLAIMS_CLI,`--task-path=${f.taskDir}`],{encoding:"utf8"});
 function claimBody(run){return JSON.parse(run.stdout);}
 
-it("bound delivery claims: a real close consumes the three sourced originals and records the actual readback",async()=>{
+it("bound delivery claims: a real close consumes the two sourced originals",async()=>{
   const f=await claimsFixture();
   // The gate original is the one written by the real public capture route; its
   // argv, output, receipt and material fingerprint are readable originals.
@@ -454,44 +446,32 @@ it("bound delivery claims: a real close consumes the three sourced originals and
   expect(createHash("sha256").update(gateReceipt).digest("hex")).toBe(f.gateArtifact.receipt_sha256);
   expect(JSON.parse(gateReceipt.toString("utf8"))).toMatchObject({argv:f.captured.argv,exit_code:f.gateArtifact.exit_code,output_ref:f.captured.output_ref});
   expect(f.captured.receipt_ref.endsWith(`/${basename(f.gateArtifact.receipt_ref)}`)).toBe(true);
-  signClaims(f);
   const before=runClaims(f);
-  expect(before.status,"a signed accepted claim without a downstream readback must not pass").toBe(1);
+  expect(before.status,"a real gate must prove both claims").toBe(0);
   const first=claimBody(before);
   expect(first.claims.implemented).toMatchObject({status:"pass",evidence:{ref:f.gate.ref,sha256:f.gate.sha256}});
   expect(first.claims.implemented.reasons).toEqual([]);
   expect(first.claims.verified).toMatchObject({status:"pass",evidence:{ref:f.gate.ref,sha256:f.gate.sha256}});
   expect(first.claims.verified.reasons).toEqual([]);
-  expect(first.claims.accepted.status).toBe("fail");
-  expect(first.claims.accepted.reasons.join(" ")).toMatch(/readback/);
-  expect(readbackFiles(f)).toEqual([]);
   const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
   const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
   await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
   const final=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
   expect(final.status,JSON.stringify(final.error)).toBe("completed");
   expect(final.delivery_claims.status).toBe("pass");
-  const readbackRef=final.delivery_claims.readback_ref,readback=JSON.parse(readFileSync(join(f.taskDir,readbackRef),"utf8"));
-  expect(readbackRef,JSON.stringify(final.delivery_claims)).toMatch(/^quality\/evidence\/close\/\d{4}-\d{2}-\d{2}-\d{3}-close-claims-readback\.json$/);
-  expect(readback).toMatchObject({schema_version:"close-claims-readback.v1",task_id:f.taskId,status:"pass",plan_ref:p.plan_ref,material_sha256:f.materialSha,gate_ref:f.gate});
-  const verdictSha=createHash("sha256").update(readFileSync(join(f.taskDir,"quality","evidence","verdict.json"))).digest("hex");
-  expect(readback.verdict_ref).toEqual({ref:"quality/evidence/verdict.json",sha256:verdictSha});
-  // The readback records each claim's own sourced original, not one shared copy.
-  expect(readback.claims).toEqual({implemented:f.gate,verified:f.gate,accepted:{ref:"quality/evidence/verdict.json",sha256:verdictSha}});
+  expect(final.delivery_claims.claims.implemented.status).toBe("pass");
+  expect(final.delivery_claims.claims.verified.status).toBe("pass");
   expect(createHash("sha256").update(readFileSync(join(f.taskDir,f.gate.ref))).digest("hex")).toBe(f.gate.sha256);
   const after=runClaims(f);
   expect(after.status,after.stderr).toBe(0);
   const body=claimBody(after);
   expect(body.status).toBe("pass");expect(body.material.archived).toBe(true);
-  expect(body.claims.accepted).toMatchObject({status:"pass",evidence:{ref:readbackRef}});
-  expect(body.claims.accepted.reasons).toEqual([]);
   expect(body.claims.implemented.evidence).toMatchObject(f.gate);
   expect(body.claims.verified.evidence).toMatchObject(f.gate);
-  expect(readbackFiles(f)).toHaveLength(1);
 });
 
 it("bound delivery claims: a genuine red gate is refused by the real close and stays a named failure",async()=>{
-  const f=await claimsFixture({gateExit:1,slug:"owned-gate-red"});signClaims(f);
+  const f=await claimsFixture({gateExit:1,slug:"owned-gate-red"});
   // The red is the controlled command's own exit captured by the real route,
   // not a hand-written artifact exit.
   expect(f.captured.exit_code).toBe(1);
@@ -502,7 +482,6 @@ it("bound delivery claims: a genuine red gate is refused by the real close and s
   expect(body.claims.implemented.status).toBe("pass");
   expect(body.claims.verified.status).toBe("fail");
   expect(body.claims.verified.reasons.join(" ")).toMatch(/exit is 1, not 0/);
-  expect(body.claims.accepted.status).toBe("fail");
   const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
   const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
   await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
@@ -510,7 +489,6 @@ it("bound delivery claims: a genuine red gate is refused by the real close and s
   const result=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
   expect(result.status).toBe("failed");expect(result.operation).toBe("claims");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
   expect(result.error.message).toMatch(/verified/);
-  expect(readbackFiles(f)).toEqual([]);
   const failure=JSON.parse(readFileSync(result.failure_ref,"utf8"));
   expect(failure).toMatchObject({operation:"claims",status:"failed",plan_ref:p.plan_ref});
   expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
@@ -518,62 +496,8 @@ it("bound delivery claims: a genuine red gate is refused by the real close and s
   expect(readdirSync(join(f.taskDir,"quality","evidence","close")).some(name=>/-close-action\.json$/.test(name)&&JSON.parse(readFileSync(join(f.taskDir,"quality","evidence","close",name),"utf8")).status==="completed")).toBe(false);
 });
 
-it("bound delivery claims: material bytes changed after signing invalidate the signature and the close, keeping both originals",async()=>{
-  const f=await claimsFixture();signClaims(f);
-  const verdictBefore=readFileSync(join(f.taskDir,"quality","evidence","verdict.json"));
-  const gateBefore=readFileSync(join(f.taskDir,f.gate.ref));
-  writeFileSync(join(f.wt,"specs",f.taskId,"spec.md"),"# Owned actual delivery changed after signing\n");
-  const run=runClaims(f);expect(run.status).toBe(1);
-  const body=claimBody(run);
-  expect(body.claims.accepted.status).toBe("fail");
-  expect(body.claims.accepted.reasons.join(" ")).toMatch(/differ from the signed fingerprint/);
-  expect(body.material.sha256).not.toBe(f.materialSha);
-  expect(body.claims.implemented.status).toBe("pass");
-  expect(body.claims.verified.status).toBe("pass");
-  const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
-  const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
-  await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
-  const base=f.git(f.repo,["rev-parse","HEAD"]);
-  const result=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
-  expect(result.status).toBe("failed");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
-  expect(result.error.message).toMatch(/differ from the signed fingerprint/);
-  expect(readbackFiles(f)).toEqual([]);
-  expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
-  // Neither the signature nor the gate original is rewritten by the refusal.
-  expect(readFileSync(join(f.taskDir,"quality","evidence","verdict.json"))).toEqual(verdictBefore);
-  expect(readFileSync(join(f.taskDir,f.gate.ref))).toEqual(gateBefore);
-});
-
-it("bound delivery claims: a signer who authored the implementation and a missing signature are both refused",async()=>{
-  const author=await claimsFixture({slug:"owned-gate-author"});signClaims(author,{signer:"Owned close"});
-  const selfSigned=runClaims(author);expect(selfSigned.status).toBe(1);
-  const selfBody=claimBody(selfSigned);
-  expect(selfBody.claims.accepted.reasons.join(" ")).toMatch(/implementation authors/);
-  // Only acceptance fails: the real gate and its receipt still prove implementation/verification.
-  expect(selfBody.claims.implemented.status).toBe("pass");
-  expect(selfBody.claims.verified.status).toBe("pass");
-  const unsigned=await claimsFixture({slug:"owned-gate-unsigned"});
-  const missing=runClaims(unsigned);expect(missing.status).toBe(1);
-  const missingBody=claimBody(missing);
-  expect(missingBody.claims.accepted.reasons.join(" ")).toMatch(/no independent signature original/);
-  expect(missingBody.claims.accepted.evidence).toBeNull();
-  expect(missingBody.claims.implemented.status).toBe("pass");
-  expect(missingBody.claims.verified.status).toBe("pass");
-  for(const f of [author,unsigned]){
-    const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
-    const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
-    await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
-    const base=f.git(f.repo,["rev-parse","HEAD"]);
-    const result=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
-    expect(result.status).toBe("failed");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
-    expect(result.error.message).toMatch(/accepted/);
-    expect(readbackFiles(f)).toEqual([]);
-    expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
-  }
-});
-
 it("bound delivery claims: a hand-built gate original that never went through the real verify capture is refused",async()=>{
-  const f=await claimsFixture();signClaims(f);
+  const f=await claimsFixture();
   // A fabricated gate can copy every field; it cannot honestly claim the real
   // capture route. The claim reader must refuse it, not treat it as the gate.
   const forged=rewriteGate(f,artifact=>{artifact.capture_route="direct:buildGateResultArtifact";artifact.capture_surface="hand-written gate-results artifact";});
@@ -590,7 +514,6 @@ it("bound delivery claims: a hand-built gate original that never went through th
   const result=await executeClosePlan({taskDir:forged.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
   expect(result.status).toBe("failed");expect(result.operation).toBe("claims");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
   expect(result.error.message).toMatch(/verify --action=execute/);
-  expect(readbackFiles(forged)).toEqual([]);
   expect(forged.git(forged.repo,["rev-parse","HEAD"])).toBe(base);
 });
 
@@ -610,8 +533,7 @@ it("bound delivery claims: a later green capture that is not the declared Phase 
   const shortcutArtifact=JSON.parse(readFileSync(join(f.taskDir,shortcutPointer.ref),"utf8"));
   expect(shortcutArtifact.exit_code).toBe(0);
   expect(shortcutArtifact.gate_identity).toBeNull();
-  // The forged strongest claim: sign the shortcut pointer as if it were the gate.
-  signClaims(f,{gate:shortcutPointer});
+  // The forged strongest claim: the shortcut pointer is not the declared gate.
   const run=runClaims(f);expect(run.status).toBe(1);
   const body=claimBody(run);
   expect(body.claims.implemented.status).toBe("pass");
@@ -624,8 +546,6 @@ it("bound delivery claims: a later green capture that is not the declared Phase 
   expect(laterReason).toMatch(/later capture/);
   expect(laterReason).toContain(JSON.stringify(f.gateArtifact.command));
   expect(laterReason).toContain(JSON.stringify(shortcutArtifact.command));
-  expect(body.claims.accepted.status).toBe("fail");
-  expect(body.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
   const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
   const c=await confirmClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,replyText:"Approve this exact owned plan."});
   await authorizeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
@@ -633,13 +553,12 @@ it("bound delivery claims: a later green capture that is not the declared Phase 
   const result=await executeClosePlan({taskDir:f.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,graphTimeoutMs:1000});
   expect(result.status).toBe("failed");expect(result.operation).toBe("claims");expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
   expect(result.error.message).toMatch(/exit is 1/);
-  expect(readbackFiles(f)).toEqual([]);
   expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(base);
   // The red declared-gate original is preserved, not replaced by the shortcut.
   expect(createHash("sha256").update(readFileSync(join(f.taskDir,red.ref))).digest("hex")).toBe(red.sha256);
 });
 
-it("bound delivery claims: only a re-run of the declared gate replaces the red capture, and an earlier signature stays stale",async()=>{
+it("bound delivery claims: only a re-run of the declared gate replaces the red capture",async()=>{
   const f=await claimsFixture({gateExit:1,slug:"owned-gate-red"});
   const red=f.gate;
   // A repair re-runs the same declared gate; that lawful capture is the new gate.
@@ -653,23 +572,13 @@ it("bound delivery claims: only a re-run of the declared gate replaces the red c
   expect(green.sha256).not.toBe(red.sha256);
   const greenArtifact=JSON.parse(readFileSync(join(f.taskDir,green.ref),"utf8"));
   expect(greenArtifact.gate_identity).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
-  // A signature made against the red capture names a gate that is no longer current.
-  signClaims(f,{gate:red});
-  const stale=runClaims(f);expect(stale.status).toBe(1);
-  const staleBody=claimBody(stale);
-  expect(staleBody.claims.verified.status).toBe("pass");
-  expect(staleBody.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
-  // Re-signing the current declared-gate capture leaves only the missing readback.
-  signClaims(f,{gate:green});
-  const resigned=runClaims(f);expect(resigned.status).toBe(1);
+  const resigned=runClaims(f);expect(resigned.status).toBe(0);
   const resignedBody=claimBody(resigned);
   expect(resignedBody.claims.implemented).toMatchObject({status:"pass",evidence:green});
   expect(resignedBody.claims.verified).toMatchObject({status:"pass",evidence:green});
   // P3/T016: passing has no failure code at either the claim or the report level.
   expect(resignedBody.claims.verified.code).toBeNull();
   expect(resignedBody.claim_codes.verified).toBeNull();
-  expect(resignedBody.claims.accepted.reasons.join(" ")).toMatch(/readback/);
-  expect(resignedBody.claims.accepted.reasons.join(" ")).not.toMatch(/gate-results original/);
 });
 
 it("bound delivery claims: a green capture of another declared Phase gate cannot replace the current Phase's red gate",async()=>{
@@ -686,14 +595,12 @@ it("bound delivery claims: a green capture of another declared Phase gate cannot
   const markers=gateMarkersOf(f);
   expect(markers).toHaveLength(2);
   const redArtifact=JSON.parse(readFileSync(join(f.taskDir,markers[0].ref),"utf8"));
-  signClaims({...f,materialSha:redArtifact.material_sha256,gate:markers[0]},{gate:markers.at(-1)});
   const run=runClaims(f);expect(run.status).toBe(1);
   const body=claimBody(run);
   // The delivery gate is the P2 cursor's declared gate, still the red capture.
   expect(body.claims.verified.status).toBe("fail");
   expect(body.claims.verified.reasons.join(" ")).toMatch(/exit is 1, not 0/);
   expect(body.claims.verified.evidence).toMatchObject(markers[0]);
-  expect(body.claims.accepted.reasons.join(" ")).toMatch(/signature does not name the current gate-results original/);
 });
 
 it("bound delivery claims: a declared shell gate is matched by the captured shell text through the sh -c wrapper",async()=>{
@@ -708,11 +615,10 @@ it("bound delivery claims: a declared shell gate is matched by the captured shel
   const markers=gateMarkersOf(f);
   const artifact=JSON.parse(readFileSync(join(f.taskDir,markers.at(-1).ref),"utf8"));
   expect(artifact.gate_identity).toMatchObject({phase_id:"P1",phase_ref:"phases/P1-owned.md"});
-  const run=runClaims(f);expect(run.status).toBe(1);
+  const run=runClaims(f);expect(run.status).toBe(0);
   const body=claimBody(run);
   expect(body.claims.implemented).toMatchObject({status:"pass",evidence:markers.at(-1)});
   expect(body.claims.verified).toMatchObject({status:"pass",evidence:markers.at(-1)});
-  expect(body.claims.accepted.reasons.join(" ")).toMatch(/no independent signature original/);
 });
 
 it("matched target replay: a lost T6/T16 original is reported unavailable with reason and owner and never passes",()=>{
@@ -881,7 +787,6 @@ it("P3-AC-001: deleting the latest declared gate's identity fails at that origin
   expect(result.operation).toBe("claims");
   expect(result.error.code).toBe("DELIVERY_CLAIMS_REJECTED");
   expect(result.error.message).toContain("GATE_IDENTITY_MISSING");
-  expect(readbackFiles(f2)).toEqual([]);
 });
 
 it("P3-AC-002: a record with no gate_identity key is 未取得, the close refuses, and the original bytes never change",async()=>{

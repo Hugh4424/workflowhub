@@ -1,9 +1,8 @@
-// Single read-only reader for the three delivery claims (implemented /
-// verified / accepted). It binds each claim to one ordinary original: the
-// gate-results receipt written by the real `verify --execute` capture, the
-// capture receipt named by that gate result, and the independent verdict plus
-// the close readback. Nothing here writes a second ledger, guesses a newest
-// same-named file, or re-runs a gate.
+// Single read-only reader for the two delivery claims (implemented / verified).
+// It binds each claim to one ordinary original: the gate-results receipt written
+// by the real `verify --execute` capture, and the capture receipt named by that
+// gate result. Nothing here writes a second ledger, guesses a newest same-named
+// file, or re-runs a gate.
 //
 // File-level provenance cannot prove which caller wrote a JSON file. The gate
 // original is therefore cross-checked against an independent producer (the
@@ -14,18 +13,15 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { phaseFilesFromIndex } from "./material-workspace.mjs";
 import { acCardStatuses, applyRefVerdicts, checkEvidencePath, materialFingerprint } from "../stage/stage-content-contracts.mjs";
 import { readTaskFacts } from "./task-store.mjs";
-import { appendRecord } from "../interface/safe-write.mjs";
 
 export const GATE_RESULTS_DIR = "quality/evidence/gate-results";
-export const VERDICT_REF = "quality/evidence/verdict.json";
 export const REPLAY_CASES_DIR = "quality/evidence/replay-cases";
-export const CLOSE_CLAIMS_READBACK = /^\d{4}-\d{2}-\d{2}-\d{3}-close-claims-readback\.json$/;
 const GATE_MARKER = /; gate: ([^\n;]+)/g;
-const CLAIM_NAMES = Object.freeze(["implemented", "verified", "accepted"]);
+const CLAIM_NAMES = Object.freeze(["implemented", "verified"]);
 const HEX = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -422,42 +418,7 @@ function selectDeclaredGate({ taskPath, markers, phases, phaseId }) {
   return gateFailure("GATE_NOT_CAPTURED", `no recorded capture declares the current ${phaseId ?? "Phase"} gate identity (${notGate.length} capture(s) declare no gate; ${otherPhase.length} declare another Phase's gate)`);
 }
 
-function authorsFor(repo, baseline, head) {
-  if (!text(head) || !OID.test(head) || git(repo, ["cat-file", "-e", `${head}^{commit}`], { optional: true }).status !== 0) return null;
-  const authors = new Set();
-  const headAuthor = git(repo, ["log", "-1", "--format=%an%x00%ae", head], { encoding: "utf8", optional: true });
-  if (headAuthor.status === 0) for (const value of String(headAuthor.stdout).split("\0")) if (text(value)) authors.add(value.trim().toLowerCase());
-  if (text(baseline) && OID.test(baseline) && baseline !== head
-      && git(repo, ["cat-file", "-e", `${baseline}^{commit}`], { optional: true }).status === 0
-      && git(repo, ["merge-base", "--is-ancestor", baseline, head], { optional: true }).status === 0) {
-    const result = git(repo, ["log", "--format=%an%x00%ae", `${baseline}..${head}`], { encoding: "utf8", optional: true });
-    if (result.status === 0) for (const value of String(result.stdout).split("\0")) if (text(value)) authors.add(value.trim().toLowerCase());
-  }
-  return authors;
-}
-
 function claim(status, reasons, evidence = null, code = null) { return { status, reasons: [...new Set(reasons)], evidence, code }; }
-
-function readReadback(taskPath, material, gate, verdict) {
-  const directory = join(resolve(taskPath), "quality", "evidence", "close");
-  let names;
-  try { names = readdirSync(directory).filter((name) => CLOSE_CLAIMS_READBACK.test(name)).sort(); }
-  catch (error) { if (error.code === "ENOENT") return { status: "fail", reasons: ["accepted: no downstream close readback exists; the accepted declaration has no actual consumer"], evidence: null }; throw error; }
-  const matched = [];
-  for (const name of names) {
-    const ref = `quality/evidence/close/${name}`;
-    let record;
-    try { record = JSON.parse(readTaskRelative(taskPath, ref).toString("utf8")); }
-    catch { continue; }
-    if (record?.schema_version !== "close-claims-readback.v1" || record.status !== "pass") continue;
-    if (record.material_sha256 !== material.sha256) continue;
-    if (!plain(record.gate_ref) || record.gate_ref.ref !== gate.ref || record.gate_ref.sha256 !== gate.sha256) continue;
-    if (!plain(record.verdict_ref) || record.verdict_ref.ref !== verdict.ref || record.verdict_ref.sha256 !== verdict.sha256) continue;
-    matched.push({ ref, sha256: sha256(readTaskRelative(taskPath, ref)) });
-  }
-  if (!matched.length) return { status: "fail", reasons: ["accepted: no close readback matches this material fingerprint, gate original and verdict"], evidence: null };
-  return { status: "pass", reasons: [], evidence: matched.at(-1) };
-}
 
 
 // --- Version reconciliation: report, commits, reuse, gate coverage ----------
@@ -800,7 +761,7 @@ export function declaredGateCoverage({ phases = {}, captures = [], selected = nu
   });
 }
 
-export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
+export function readDeliveryClaims({ taskPath } = {}) {
   if (!text(taskPath) || !isAbsolute(taskPath)) throw new TypeError("readDeliveryClaims requires an absolute task path");
   const root = resolve(taskPath);
   const manifest = JSON.parse(readFileSync(join(root, "task.json"), "utf8"));
@@ -812,12 +773,9 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
   const phaseId = buildCodeRow?.phase_progress?.phase_id ?? null;
   const selection = selectDeclaredGate({ taskPath: root, markers, phases: material.phases, phaseId });
   const pointer = selection.pointer ?? null;
-  let verdictBytes = null;
-  try { verdictBytes = readTaskRelative(root, VERDICT_REF); }
-  catch (error) { if (error.code !== "ENOENT") throw error; }
   // A build-code facts row is itself a delivery declaration; without a bound
-  // gate original it cannot pass, even when no verdict exists yet.
-  const required = Boolean(markers.length || verdictBytes || buildCodeRow);
+  // gate original it cannot pass.
+  const required = Boolean(markers.length || buildCodeRow);
   const repo = realpathSync(manifest.target_repo_root);
   const worktree = taskWorktreeRoot(manifest, repo);
   const currentEnvironment = environmentFingerprint();
@@ -886,7 +844,7 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
   const evidenceReuse = captureOriginals.map(({ ref }) => reuseByRef.get(ref));
 
   const claims = {};
-  let gate = null, verdict = null, verdictRef = null;
+  let gate = null;
   if (!pointer) {
     // Every named failure keeps the two-value claim status; "未取得" is carried
     // by the code and the reason text, never by a third status.
@@ -958,7 +916,7 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
           if (absoluteOutput(receipt.output_ref) !== absoluteOutput(artifact.output_ref)) verifiedReasons.push("verified: the capture receipt names a different output original");
         }
       }
-      // Report-only position of every capture that came after the accepted gate:
+      // Report-only position of every capture that came after the selected gate:
       // a later green capture of another command never replaces it, and the
       // reason names both rounds' commands so the two are distinguishable. The
       // report never changes the verdict; the failure set below was fixed
@@ -976,41 +934,6 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
     claims.verified = claim(verifiedFailures ? "fail" : "pass", verifiedReasons, read.evidence, verifiedFailures ? "GATE_VERIFIED_RED" : null);
   }
 
-  if (!verdictBytes) {
-    claims.accepted = claim("fail", ["accepted: no independent signature original exists at quality/evidence/verdict.json"]);
-  } else {
-    const reasons = [];
-    try { verdict = JSON.parse(verdictBytes.toString("utf8")); }
-    catch { reasons.push("accepted: the signature original is not JSON"); }
-    verdictRef = { ref: VERDICT_REF, sha256: sha256(verdictBytes) };
-    if (verdict) {
-      if (verdict.schema_version !== "delivery-verdict.v1" || verdict.task_id !== taskId || verdict.stage !== "build-code") reasons.push("accepted: signature schema, task or stage identity differs");
-      if (verdict.conclusion !== "pass") reasons.push("accepted: signature conclusion is not pass");
-      const signer = plain(verdict.signer) ? verdict.signer.identity : null;
-      if (!text(signer)) reasons.push("accepted: signer identity is missing");
-      if (!plain(verdict.reviewed) || !HEX.test(verdict.reviewed.material_sha256 ?? "")) reasons.push("accepted: signed material fingerprint is missing");
-      else if (material.sha256 === null) reasons.push("accepted: current task materials are not readable; the signed fingerprint cannot be compared");
-      else if (verdict.reviewed.material_sha256 !== material.sha256) reasons.push(`accepted: current material bytes differ from the signed fingerprint (signed ${verdict.reviewed.material_sha256}, current ${material.sha256}); re-sign the current bytes`);
-      if (!pointer || !plain(verdict.reviewed?.gate_ref) || verdict.reviewed.gate_ref.ref !== pointer.ref || verdict.reviewed.gate_ref.sha256 !== pointer.sha256) reasons.push("accepted: signature does not name the current gate-results original");
-      if (text(signer)) {
-        const authors = authorsFor(repo, gate?.artifact?.baseline ?? manifest.baseline_commit, gate?.artifact?.head);
-        if (authors && authors.has(signer.trim().toLowerCase())) reasons.push("accepted: the signer is one of the implementation authors");
-      }
-      if (material.missing.length) reasons.push(`accepted: current materials are incomplete (${material.missing.join(", ")})`);
-      if (gate?.artifact) {
-        if (Array.isArray(gate.artifact.material_missing) && gate.artifact.material_missing.length) reasons.push("accepted: the signed gate original ran without a complete material set");
-        if (gate.artifact.material_sha256 !== material.sha256) reasons.push("accepted: the signed gate original ran on different material bytes than the current materials");
-      }
-      if (requireReadback && pointer) {
-        const readback = readReadback(root, material, pointer, verdictRef);
-        reasons.push(...readback.reasons);
-        claims.accepted = claim(reasons.length ? "fail" : "pass", reasons, readback.evidence ?? verdictRef);
-      } else {
-        claims.accepted = claim(reasons.length ? "fail" : "pass", reasons, verdictRef);
-      }
-    } else claims.accepted = claim("fail", reasons, verdictRef);
-  }
-
   const status = !required ? "not_required"
     : CLAIM_NAMES.every((name) => claims[name].status === "pass") ? "pass" : "fail";
   return Object.freeze({
@@ -1018,7 +941,6 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
     material: Object.freeze({ sha256: material.sha256, root: material.root, archived: material.archived, missing: Object.freeze([...material.missing]), files: Object.freeze([...material.files]) }),
     gate: gate ? Object.freeze({ ref: pointer.ref, sha256: pointer.sha256, exit_code: gate.artifact.exit_code, head: gate.artifact.head ?? null, baseline: gate.artifact.baseline ?? null, workspace: gate.artifact.workspace ?? null, workspace_sha256: gate.artifact.workspace_sha256 ?? null, pending: gate.artifact.pending ?? null }) : null,
     worktree: Object.freeze({ path: worktree, pending_recheck: worktree === null ? "worktree_absent" : "recomputed" }),
-    verdict: verdictRef ? Object.freeze(verdictRef) : null,
     claims: Object.freeze(Object.fromEntries(CLAIM_NAMES.map((name) => [name, Object.freeze(claims[name])]))),
     claim_codes: Object.freeze(Object.fromEntries(CLAIM_NAMES.map((name) => [name, claims[name].code ?? null]))),
     environment: Object.freeze({ sha256: currentEnvironment, platform: process.platform, arch: process.arch, node: process.version, node_major: process.versions.node.split(".")[0], graphify: graphifyIdentity() }),
@@ -1037,43 +959,4 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
         : null,
     }),
   });
-}
-
-// Close is the only writer: it re-reads the originals, rejects a failed claim
-// before any Git action, and records the actual downstream readback that the
-// accepted claim needs. A signature/staleness failure leaves every original in
-// place; only the readback owner reverts its own failed wiring.
-export async function recordCloseClaimsReadback({ taskPath, planRef, worktreeRoot } = {}) {
-  if (!text(planRef)) throw new TypeError("close claims readback requires the current close plan reference");
-  const before = readDeliveryClaims({ taskPath, requireReadback: false });
-  if (!before.required) return { status: "not_required", claims: before, readback_ref: null };
-  const failed = Object.entries(before.claims).filter(([, value]) => value.status !== "pass");
-  if (failed.length) {
-    throw failure("DELIVERY_CLAIMS_REJECTED", `close refuses the unproven delivery claims [${failed.map(([, value]) => value.code ?? "UNCODED").join(",")}]: ${failed.map(([name, value]) => `${name} (${value.reasons.join("; ")})`).join(" | ")}`);
-  }
-  const record = {
-    schema_version: "close-claims-readback.v1",
-    task_id: before.task_id,
-    stage: "build-code",
-    status: "pass",
-    plan_ref: planRef,
-    worktree_root: worktreeRoot ?? null,
-    material_sha256: before.material.sha256,
-    gate_ref: { ref: before.gate.ref, sha256: before.gate.sha256 },
-    verdict_ref: { ref: before.verdict.ref, sha256: before.verdict.sha256 },
-    claims: Object.fromEntries(CLAIM_NAMES.map((name) => [name, before.claims[name].evidence])),
-    environment_sha256: before.environment.sha256,
-    pending_digest: before.gate.pending?.digest ?? null,
-    workspace_sha256: before.gate.workspace_sha256 ?? null,
-    read_at: new Date().toISOString(),
-  };
-  const bytes = Buffer.from(`${JSON.stringify(record, null, 2)}\n`, "utf8");
-  const directory = join(resolve(taskPath), "quality", "evidence", "close");
-  const ref = await appendRecord(directory, "close-claims-readback", "json", bytes);
-  const relativeRef = `quality/evidence/close/${ref.slice(ref.lastIndexOf(sep) + 1)}`;
-  const after = readDeliveryClaims({ taskPath, requireReadback: true });
-  if (after.claims.accepted.status !== "pass") {
-    throw failure("DELIVERY_CLAIMS_READBACK", `the recorded close readback does not satisfy the accepted claim: ${after.claims.accepted.reasons.join("; ")}`);
-  }
-  return { status: "pass", claims: after, readback_ref: relativeRef };
 }

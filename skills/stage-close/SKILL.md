@@ -142,7 +142,7 @@ execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name
 
 完成：最终scope和真实答复原ref可读，归档/保留逐项实际结果可定位；拒绝或未答无对应副作用。
 
-收口执行前，`core/task-close.mjs` 从当前任务原件重读三种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹）、验证声明读同次 gate 退出 0 与捕获回执、接受声明读 `quality/evidence/verdict.json` 的独立签字人、被审材料指纹、所审 gate 引用和实际下游读回。gate 红、缺证据、签字人属于实施作者、签后材料字节变化或没有读回时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。声明通过时在同一 close 证据区写 `close-claims-readback`，记录本次实际读回的门、签字、材料指纹与计划。只读核对用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。质量签字只证明被审材料，不代 Git 授权；commit/push/merge/archive/cleanup 仍逐项按本节取得并保存真实范围答复。同一收口链路有两道步骤门与一道缺口分类门：`closeDelivery` 在写 plan 前先判声明步骤（早门，用 caller 的 delivery 分支）；`execute` 在锁内、写本次 close 动作记录前再判同一声明步骤（执行门，用已确认计划的 `target_branch`，以它为准），缺步以 `STEP_EVIDENCE_*` 拒绝并点名，不写本次 close 动作记录、不发起 Git 动作；锁内紧接着判缺口分类：`plan.gap_triage` 每条 `class` 非空且在四类闭集内，否则以 `GAP_TRIAGE_UNCLASSIFIED` 拒绝并点名 `id:class`。两道门都不拒已带类别的 `incomplete`。
+收口执行前，`core/task-close.mjs` 从当前任务原件重读两种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹），验证声明读同次 gate 退出 0 与捕获回执。gate 红、缺证据、实施字节与捕获时不一致时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。
 
 ## 7. 安全移除、分支删除与逐项读回
 
