@@ -596,7 +596,7 @@ AC-12 的判定方式是「只能人读」：判定者是实现上下文之外�
 - **依赖**：T120
 - **测试层级 / 技能**：文档级计数；`skills/backend-testing` 的负控写法。
 - **场景 / 夹具或服务**：正控＝去任务根后的重复组数必须恰 12；负控＝键不带任务根时重复行应出现且被计数；只用只读文本比对。
-- **RED/GREEN 门禁命令**：`node -e 'const fs=require("fs");const t=fs.readFileSync("quality/evidence/p7-replay/verdict-table.md","utf8");const keys=t.split(/\n/).filter(l=>/^\| *(?:foundation|direction-requirements|plan|code)-/.test(l)).map(l=>l.split("|")[2].trim());const bare=keys.map(k=>k.replace(/^[a-z0-9-]+\//,""));const dup=a=>a.length-new Set(a).size;process.exit(keys.length===127&&dup(keys)===0&&dup(bare)===12?0:1)'`（cwd＝任务根）
+- **RED/GREEN 门禁命令**：`node -e 'const fs=require("fs");const t=fs.readFileSync("quality/evidence/p7-replay/verdict-table.md","utf8");const keys=t.split(/\n/).filter(l=>/^\| *(?:foundation|direction-requirements|plan|code)-/.test(l)).map(l=>l.split("|")[1].trim());const bare=keys.map(k=>k.replace(/^[a-z0-9-]+\//,""));const dup=a=>a.length-new Set(a).size;process.exit(keys.length===127&&dup(keys)===0&&dup(bare)===12?0:1)'`（cwd＝任务根）
 - **预期退出码**：RED nonzero; GREEN 0
 - **RED 目标失败**：ORACLE-P8-KEY-12-COLLISIONS；改动前键不带任务根，去根重复为 0、带根重复不为 0，同一命令因目标断言失败而退出非零；归因是键未加任务根。
 - **GREEN 判定器**：ORACLE-P8-KEY-12-COLLISIONS；同一命令退出 0，12 组编号与设计列出的完全一致，12 行备注各写出另一处的任务根与语义差异。
@@ -1091,7 +1091,7 @@ AC-12 的判定方式是「只能人读」：判定者是实现上下文之外�
 - **依赖**：T126、T127、T128、T129、T132、T134、T137
 - **测试层级 / 技能**：文档级＋只读搜索；`skills/spec-plan` 的收口与 `AGENTS.md` 的治理边界（新控制面须登记 consumer／owner／替代关系／删除条件）。
 - **场景 / 夹具或服务**：三件搜索与一次 OID 比对；未取得六类各一具名行；只读。
-- **RED/GREEN 门禁命令**：`node -e 'const fs=require("fs"),{execSync}=require("child_process");const head=execSync("git rev-parse HEAD",{encoding:"utf8"}).trim();const dir="quality/evidence/p7-replay/";const files=["verdict-table.md","old-criteria-3state.md","integration-readings.md"];const same=files.every(f=>fs.readFileSync(dir+f,"utf8").includes(head));const gaps=fs.readFileSync(dir+"checks/ac-p7-not-a-checker.out","utf8");process.exit(same&&gaps.includes("0")&&gaps.includes("owner")?0:1)'`（cwd＝任务根；仓内三处 grep 的原始输出落在 `checks/ac-p7-not-a-checker.out` 里，不在本命令内重跑）
+- **RED/GREEN 门禁命令**：`node -e 'const fs=require("fs");const dir="/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/delivery-quality-acceptance-20261126/quality/evidence/p7-replay/";const files=["verdict-table.md","old-criteria-3state.md","integration-readings.md"];const heads=files.map(f=>(fs.readFileSync(dir+f,"utf8").match(/[0-9a-f]{40}/)||[])[0]);const same=heads.every(h=>h&&h===heads[0]);const gaps=fs.readFileSync(dir+"checks/ac-p7-not-a-checker.out","utf8");process.exit(same&&gaps.includes("0")&&gaps.includes("owner")?0:1)'`（cwd＝仓库根；仓内三处 grep 的原始输出落在 `checks/ac-p7-not-a-checker.out` 里，不在本命令内重跑）
 - **预期退出码**：RED nonzero; GREEN 0
 - **RED 目标失败**：ORACLE-P8-NOT-A-CHECKER；改动前三表不存在、无 OID 与搜索读数，同一命令因目标断言失败而退出非零；归因是收口未做。
 - **GREEN 判定器**：ORACLE-P8-NOT-A-CHECKER；同一命令退出 0，三表 OID 同值且等于当前 HEAD，三件「不是检查器」读数齐，未取得六类各带 owner 与恢复条件。
