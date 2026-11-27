@@ -13,7 +13,7 @@ import { readTaskFacts } from "../runtime/task/task-store.mjs";
 import { openTask } from "../runtime/task/task-handle.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
-import { readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
+import { deliveryCommit, readDeliveryClaims } from "../runtime/task/delivery-claims.mjs";
 import { readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
@@ -802,7 +802,14 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
       cleanupScan = inspectWorktreeCleanup(plan.worktree_root);
     }
   } catch (error) { readErrors.push(`worktree read: ${error.message}`); }
-  const facts = { delivery_committed: sourceAvailable && Boolean(commitAction || task) && (plan.source.changes.length === 0 || sourceCommit !== plan.source.head), merge: Boolean(merged), archive,
+  // The two commits are read from the same action records the claims reader
+  // uses: the source from a completed commit, the target only from a completed
+  // merge (a commit action's target_head is the pre-merge tip, not a target).
+  const commitFacts = deliveryCommit({ actions, repo: c.root });
+  const facts = { delivery_committed: sourceAvailable && Boolean(commitAction || task) && (plan.source.changes.length === 0 || sourceCommit !== plan.source.head),
+    source_commit: commitFacts.source_commit, target_commit: commitFacts.target_commit,
+    target_commit_reason: commitFacts.target_commit_reason, delivered: commitFacts.delivered,
+    merge: Boolean(merged), archive,
     push: remote.status === "available" && remote.oid === target, worktree_cleanup: plan.preserve_existing_workspace ? false : !existing,
     formal_cleanup_safe: !existing || cleanupScan?.safe === true, branch_cleanup: plan.preserve_existing_workspace ? false : task === null,
     remote_branch_cleanup: plan.preserve_existing_workspace ? false : remoteTask.status === "absent",
@@ -928,7 +935,7 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   }
   const physical = derivePhysicalDeliveryStatus({ task_id: plan.task_id, plan, facts, step_records: verifiedActions, workspace_mode: c.manifest.workspace_mode,
     ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}) });
-  // Read-only projection of the three delivery claims. Quality stays "unknown"
+  // Read-only projection of the two delivery claims. Quality stays "unknown"
   // as before; this field never becomes a close or Git permit by itself.
   let deliveryClaims;
   try { deliveryClaims = readDeliveryClaims({ taskPath: c.taskDir }); }
@@ -961,15 +968,17 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
     // delivery hint never overrides this judgement.
     await assertDeclaredStepsComplete(taskDir, { target_branch: plan.target_branch }, { recordClaim: "不写本次 close 动作记录、不发起 Git 动作" });
     assertGapTriage(plan);
-    // The current task's real claims are re-read from their originals before
-    // any Git action. A failed or missing claim rejects the close instead of
-    // publishing a success it cannot source; nothing is deleted on rejection.
-    let claimsReadback;
-    try { claimsReadback = await recordCloseClaimsReadback({ taskPath: c.taskDir, planRef, worktreeRoot: c.worktree }); }
-    catch (error) {
+    // The two delivery claims (implemented / verified) are re-read from their
+    // gate originals before any Git action. A failed or missing claim rejects
+    // the close instead of publishing a success it cannot source; nothing is
+    // deleted on rejection.
+    const claims = readDeliveryClaims({ taskPath: c.taskDir });
+    const failedClaims = Object.entries(claims.claims).filter(([, value]) => value.status !== "pass");
+    if (claims.required && failedClaims.length) {
+      const message = `close refuses the unproven delivery claims [${failedClaims.map(([, value]) => value.code ?? "UNCODED").join(",")}]: ${failedClaims.map(([name, value]) => `${name} (${value.reasons.join("; ")})`).join(" | ")}`;
       const ref = await writeEvidence(c, "close-action", { operation: "claims", status: "failed", plan_ref: planRef,
-        error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
-      return { status: "failed", operation: "claims", error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records: [],
+        error: { code: "DELIVERY_CLAIMS_REJECTED", message }, recorded_at: new Date().toISOString() });
+      return { status: "failed", operation: "claims", error: { code: "DELIVERY_CLAIMS_REJECTED", message }, failure_ref: ref, records: [],
         physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
     }
     let sourceHead = plan.source.head, targetHead = plan.target_head;
@@ -1275,7 +1284,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         return { status: "failed", operation: currentAction, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       }
     }
-    return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claimsReadback, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+    return { status: plan.mode === "planning" ? "executed" : "completed", records, delivery_claims: claims, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
   });
 }
 // The declared-step gate must read the same material root the close plan will
@@ -1317,14 +1326,23 @@ async function assertDeclaredStepsComplete(taskDir, delivery = {}, { recordClaim
   if (coverage.evaluable !== true && coverage.definition_unavailable) {
     throw failure("STEP_EVIDENCE_UNDEFINED", `收口前读不到步骤定义：${coverage.definition_unavailable.stages.join("、")}；声明步骤无法判定，${recordClaim}`);
   }
+  // The card status divergence is copied from the report the terminal chain
+  // produced; the close gate never re-judges the card itself.
+  const divergence = (() => {
+    const entries = Array.isArray(report?.ac_status?.divergence) ? report.ac_status.divergence : [];
+    if (!entries.length) return "";
+    const ids = [...new Set(entries.flatMap((entry) => Array.isArray(entry.ids) ? entry.ids : []))];
+    const named = ids.length ? ids.join("、") : entries.map((entry) => entry.code).join("、");
+    return `；卡面状态与合同原件不一致：${named}（fingerprint ${String(report?.ac_status?.fingerprint ?? "").slice(0, 12)}）`;
+  })();
   if (coverage.exit_code !== 0) {
     const missing = (coverage.declared ?? []).map(row => `${row.source}#${row.step_slug}（${row.state}）`).join("；");
     // Distinguish the two causes of a rejection: a declared-step gap names the
     // steps; the pre-existing make-decision named-evidence gap is not a declared
     // step, so it must not be reported as "declared steps: unavailable".
-    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；${recordClaim}`);
-    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；${recordClaim}`);
-    throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前步骤判定未通过（未取得具名缺步原因）；${recordClaim}`);
+    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；${recordClaim}${divergence}`);
+    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；${recordClaim}${divergence}`);
+    throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前步骤判定未通过（未取得具名缺步原因）；${recordClaim}${divergence}`);
   }
 }
 // The supplied real user reply covers the displayed action set. Record each

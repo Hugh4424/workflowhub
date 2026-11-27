@@ -40,6 +40,7 @@
       "step_id": 3,
       "step_slug": "internal-research-talk",
       "method_anchor": "3. `internal-research-talk` — 内部调研与真实问答",
+      "skill": "skills/task-breakdown/SKILL.md#breakdown-method",
       "requires_user_reply": false,
       "observable_result": "内部调研与真实问答：实际执行内部调研，按 knowledge-graph 先图后源，再用 talk-with-zhipeng 消费结论、候选与真实答复；外部仅按会改变方向的缺口。 条件：真实内部原文/结论与未决可定位，不用空skipped代替；未答不当已选。 判定消费：SKILL.md#步骤 第3步；原件：origin研究原件、Talk回复、外部未触发理由。",
       "completion_evidence": [

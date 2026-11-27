@@ -8,6 +8,8 @@ import yaml from "js-yaml";
 import { redactProviderHostPaths } from "../review/provider-material-projection.mjs";
 import { loadPortableWorkflowManifest, stateForStepResults, validateStepResults } from "./portable-workflow-run.mjs";
 import { RINGS, resolveLevel, evaluateRing, summarize, evaluateWorkflowSteps, summarizeWorkflow } from "./final-chain.mjs";
+import { acCardStatuses, applyRefVerdicts, checkEvidencePath } from "../stage/stage-content-contracts.mjs";
+import { reportReconciliation } from "./delivery-claims.mjs";
 
 const text = value => typeof value === "string" && value.trim() !== "";
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -389,8 +391,35 @@ function writeSets(spec, phases, missingPhases, phaseIndex = null) {
   // coverage/cross-check input. Without an index the body remains the fallback.
   return {specWriteSet:indexWrites?.length ? indexWrites : (declared ? [...new Set([...declared,...covered])] : phaseWriteSet),phaseWriteSet,writeSetConflict:conflict,writeSetUnknown:pointerWithoutIndex ? "Phase 指针写集缺少可读的 Execution Index 写集列；不返回空集" : null};
 }
-function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, limits, commands) {
+function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, limits, commands, taskPath = null) {
   const field = (raw,name) => raw.match(new RegExp(`^\\s*-\\s+\\*\\*${name}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,"m"))?.[1]?.trim() ?? null;
+  // Recompute the card status with the same pure function and the same task root
+  // the material check uses. Reading only the stored contract would leave a
+  // deleted reference invisible here; the fingerprint is the shared identity.
+  const archive = materialRoot.includes(`${sep}specs${sep}archive${sep}`);
+  const currentAc = (() => {
+    const phaseMap = Object.fromEntries((phases ?? []).map((phase) => [phase.ref, phase.raw ?? ""]));
+    const seed = acCardStatuses({ spec: spec ?? "", phases: phaseMap });
+    const verdicts = {};
+    for (const entry of seed.entries) for (const [index, ref] of entry.refs.entries()) {
+      if (ref.kind !== "task-relative") continue;
+      if (ref.token.endsWith("/")) { verdicts[`${entry.id}#${index}`] = { status: "unverified", reason: "directory-path" }; continue; }
+      if (!text(taskPath) || !isAbsolute(taskPath)) { verdicts[`${entry.id}#${index}`] = { status: "unresolved", reason: "no-task-record-root" }; continue; }
+      const checkedRef = checkEvidencePath(ref.token, [], taskPath);
+      verdicts[`${entry.id}#${index}`] = { status: checkedRef.status, ...(checkedRef.reason ? { reason: checkedRef.reason } : {}) };
+    }
+    return applyRefVerdicts(seed, verdicts);
+  })();
+  const currentAcReport = { fingerprint: currentAc.fingerprint, counts: currentAc.counts, conflicts: currentAc.conflicts, clean_pass: currentAc.clean_pass, pass_without_ref: currentAc.pass_without_ref };
+  const currentMaterialUnclean = (currentAc.conflicts ?? []).length > 0 || currentAc.clean_pass < currentAc.counts.pass;
+  // Even when the stored contract original cannot be verified, the recomputed
+  // status is reported, and a non-archive material whose card is unclean is a
+  // divergence the caller sees. Archive material still only reports it.
+  const baseAcStatus = { ...currentAcReport, original: "unknown", divergence: currentMaterialUnclean ? [{ code: "material_unclean", ids: [...new Set([...(currentAc.pass_without_ref ?? []), ...(currentAc.conflicts ?? []).map((item) => item.id)])] }] : [] };
+  const baseReport = reportReconciliation({ taskPath: taskPath ?? "", acStatus: currentAc });
+  // Archived material records the divergence as one information line only; it
+  // never changes the applicability or the exit code of historical material.
+  if (archive && currentMaterialUnclean) limits.push(`归档材料的卡面状态分歧只报事实（material_unclean，fingerprint ${currentAc.fingerprint.slice(0, 12)}，未覆盖判据 ${currentAc.pass_without_ref.length} 条/冲突 ${currentAc.conflicts.length} 条）；历史材料不新增门`);
   const same = (left,right) => Array.isArray(left) && Array.isArray(right) && [...left].sort().join("\0") === [...right].sort().join("\0");
   const refs = facts.flatMap(row=>{const first=typeof row.source === "string" ? row.source.split(";")[0].trim() : "";return /^quality\/evidence\/[^\n]+\.json$/.test(first) ? [first] : [];});
   const candidates=[...refs.map(ref=>({ref})),...commands.filter(command=>command.command.includes("validatePostPhaseContract")).map(native=>({ref:native.ref,native}))];
@@ -398,23 +427,33 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
   for (const {ref,native} of candidates) {
     if (native && unknown) return unknown;
     const source = read(ref);
-    if (!source.verified) { unknown={unavailable:true,readable:false}; continue; }
+    if (!source.verified) { unknown={unavailable:true,readable:false,ac_status:baseAcStatus,report:baseReport}; continue; }
     let original;
-    try { original=native ? {command:native.command,exit_code:native.exit_code,contract:JSON.parse(native.output)} : JSON.parse(source.raw); } catch { limits.push(`${ref}: checker actual result body unavailable`); unknown={unavailable:true,readable:false}; continue; }
+    try { original=native ? {command:native.command,exit_code:native.exit_code,contract:JSON.parse(native.output)} : JSON.parse(source.raw); } catch { limits.push(`${ref}: checker actual result body unavailable`); unknown={unavailable:true,readable:false,ac_status:baseAcStatus,report:baseReport}; continue; }
     if (!text(original.command) || !original.command.includes("validatePostPhaseContract")) continue;
     const body=original.contract, checked=body?.facts;
     const words=native ? native.receipt.argv : original.command.match(/(?:"[^"]*"|'[^']*'|\S+)/g)?.map(value=>value.replace(/^['"]|['"]$/g,"")) ?? [];
-    if (!words.includes(materialRoot) || !object(body) || typeof body.ok !== "boolean" || !Array.isArray(body.errors) || !checked || !Array.isArray(checked.phase_rows) || !Number.isInteger(checked.phase_count) || checked.phase_count <= 0 || !Number.isInteger(checked.task_count) || checked.task_count <= 0) { limits.push(`${ref}: current material root/scanned contract body or input scope unavailable`); unknown={unavailable:true,readable:false}; continue; }
+    if (!words.includes(materialRoot) || !object(body) || typeof body.ok !== "boolean" || !Array.isArray(body.errors) || !checked || !Array.isArray(checked.phase_rows) || !Number.isInteger(checked.phase_count) || checked.phase_count <= 0 || !Number.isInteger(checked.task_count) || checked.task_count <= 0) { limits.push(`${ref}: current material root/scanned contract body or input scope unavailable`); unknown={unavailable:true,readable:false,ac_status:baseAcStatus,report:baseReport}; continue; }
     const row=facts.find(row=>String(row.source??"").split(";")[0].trim() === ref);
     const producerRefs=[...receiptPointers(row?.source),...(row?.evidence?.value??[]).map(entry=>entry.receipt_ref??entry.ref).filter(text)];
     const producer=native ?? commands.find(command=>producerRefs.includes(command.ref) && command.verified && argvMatches(original.command,command.receipt.argv) && command.receipt.argv.includes(materialRoot) && command.exit_code === original.exit_code);
     let actual;
     try { actual=producer ? JSON.parse(producer.output) : null; } catch { actual=null; }
-    if (!producer?.verified || !producer.receipt.argv.includes(materialRoot) || !actual || actual.ok !== body.ok || JSON.stringify(actual.errors) !== JSON.stringify(body.errors) || JSON.stringify(actual.facts) !== JSON.stringify(body.facts)) { limits.push(`${ref}: 普通或native合同结果未绑定实际checker command/input/exit及原结果，执行来源或结果冲突未取得`); unknown={unavailable:true,readable:false}; continue; }
-    if (body.ok === false && body.errors.length) return {...fileEvidence(ref,source.raw),command:producer.command,exit_code:producer.exit_code,contract_ok:false,contract:body,scan_count:checked.phase_count,basis:[fileEvidence(ref,source.raw),producer],note:"已核实际checker失败；advisory exit不覆盖错误结果"};
+    if (!producer?.verified || !producer.receipt.argv.includes(materialRoot) || !actual || actual.ok !== body.ok || JSON.stringify(actual.errors) !== JSON.stringify(body.errors) || JSON.stringify(actual.facts) !== JSON.stringify(body.facts)) { limits.push(`${ref}: 普通或native合同结果未绑定实际checker command/input/exit及原结果，执行来源或结果冲突未取得`); unknown={unavailable:true,readable:false,ac_status:baseAcStatus,report:baseReport}; continue; }
+    if (body.ok === false && body.errors.length) return {...fileEvidence(ref,source.raw),command:producer.command,exit_code:producer.exit_code,contract_ok:false,contract:body,scan_count:checked.phase_count,basis:[fileEvidence(ref,source.raw),producer],note:"已核实际checker失败；advisory exit不覆盖错误结果",ac_status:{...baseAcStatus},report:baseReport};
     const expectedFrs=[...new Set([...String(spec??"").matchAll(/^-\s+\*\*(FR-[A-Z0-9-]+)\*\*/gm)].map(match=>match[1]))];
     const expectedAcs=[...new Set([...String(spec??"").matchAll(/^-\s+(?:\[[ xX]\]\s+)?\*\*(AC-[A-Z0-9-]+)/gm)].map(match=>match[1]))];
-    let applicable=checked.phase_count === phases.length && same(checked.fr_coverage?.accepted_ids,expectedFrs) && same(checked.ac_coverage?.accepted_ids,expectedAcs);
+    const originalFingerprint = typeof checked.ac_status?.fingerprint === "string" ? checked.ac_status.fingerprint : null;
+    const originalState = originalFingerprint === null ? "unknown" : (originalFingerprint === currentAc.fingerprint ? "matched" : "differ");
+    const originalDiffer = originalState === "differ";
+    const materialUnclean = (currentAc.conflicts ?? []).length > 0 || currentAc.clean_pass < currentAc.counts.pass;
+    const divergence = [];
+    if (originalDiffer) divergence.push({ code: "original_differ", ids: [...(currentAc.pass_without_ref ?? [])] });
+    if (materialUnclean) divergence.push({ code: "material_unclean", ids: [...new Set([...(currentAc.pass_without_ref ?? []), ...(currentAc.conflicts ?? []).map((item) => item.id)])] });
+    // Archived material keeps the P5 conclusion byte for byte; any other material
+    // that disagrees with its stored contract or carries an unclean card fails.
+    const AC_STATUS_OK = archive ? true : !originalDiffer && !materialUnclean;
+    let applicable=checked.phase_count === phases.length && same(checked.fr_coverage?.accepted_ids,expectedFrs) && same(checked.ac_coverage?.accepted_ids,expectedAcs) && (checked.evidence_paths?.missing_count ?? 0) === 0 && (checked.evidence_paths?.unverified_count ?? 0) === 0 && AC_STATUS_OK;
     for (const record of checked.phase_rows) {
       const current=phases.find(phase=>phase.ref === record.path);
       if (!current) {applicable=false;continue;}
@@ -428,10 +467,19 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
       if (dependency !== record.dependency || !same(writes,record.write_set) || field(raw,"gate_cmd") !== record.command || field(raw,"oracle") !== record.oracle || !same(taskIds,record.task_ids)) applicable=false;
       if ([...String(dependency??"").matchAll(/\bP\d+\b/g)].some(match=>!phases.some(phase=>phase.ref.match(/\/P\d+/)?.[0].slice(1) === match[0]))) applicable=false;
     }
-    if (!applicable || !text(phaseIndex)) { limits.push(`${ref}: 受检FR/AC/Phase/task/dependency/command-oracle结构或范围已变化，原适用结论未取得`); unknown={unavailable:true,readable:false}; continue; }
-    return {...fileEvidence(ref,source.raw),command:producer.command,exit_code:producer.exit_code,contract_ok:original.exit_code === 0 && body.ok === true && body.errors.length === 0,contract:body,scan_count:checked.phase_count,basis:[fileEvidence(ref,source.raw),producer],note:"仅声明级合同及已核结构锚；无关prose/whole-file hash不作新鲜度门"};
+    if (!applicable || !text(phaseIndex)) {
+      const evidenceMissing = checked.evidence_paths?.missing_count ?? 0;
+      const evidenceUnverified = checked.evidence_paths?.unverified_count ?? 0;
+      limits.push(`${ref}: ${evidenceMissing || evidenceUnverified
+        ? `合同原件的证据路径：缺 ${evidenceMissing} 份、未验证 ${evidenceUnverified} 份，原适用结论未取得`
+        : "受检FR/AC/Phase/task/dependency/command-oracle结构或范围已变化，原适用结论未取得"}`);
+      unknown={unavailable:true,readable:false,ac_status:baseAcStatus,report:baseReport}; continue;
+    }
+    return {...fileEvidence(ref,source.raw),command:producer.command,exit_code:producer.exit_code,contract_ok:original.exit_code === 0 && body.ok === true && body.errors.length === 0,contract:body,scan_count:checked.phase_count,basis:[fileEvidence(ref,source.raw),producer],note:"仅声明级合同及已核结构锚；无关prose/whole-file hash不作新鲜度门",ac_status:{...currentAcReport, original:originalState, divergence},report:baseReport};
   }
-  return unknown;
+  // No candidate at all is still an unavailable contract original, but the
+  // recomputed card status is reported so a caller never loses it.
+  return unknown ?? {unavailable:true,readable:false,ac_status:baseAcStatus,report:baseReport};
 }
 function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots, taskPath) {
   const packageRoot=resolve(dirname(fileURLToPath(import.meta.url)),"../.."),checkerRelative="tools/cli/check-decision-log-chain.mjs";
@@ -1035,6 +1083,33 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const missingPhases = phaseRefs.filter(ref=>!phases.some(phase=>phase.ref === ref));
   const sets = writeSets(spec ?? "",phases,missingPhases,phaseIndex);
   if (sets.writeSetUnknown) limits.push(`环 6 ${sets.writeSetUnknown}`);
+  // 执行清单缺件与份数差只写未取得项列表（limits）；环、completion 与
+  // chain_state 一律不动（缺件不降档）。只在任务已进入 build-code 时判。
+  const buildCodeReached = facts.some(row=>row.record_kind === "stage" && row.stage === "build-code");
+  if (buildCodeReached) {
+    if (phaseRefs.length === 0) {
+      limits.push("执行清单份数未取得：phases/index.md 缺可读的 Phase 引用");
+    } else {
+      const checklistDir = join(taskPath,"quality","evidence","build-code");
+      let present = null;
+      try { present = readdirSync(checklistDir); }
+      catch (error) { if (error.code !== "ENOENT") limits.push(`执行清单份数未取得：${checklistDir} 不可读（${error.code ?? error.message}）`); }
+      if (present === null) {
+        limits.push(`执行清单份数未取得：${checklistDir} 不存在`);
+      } else {
+        const expected = new Set(phaseRefs.map(ref=>"p" + ref.match(/\/P(\d+)/)[1]));
+        const actual = new Set(present.map(name=>/^execution-checklist-(p\d+)\.md$/i.exec(name)?.[1]?.toLowerCase()).filter(Boolean));
+        const order = id=>Number(id.slice(1));
+        const missing = [...expected].filter(id=>!actual.has(id)).sort((a,b)=>order(a)-order(b));
+        const extra = [...actual].filter(id=>!expected.has(id)).sort((a,b)=>order(a)-order(b));
+        if (missing.length > 0) {
+          limits.push(`执行清单份数：期望 ${expected.size} 份、实有 ${actual.size} 份、缺 ${missing.length} 份（未解释）`);
+          for (const id of missing) limits.push(`执行清单缺 P${id.slice(1)}`);
+        }
+        for (const id of extra) limits.push(`执行清单多出 P${id.slice(1)}（未解释）`);
+      }
+    }
+  }
   if (diff) {
     diff.phase_write_set = sets.phaseWriteSet;
     diff.spec_write_set = sets.specWriteSet;
@@ -1048,7 +1123,7 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const exactRaw = exactRawSource(taskPath,manifest,materialRoot,repo,spec,decisionLog,limits);
   const rawEvidence = exactRaw ? [exactRaw.evidence].filter(item=>item.verified) : rawRefs.map(({root,ref})=>fileEvidence(ref,optional(root,ref,limits))).filter(item=>item.verified);
   const decisionCheck = decisionOriginal(actualCommands,materialRoot,decisionLog,limits,[materialRepo,manifest.target_repo_root],taskPath);
-  const ordinaryContract = contractOriginal(facts,read,materialRoot,spec,phaseIndex,phases,limits,actualCommands);
+  const ordinaryContract = contractOriginal(facts,read,materialRoot,spec,phaseIndex,phases,limits,actualCommands,taskPath);
   const review = currentReview(facts,taskPath,materialRoot,taskId,level,changed,limits,phaseRefs.map(ref=>ref.match(/\/P(\d+)/)?.[1]).filter(Boolean).map(id=>`P${id}`),phases,repo);
   const explicitResearchRefs = decisionLog.split("\n").filter(line=>/研究|调研|research/i.test(line)).flatMap(line=>[...line.matchAll(/`([^`\n]+\.md)`/g)].map(match=>plainRef(match[1]))).filter(ref=>ref.startsWith("quality/evidence/") || isAbsolute(ref) && inside(taskPath,ref));
   const researchRefs = [...new Set(explicitResearchRefs)];
@@ -1089,5 +1164,5 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const mergeDeclared = facts.some(row=>row.record_kind === "close_action" && row.close_action?.action === "merge" && text(row.close_action.result));
   if (specsAt > 0) limits.push(mergeDeclared ? "已记录任务 merge 事实；已合并主仓的 baseline..HEAD 可能含后续提交，只按任务相关路径读回；此视野限制不缩减 outside 清单。" : "baseline..HEAD 是当前材料仓库视野，可能含后续变化；未取得任务合并事实，不据路径推断历史交付。");
   const workflow = workflowReport(definitionRoot,taskPath,materialRoot,level,facts,actualCommands,read,limits);
-  return {schema_version:"1.0.0",task_id:taskId,baseline_commit:manifest.baseline_commit ?? null,material_root:materialRoot,level,rings:results,...summarize(results),limits:[...new Set(limits)],chain_state:chain.state,...workflow};
+  return {schema_version:"1.0.0",task_id:taskId,baseline_commit:manifest.baseline_commit ?? null,material_root:materialRoot,level,rings:results,...summarize(results),limits:[...new Set(limits)],chain_state:chain.state,ac_status:ordinaryContract?.ac_status ?? null,report:ordinaryContract?.report ?? null,...workflow};
 }

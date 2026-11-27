@@ -14,7 +14,7 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessMode, readinessProbeArgv, materialFingerprint, readinessFingerprint } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps, phaseReadinessRows, readinessMode, readinessProbeArgv, materialFingerprint, readinessFingerprint, checkEvidencePath } from "../../runtime/stage/stage-content-contracts.mjs";
 import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex, isPhaseMaterialFile } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
@@ -1662,6 +1662,28 @@ function terminalAssessmentQuality(context, row) {
     const values=list(value,label);requireFact(values.length>0,`${label}: no original evidence`);
     return values.map(ref=>{try{return {ref,raw:read(ref)};}catch(error){if(error.code==="ENOENT"){gaps.push(`${label}: missing ${ref?.ref}`);return {ref,raw:null};}throw error;}});
   };
+  // The acceptance-record face of the one evidence reader. It keeps the same
+  // shape checks and gap wording as readRefs; only the existence/run-binding
+  // decision moves to the shared export. verified refs still load their bytes.
+  const classifyEntryRefs = (entry) => {
+    const label=`acceptance ${entry?.id}`;
+    const values=list(entry?.refs,label);requireFact(values.length>0,`${label}: no original evidence`);
+    const sources=[];
+    for(const ref of values){
+      if(!reference(ref))throw new TypeError("invalid terminal evidence reference");
+      const checked=checkEvidencePath(ref.ref,[],context.task.taskPath,{declared_sha256:ref.sha256});
+      if(checked.status==="verified"){
+        const bytes=context.task.readRecordBytes(ref.ref);
+        if(sha256(bytes)!==ref.sha256){gaps.push(`${label}: content-mismatch: 二次读取 ${ref.ref} 的字节与 ref.sha256 不符`);continue;}
+        refs.push(ref);
+        sources.push({ref,raw:bytes.toString("utf8")});
+        continue;
+      }
+      if(checked.status==="missing"){gaps.push(`${label}: missing ${ref.ref}`);continue;}
+      gaps.push(`${label}: ${checked.reason}`);
+    }
+    return sources;
+  };
   let terminalReaderBound=false,terminalReaderDispatch=null;
   const independent = (reader,label,proofRef=null,findingId=null,boundary=null) => {
     if (!plain(reader)||typeof reader.identity!=="string"||!reader.identity.trim()||!reader.source_ref) {gaps.push(`${label}: missing independently bound reader`);return false;}
@@ -1869,7 +1891,7 @@ function terminalAssessmentQuality(context, row) {
     requireFact(entries.filter(v=>v?.id===entry?.id).length===1,`acceptance ${entry?.id}: duplicated original`);
     requireFact(typeof entry?.current_applicability?.basis==="string"&&entry.current_applicability.basis.trim().length>0,`acceptance ${entry?.id}: current applicability not independently explained`);
     readRefs(entry?.current_applicability?.refs,`acceptance ${entry?.id} current applicability`);
-    const sources=readRefs(entry?.refs,`acceptance ${entry?.id}`);
+    const sources=classifyEntryRefs(entry);
     const verdicts=[];
     for(const {ref,raw} of sources){
       if(!requireFact(ref.ref!==a.final_report?.ref&&ref.sha256!==a.final_report?.sha256,`acceptance ${entry.id}: final report cannot be its own upstream verdict`))continue;

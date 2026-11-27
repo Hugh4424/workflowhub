@@ -40,6 +40,7 @@
       "step_id": 3,
       "step_slug": "research",
       "method_anchor": "3. `research` — 方向调研",
+      "skill": "skills/task-breakdown/SKILL.md#breakdown-method",
       "requires_user_reply": false,
       "observable_result": "方向调研：按真实方向未知执行内部先图后源及有界外部调研，候选、取舍、依据与实际未解项可读。 条件：Talk消费唯一canonical报告；无具体外部缺口时写理由，跳过是不调用，不空跑。 判定消费：SKILL.md#步骤 第3步；原件：研究origin/原件、候选、跳过依据。",
       "completion_evidence": [

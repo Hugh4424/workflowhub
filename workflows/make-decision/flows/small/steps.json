@@ -40,6 +40,7 @@
       "step_id": 3,
       "step_slug": "bounded-research",
       "method_anchor": "3. `bounded-research` — 有界调研",
+      "skill": "skills/task-breakdown/SKILL.md#breakdown-method",
       "requires_user_reply": false,
       "observable_result": "有界调研：会改变方向的具体未知有原文来源与结论；没有未知写具名跳过理由。 条件：相关未知已查或明确缺口；跳过是不调用研究，不写空报告。 判定消费：SKILL.md#步骤 第3步；原件：研究原件或具名未触发事实。",
       "completion_evidence": [

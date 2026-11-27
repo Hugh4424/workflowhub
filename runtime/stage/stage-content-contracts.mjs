@@ -259,13 +259,32 @@ function readableEvidenceRoots(roots) {
   });
 }
 
+const DECLARED_SHA256 = /^(.*?)\s+@sha256=([0-9a-f]{64})$/i;
+
+// A declaration span is either a bare path or `<path> @sha256=<64hex>`. The
+// anchor is optional: an unanchored path is still a path, but it can only ever
+// be `unverified/no-run-binding` (same name, not necessarily this run).
 function declaredEvidencePaths(value) {
   const text = String(value ?? "").trim();
   const spans = inlinePaths(text);
   const candidates = spans.length > 0 ? spans : [text.replace(/[（(][\s\S]*$/, "").trim()];
-  return [...new Set(candidates
-    .map((token) => token.replace(/^\s*(?:`+\s*)?planned\s*[:：]\s*/i, "").trim())
-    .filter((token) => token !== "" && !/\s/.test(token) && /[/\\.]/.test(token)))];
+  const parsed = [];
+  for (const candidate of candidates) {
+    const stripped = candidate.replace(/^\s*(?:`+\s*)?planned\s*[:：]\s*/i, "").trim();
+    if (stripped === "") continue;
+    const anchored = DECLARED_SHA256.exec(stripped);
+    const token = anchored ? anchored[1].trim() : stripped;
+    if (token === "" || /\s/.test(token) || !/[/\\.]/.test(token)) continue;
+    parsed.push(Object.freeze({ path: token, declared_sha256: anchored ? anchored[2].toLowerCase() : null }));
+  }
+  const seen = new Set(), unique = [];
+  for (const item of parsed) {
+    const key = `${item.path}\0${item.declared_sha256 ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique;
 }
 
 function taskEvidenceRoot(token, taskRecordRoot) {
@@ -276,30 +295,65 @@ function taskEvidenceRoot(token, taskRecordRoot) {
   catch { return null; }
 }
 
-function checkEvidencePath(token, roots, taskRecordRoot) {
-  if (isAbsolute(token)) {
-    try {
-      return statSync(token).isFile()
-        ? Object.freeze({ status: "verified", resolved: token })
-        : Object.freeze({ status: "missing", reason: "not a regular file" });
-    } catch (error) {
-      return Object.freeze({ status: "missing", reason: error.code ?? error.message });
-    }
+const unverified = (reason) => Object.freeze({ status: "unverified", reason });
+
+// A declaration is "this run" only when at least one anchor (declared @sha256 or
+// a task facts quality_evidence sha256) matches the bytes read now. The four
+// status names are fixed; the diagnostic subclass is the first reason word.
+function anchoredCheck(token, resolved, bytes, resolutionSource, binding) {
+  const declared = typeof binding?.declared_sha256 === "string" && binding.declared_sha256.trim() !== ""
+    ? binding.declared_sha256.toLowerCase() : null;
+  const facts = Array.isArray(binding?.facts_sha256)
+    ? binding.facts_sha256.filter((value) => typeof value === "string" && value.trim() !== "").map((value) => value.toLowerCase())
+    : [];
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (declared === null && facts.length === 0) {
+    return unverified("no-run-binding: 声明与任务记录都没有本次字节指纹");
   }
-  for (const root of roots) {
+  if ((declared !== null && declared === actual) || facts.includes(actual)) {
+    return Object.freeze({ status: "verified", resolved, ...(resolutionSource ? { resolution_source: resolutionSource } : {}) });
+  }
+  const expected = declared ?? facts[0] ?? "";
+  return unverified(`content-mismatch: 声明 ${expected.slice(0, 8)}… 实际 ${actual.slice(0, 8)}…`);
+}
+
+export function checkEvidencePath(token, roots, taskRecordRoot, binding = Object.freeze({})) {
+  if (plannedEvidence(token)) return Object.freeze({ status: "planned", reason: "declared planned" });
+  if (/[{*?}]/.test(token)) return unverified(`not-single-path: ${token} 不是单一可打开路径`);
+  if (isAbsolute(token)) {
+    let stats;
+    try { stats = statSync(token); }
+    catch (error) { return Object.freeze({ status: "missing", reason: error.code ?? error.message }); }
+    if (!stats.isFile()) return Object.freeze({ status: "missing", reason: "not a regular file" });
+    let bytes;
+    try { bytes = readFileSync(token); }
+    catch (error) { return unverified(`unreadable: ${error.code ?? error.message}`); }
+    return anchoredCheck(token, token, bytes, null, binding);
+  }
+  for (const root of Array.isArray(roots) ? roots : []) {
     const candidate = resolve(root, token);
-    try {
-      if (statSync(candidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate });
-    } catch { /* keep searching the remaining declared roots */ }
+    let stats;
+    try { stats = statSync(candidate); }
+    catch { continue; /* ENOENT, ENOTDIR, broken links: keep scanning the remaining roots */ }
+    if (!stats.isFile()) continue; /* a directory or device in one root never hides a later root's file */
+    let bytes;
+    try { bytes = readFileSync(candidate); }
+    catch (error) { return unverified(`unreadable: ${error.code ?? error.message}`); }
+    return anchoredCheck(candidate, candidate, bytes, null, binding);
   }
   const taskRoot = taskEvidenceRoot(token, taskRecordRoot);
-  if (taskRoot && !roots.includes(taskRoot)) {
+  if (taskRoot && !(Array.isArray(roots) && roots.includes(taskRoot))) {
     const candidate = resolve(taskRoot, token);
     try {
       const realRoot = realpathSync(taskRoot), realCandidate = realpathSync(candidate);
       const rel = relative(realRoot, realCandidate);
       const contained = rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-      if (contained && statSync(realCandidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate, resolution_source: "task_root" });
+      if (contained && statSync(realCandidate).isFile()) {
+        let bytes;
+        try { bytes = readFileSync(realCandidate); }
+        catch (error) { return unverified(`unreadable: ${error.code ?? error.message}`); }
+        return anchoredCheck(candidate, candidate, bytes, "task_root", binding);
+      }
     } catch { /* Keep the original missing evidence result, including escaping links. */ }
   }
   return Object.freeze({ status: "missing", reason: "not found under any declared root" });
@@ -895,6 +949,244 @@ function legacyProbeTargetChanges(probe, cwd) {
   return changes;
 }
 
+// --- Acceptance criterion slot status: parsed once, read by three faces ------
+// A Phase card states each accepted criterion's status in one slot. Five
+// historical shapes exist, and a reader that scans the whole line for a status
+// word (or uses a loose id regex) miscounts 78 criteria as 80 and turns prose
+// negatives into conflicts. `acCardStatuses` is the only card-text reader;
+// `applyRefVerdicts` is the only place evidence existence becomes `clean`.
+const ACCEPTANCE_STATUS_WORDS = Object.freeze(["pass", "fail", "incomplete", "partial", "inconclusive", "deferred", "missing", "unavailable", "inconsistent"]);
+const ACCEPTANCE_STATUS_SET = new Set(ACCEPTANCE_STATUS_WORDS);
+// Worst-first ranking. `AC-P9-005` writes two grades in one cell and the card
+// convention is "take the worst"; `fail`/`missing` outrank `unavailable`
+// because they already name a lost result.
+const ACCEPTANCE_STATUS_RANK = Object.freeze({ pass: 0, deferred: 1, incomplete: 2, inconclusive: 3, partial: 4, inconsistent: 5, unavailable: 6, fail: 7, missing: 7 });
+const ACCEPTANCE_SLOT_SHAPES = Object.freeze([
+  Object.freeze({ shape: "bold-bullet", pattern: new RegExp(String.raw`^-\s+\*\*(${ACCEPTANCE_CRITERION_SOURCE})\*\*\s*[:：]`) }),
+  Object.freeze({ shape: "table-row", pattern: new RegExp(String.raw`^\|\s*(${ACCEPTANCE_CRITERION_SOURCE})\s*\|\s*([^|]*)\|`) }),
+  Object.freeze({ shape: "indented-bullet", pattern: new RegExp(String.raw`^\s+- (${ACCEPTANCE_CRITERION_SOURCE})\s*[:：]`) }),
+  Object.freeze({ shape: "bullet", pattern: new RegExp(String.raw`^- (${ACCEPTANCE_CRITERION_SOURCE})\s*[:：]`) }),
+  Object.freeze({ shape: "bare-line", pattern: new RegExp(String.raw`^\s{2,}(${ACCEPTANCE_CRITERION_SOURCE})\s*[:：]`) }),
+]);
+const ACCEPTANCE_REF_PREFIX = /^(?:quality|skills|tools|tests|specs|docs|runtime|core|workflows)\//;
+const ACCEPTANCE_REF_SUFFIX = /(?:^|\/)[A-Za-z0-9._-]+\.(?:json|output|md|mjs|txt|csv|jsonl|patch|sha256|log|ya?ml|png)$/;
+
+function declaredAcceptanceCriterionIds(spec) {
+  return [...new Set([...String(spec ?? "").matchAll(new RegExp(String.raw`^-\s+(?:\[[ xX]\]\s+)?\*\*(${ACCEPTANCE_CRITERION_SOURCE})\b`, "gm"))].map((match) => match[1]))];
+}
+
+function acceptanceWorst(values) {
+  let worst = null;
+  for (const value of values) {
+    if (!ACCEPTANCE_STATUS_SET.has(value)) continue;
+    if (worst === null || ACCEPTANCE_STATUS_RANK[value] > ACCEPTANCE_STATUS_RANK[worst]) worst = value;
+  }
+  return worst;
+}
+
+// One slot value -> the grades it states. Only the first word after the colon
+// (or after an explicit ①② marker) is a grade; prose later on the line is not.
+function acceptanceSlotGrades(value) {
+  const cleaned = String(value ?? "").replace(/[`*]/g, "").trim();
+  const marked = [...cleaned.matchAll(/[①②③④⑤⑥]\s*([A-Za-z]+)/g)].map((match) => match[1].toLowerCase());
+  if (marked.length >= 1) {
+    const grades = [];
+    for (const grade of marked) { if (ACCEPTANCE_STATUS_SET.has(grade) && !grades.includes(grade)) grades.push(grade); }
+    if (grades.length) return { grades, word: null };
+  }
+  const word = /^([A-Za-z]+)/.exec(cleaned)?.[1]?.toLowerCase() ?? null;
+  return { grades: word && ACCEPTANCE_STATUS_SET.has(word) ? [word] : [], word };
+}
+
+function acceptanceSubitems(value) {
+  const cleaned = String(value ?? "").replace(/[`*]/g, "");
+  const items = [];
+  for (const match of cleaned.matchAll(/[（(]\s*子项\s*([^（）()]*)\s*[）)]/g)) {
+    for (const word of match[1].split(/[、,，/;\s]+/)) for (const token of word.matchAll(/[A-Za-z]+/g)) {
+      const valueWord = token[0].toLowerCase();
+      if (ACCEPTANCE_STATUS_SET.has(valueWord) && !items.includes(valueWord)) items.push(valueWord);
+    }
+  }
+  return items;
+}
+
+// Backticked tokens on the criterion's own slot line. A path token is either a
+// known repository prefix or a typed file; a 3-4 digit token is a receipt
+// number. Anything else (a status word, a bare sha, `x:12`) is prose, not a
+// reference, so "no reference" stays a real fact rather than a scan artifact.
+function acceptanceRefKind(token) {
+  const value = String(token ?? "").trim();
+  if (value === "") return null;
+  if (/^\d{3,4}$/.test(value)) return "receipt-number";
+  if (/[{*}?]/.test(value)) return "ambiguous-path";
+  // A directory is not a single original: its existence can never be judged as
+  // a missing file.
+  if (value.endsWith("/")) return "directory-path";
+  // A `path:line` citation (`ocr-delegation-route.test.mjs:846`) names a place in
+  // prose, not a declared original; only a whole-token path is a reference.
+  if (ACCEPTANCE_REF_PREFIX.test(value) || ACCEPTANCE_REF_SUFFIX.test(value) || value.includes("/")) return "path";
+  return null;
+}
+
+function acceptanceRefs(line) {
+  const refs = [];
+  for (const match of String(line ?? "").matchAll(/`([^`\n]+)`/g)) {
+    const token = match[1].trim();
+    const kind = acceptanceRefKind(token);
+    if (kind === null) continue;
+    const ref = { token, kind: kind === "path" && token.startsWith("quality/") ? "task-relative" : kind };
+    if (!refs.some((item) => item.token === token)) refs.push(Object.freeze(ref));
+  }
+  return refs;
+}
+
+function acceptanceSlotSources(spec, phases) {
+  const slots = new Map();
+  for (const [ref, body] of Object.entries(phases ?? {})) {
+    if (typeof body !== "string") continue;
+    for (const [index, line] of body.split(/\r?\n/).entries()) {
+      for (const { shape, pattern } of ACCEPTANCE_SLOT_SHAPES) {
+        const match = pattern.exec(line);
+        if (!match) continue;
+        const id = match[1];
+        const value = match[2] ?? line.slice(match[0].length);
+        const list = slots.get(id) ?? [];
+        list.push(Object.freeze({ path: ref, line: index + 1, shape, value, refs: acceptanceRefs(line) }));
+        slots.set(id, list);
+        break;
+      }
+    }
+  }
+  return { slots, declared: declaredAcceptanceCriterionIds(spec) };
+}
+
+export function acCardStatuses({ spec = "", phases = {} } = {}) {
+  const { slots, declared } = acceptanceSlotSources(spec, phases);
+  const declaredSet = new Set(declared);
+  const entries = [], conflicts = [], variants = [], unparsed = [];
+  for (const id of declared) {
+    const sources = slots.get(id) ?? [];
+    if (sources.length === 0) { unparsed.push(Object.freeze({ id, reason: "no-slot-on-any-card" })); continue; }
+    const grades = [], subitems = [];
+    for (const source of sources) {
+      const parsed = acceptanceSlotGrades(source.value);
+      if (!parsed.grades.length) unparsed.push(Object.freeze({ id, path: source.path, line: source.line, reason: "unparsed-grade", word: parsed.word }));
+      for (const grade of parsed.grades) if (!grades.includes(grade)) grades.push(grade);
+      for (const item of acceptanceSubitems(source.value)) if (!subitems.includes(item)) subitems.push(item);
+    }
+    // Same value written twice in different shapes is one fact, not a conflict.
+    const distinct = [...new Set(grades)];
+    let status = acceptanceWorst(distinct);
+    if (status === null) continue;
+    const crossShape = distinct.length > 1;
+    const sameSourceVariants = sources.some((source) => acceptanceSlotGrades(source.value).grades.length > 1);
+    if (sameSourceVariants) variants.push(Object.freeze({ id, values: Object.freeze([...distinct]), status }));
+    if (crossShape && !sameSourceVariants) {
+      status = "inconsistent";
+      conflicts.push(Object.freeze({
+        id,
+        sources: Object.freeze(sources.map((source) => Object.freeze({
+          path: source.path, line: source.line, shape: source.shape, raw_status: acceptanceSlotGrades(source.value).grades[0] ?? null,
+        }))),
+      }));
+    }
+    if (subitems.some((item) => item !== "pass" && item !== "verified")) status = acceptanceWorst([status, "incomplete"]);
+    const refs = [];
+    for (const source of sources) for (const ref of source.refs) if (!refs.some((item) => item.token === ref.token)) refs.push(ref);
+    entries.push(Object.freeze({
+      id,
+      status,
+      variants: Object.freeze([...distinct]),
+      subitems: Object.freeze([...subitems]),
+      clean: refs.length > 0,
+      refs: Object.freeze(refs.map((ref) => Object.freeze({ ...ref }))),
+      sources: Object.freeze(sources.map((source) => Object.freeze({ path: source.path, line: source.line, shape: source.shape, raw_status: acceptanceSlotGrades(source.value).grades[0] ?? null }))),
+    }));
+  }
+  // Every verdict word the slot parser accepts has a key here; a legal `fail` /
+  // `missing` / `deferred` must never be dropped from the total.
+  const counts = Object.fromEntries(ACCEPTANCE_STATUS_WORDS.map((word) => [word, 0]));
+  const counted = new Set();
+  for (const entry of entries) if (Object.hasOwn(counts, entry.status)) { counts[entry.status] += 1; counted.add(entry.id); }
+  // An entry whose status is outside the table is a named gap, not a silent loss.
+  const uncounted = entries.filter((entry) => !counted.has(entry.id)).map((entry) => ({ id: entry.id, status: entry.status }));
+  const cardFiles = new Set(Object.keys(phases ?? {}));
+  const readCards = new Set();
+  for (const source of slots.values()) for (const item of source) readCards.add(item.path);
+  const result = {
+    total_declared: declared.length,
+    resolved: entries.length,
+    // `read` is the true hit count (cards that carried at least one criterion
+    // slot); a full parse failure must not read as "all read". The number of
+    // cards supplied is a separate, named fact.
+    cards: { read: [...cardFiles].filter((ref) => readCards.has(ref)).length, provided: [...cardFiles].length, missing: [], unreadable: [] },
+    counts,
+    clean_pass: entries.filter((entry) => entry.status === "pass" && entry.clean).length,
+    entries,
+    conflicts,
+    variants,
+    pass_without_ref: entries.filter((entry) => entry.status === "pass" && !entry.clean).map((entry) => entry.id),
+    uncounted,
+    unparsed,
+  };
+  // The fingerprint binds card bytes only. `refs[].status`/`clean` come from the
+  // filesystem, so putting them here would mix "card text changed" with
+  // "evidence file vanished" and force the terminal chain to invent A's values.
+  result.fingerprint = createHash("sha256").update(JSON.stringify({
+    entries: entries.map((entry) => ({
+      id: entry.id, status: entry.status, variants: entry.variants, subitems: entry.subitems,
+      refs: entry.refs.map((ref) => ref.token),
+      sources: entry.sources.map((source) => ({ path: source.path, line: source.line, shape: source.shape })),
+    })),
+    unparsed: unparsed.map((item) => item.id),
+  })).digest("hex");
+  return result;
+}
+
+// The only place a `clean`/`clean_pass`/`pass_without_ref` value is produced.
+// Callers pass `{"<id>#<ref index>": {status, reason}}` from the one evidence
+// reader; none of them may re-implement this rule.
+export function applyRefVerdicts(status, verdictsByKey = {}) {
+  const verdicts = verdictsByKey !== null && typeof verdictsByKey === "object" ? verdictsByKey : {};
+  const entries = (status?.entries ?? []).map((entry) => {
+    const refs = (entry.refs ?? []).map((ref, index) => {
+      const verdict = verdicts[`${entry.id}#${index}`];
+      if (verdict === undefined || verdict === null) return { ...ref };
+      return { ...ref, status: verdict.status ?? "unverified", ...(verdict.reason ? { reason: verdict.reason } : {}) };
+    });
+    return Object.freeze({
+      ...entry,
+      refs: Object.freeze(refs),
+      clean: entry.status === "pass" && refs.length > 0 && refs.every((ref) => ref.status !== "missing"),
+    });
+  });
+  return Object.freeze({
+    ...status,
+    entries: Object.freeze(entries),
+    clean_pass: entries.filter((entry) => entry.status === "pass" && entry.clean).length,
+    pass_without_ref: Object.freeze(entries.filter((entry) => entry.status === "pass" && !entry.clean).map((entry) => entry.id)),
+  });
+}
+
+// One read for the persisted fact: parse once, then attach the evidence
+// verdicts from the task record root (an absent root is `unresolved`, never
+// `missing`, so "no place to look" cannot masquerade as "the file is gone").
+function acceptanceStatusFact({ spec, phases, taskRecordRoot }) {
+  const seed = acCardStatuses({ spec, phases });
+  const verdicts = {};
+  const rooted = typeof taskRecordRoot === "string" && isAbsolute(taskRecordRoot);
+  for (const entry of seed.entries) {
+    for (const [index, ref] of entry.refs.entries()) {
+      if (ref.kind !== "task-relative") continue;
+      if (ref.token.endsWith("/")) { verdicts[`${entry.id}#${index}`] = { status: "unverified", reason: "directory-path: 引用的是目录而不是单一原件" }; continue; }
+      if (!rooted) { verdicts[`${entry.id}#${index}`] = { status: "unresolved", reason: "no-task-record-root" }; continue; }
+      const checked = checkEvidencePath(ref.token, [], taskRecordRoot);
+      verdicts[`${entry.id}#${index}`] = { status: checked.status, ...(checked.reason ? { reason: checked.reason } : {}) };
+    }
+  }
+  return applyRefVerdicts(seed, verdicts);
+}
+
 // Legacy readiness.v1 originals carry no per-object fingerprint. Their own
 // recorded probes and outputs are still real evidence, so this reader names the
 // judged objects that changed instead of failing every legacy original as if
@@ -1050,6 +1342,59 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   const archiveMaterial = /(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? "");
   const evidenceRoots = readableEvidenceRoots(evidenceSearchRoots(reviewReadScope, material_path));
   const evidenceFacts = { verified: [], planned: [], missing: [], unverified: [] };
+  // Anchor ②: the current task facts' quality_evidence sha256 values. Read once;
+  // an absent/unreadable facts file is an empty table, never an error here.
+  // The writer stores the receipt's hash when receipt_ref exists, so that sha256
+  // belongs to the receipt only; attaching it to ref would be a false mismatch.
+  const factsShaByRef = new Map();
+  if (typeof task_record_root === "string" && isAbsolute(task_record_root)) {
+    // Task identity comes from the same task root's manifest; without it no row
+    // can be attributed and the anchor table stays empty.
+    let taskRecordId = null;
+    try {
+      const manifest = JSON.parse(readFileSync(resolve(task_record_root, "task.json"), "utf8"));
+      if (manifest !== null && typeof manifest === "object" && typeof manifest.task_id === "string") taskRecordId = manifest.task_id;
+    } catch { /* unreadable manifest: no task identity, no anchors */ }
+    try {
+      const raw = readFileSync(resolve(task_record_root, "facts.jsonl"), "utf8");
+      for (const line of raw.trimEnd().split(/\r?\n/)) {
+        if (line.trim() === "") continue;
+        let row;
+        try { row = JSON.parse(line); } catch { continue; }
+        if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
+        const entries = Array.isArray(row.evidence?.value) ? row.evidence.value : [];
+        // Only a stage row of THIS task can bind an anchor. A quality_evidence
+        // entry left by another task may hold the same bytes, but it cannot
+        // attest this task's run. When the manifest is unreadable the row's own
+        // non-empty task_id is the only identity available; a mismatch is always
+        // rejected.
+        if (row.record_kind !== "stage") continue;
+        if (typeof row.task_id !== "string" || row.task_id.trim() === "") continue;
+        if (taskRecordId !== null && row.task_id !== taskRecordId) continue;
+        for (const entry of entries) {
+          if (entry === null || typeof entry !== "object" || entry.kind !== "quality_evidence" || typeof entry.sha256 !== "string") continue;
+          // Execution binding: a current writer entry names its declared step,
+          // its executed command and an integer exit. The one legacy shape that
+          // stays acceptable is an entry whose ref is the planner's own
+          // step-evidence original (the pre-run-field contract). Anything else
+          // has no attributable run and must stay `unverified`.
+          const executionBound = typeof entry.step_slug === "string" && entry.step_slug.trim() !== ""
+            && typeof entry.command === "string" && entry.command.trim() !== ""
+            && Number.isInteger(entry.exit_code);
+          const legacyStepEvidence = typeof entry.ref === "string" && entry.ref.startsWith("quality/evidence/step-evidence/");
+          if (!executionBound && !legacyStepEvidence) continue;
+          const hasReceipt = typeof entry.receipt_ref === "string" && entry.receipt_ref.trim() !== "";
+          const refs = hasReceipt ? [entry.receipt_ref] : [entry.ref];
+          for (const ref of refs) {
+            if (typeof ref !== "string" || ref.trim() === "") continue;
+            const list = factsShaByRef.get(ref) ?? [];
+            list.push(entry.sha256);
+            factsShaByRef.set(ref, list);
+          }
+        }
+      }
+    } catch { /* missing facts.jsonl keeps the map empty; no invented anchor */ }
+  }
   let selectedPhaseScopeValid = false;
   const indexedPaths = new Set();
   const writeOwners = new Map();
@@ -1147,27 +1492,31 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     } else if (plannedEvidence(evidenceValue)) {
       // An explicit known gap is not a pass and not an error: it stays visible
       // in facts so a planned path can never masquerade as generated evidence.
-      const [plannedPath = evidenceValue] = declaredEvidencePaths(evidenceValue);
+      const [planned] = declaredEvidencePaths(evidenceValue);
       evidenceFacts.planned.push(Object.freeze({
-        phase_id: expectedId, path: plannedPath, statement: evidenceValue,
+        phase_id: expectedId, path: planned?.path ?? evidenceValue, statement: evidenceValue,
       }));
     } else {
       const declaredPaths = declaredEvidencePaths(evidenceValue);
       if (declaredPaths.length === 0) {
         evidenceFacts.unverified.push(Object.freeze({
           phase_id: expectedId, path: null,
-          reason: "evidence_path declares no concrete path", statement: evidenceValue,
+          reason: "not-single-path: evidence_path declares no concrete path", statement: evidenceValue,
         }));
       }
-      for (const token of declaredPaths) {
+      for (const declaredPath of declaredPaths) {
+        const token = declaredPath.path;
         if (!isAbsolute(token) && evidenceRoots.length === 0 && !taskEvidenceRoot(token, task_record_root)) {
           evidenceFacts.unverified.push(Object.freeze({
             phase_id: expectedId, path: token,
-            reason: "no readable material, repository, or task root",
+            reason: "no-run-binding: no readable material, repository, or task root",
           }));
           continue;
         }
-        const checked = checkEvidencePath(token, evidenceRoots, task_record_root);
+        const checked = checkEvidencePath(token, evidenceRoots, task_record_root, {
+          declared_sha256: declaredPath.declared_sha256 ?? undefined,
+          facts_sha256: factsShaByRef.get(token) ?? [],
+        });
         if (checked.status === "verified") {
           evidenceFacts.verified.push(Object.freeze({
             phase_id: expectedId, path: token, resolved: checked.resolved,
@@ -1180,7 +1529,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
           // mode there, and a missing old path must not become a new gate.
           evidenceFacts.unverified.push(Object.freeze({
             phase_id: expectedId, path: token,
-            reason: "archive material keeps historical evidence out of the current gate",
+            reason: "no-run-binding: archive material keeps historical evidence out of the current gate",
+          }));
+          continue;
+        }
+        if (checked.status === "unverified") {
+          evidenceFacts.unverified.push(Object.freeze({
+            phase_id: expectedId, path: token, reason: checked.reason,
           }));
           continue;
         }
@@ -1381,7 +1736,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     }
   }
   const acceptedFrs = [...new Set([...spec.matchAll(/^-\s+\*\*(FR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\*\*/gm)].map((match) => match[1]))];
-  const declaredAcs = [...new Set([...spec.matchAll(new RegExp(String.raw`^-\s+(?:\[[ xX]\]\s+)?\*\*(${ACCEPTANCE_CRITERION_SOURCE})\b`, "gm"))].map((match) => match[1]))];
+  // Same declaration surface as `acCardStatuses`; one regex, one function.
+  const declaredAcs = declaredAcceptanceCriterionIds(spec);
   const dispositions = acceptanceCriterionDispositions(spec);
   const activeAcs = new Set(dispositions.active_ids);
   const acceptedAcs = declaredAcs.filter((id) => activeAcs.has(id));
@@ -1462,6 +1818,11 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       archive_diagnostic: archiveMaterial,
     }),
     evidence_path_summary: `${evidenceFacts.verified.length} verified; ${evidenceFacts.planned.length} planned; ${evidenceFacts.missing.length} missing; ${evidenceFacts.unverified.length} unverified`,
+    // The persisted per-criterion state: parsed once here, read (or recomputed
+    // with the same pure function and fingerprint) by the material check, the
+    // terminal chain and the delivery reader. The three faces never merge
+    // their own card parser.
+    ac_status: acceptanceStatusFact({ spec, phases, taskRecordRoot: task_record_root }),
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }

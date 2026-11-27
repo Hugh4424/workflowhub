@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "skill": "task-breakdown",
+  "files": [
+    "SKILL.md",
+    "references/问题陈述模板.md",
+    "references/存在性判据.md",
+    "references/根因影响验收清单.md",
+    "references/逐需求五问审查表.md"
+  ]
+}

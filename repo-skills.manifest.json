@@ -4,9 +4,9 @@
   "source": "skills/catalog.yaml",
   "derived_from": {
     "catalog": "skills/catalog.yaml",
-    "catalog_sha256": "6cfd79b3a865dc1594ffc226df0ee8b3bbd0d1fb291562f9291f13e11ae41f1d",
+    "catalog_sha256": "3eae6d5c3feebc8362b0bf502d0fb4a4829b11f05d1b0ba6ebf5c9315ed16102",
     "reuse_registry": "skills/reuse-registry.md",
-    "reuse_registry_sha256": "be7749b0f38331841b7188b87544d2859eb401e277516499c8f8e2bfc1c2912a"
+    "reuse_registry_sha256": "5749f5cab47264eb7e5f6f6f8ab11b3fc9e6d71606b4403afc8fa24e7a559bd2"
   },
   "skills": [
     {
@@ -1087,6 +1087,20 @@
       ]
     },
     {
+      "name": "task-breakdown",
+      "path": "skills/task-breakdown/SKILL.md",
+      "local_version": "0.1.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [],
+      "local_changes": "workflowhub 原生；方法正文九条加四份中文 references；本技能不进 skill-deps.yaml，dependency_closure 留空以免扩大三阶段 portable payload，但入口句会被 promptSkillReferences 扫进三阶段发布闭包；2026-11-26 首建 0.1.0。used_by_stages 写三阶段是声明面（三处入口前言按 grep 读）；四个根 steps.json 禁改，故 check-skill-consistency 报 actual=[]，真实机器消费者是三个子流程 steps.json 的 skill 与三处入口前言，不是根表。",
+      "upstream": []
+    },
+    {
       "name": "task-maker",
       "path": "skills/task-maker/SKILL.md",
       "local_version": "0.2.0",
@@ -1401,6 +1415,10 @@
     {
       "name": "talk-with-zhipeng",
       "entry": "skills/talk-with-zhipeng/SKILL.md"
+    },
+    {
+      "name": "task-breakdown",
+      "entry": "skills/task-breakdown/SKILL.md"
     },
     {
       "name": "task-maker",

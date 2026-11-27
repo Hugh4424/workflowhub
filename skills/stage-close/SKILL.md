@@ -22,6 +22,9 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 主线同步预检：在PR及任务合并前，以caller声明的实际目标分支（通常`main`）、任务分支和remote为准；有remote时用`git ls-remote --heads <remote> refs/heads/<target-branch>`核具名目标分支tip。tracking ref OID与该tip不同时只fetch该具名分支并读回；后续`<target>`统一使用已核实同OID的tracking ref或OID。远端不可读或ref仍不一致就标unavailable，不拿旧ref冒充当前。用`git merge-base <target> <task>`、`git rev-list --left-right --count <target>...<task>`和`git log --left-right --oneline <target>...<task>`找双方独有提交；用`git diff --name-status <merge-base>..<target>`只看目标分支独有路径，再结合当前task材料和真实consumer判断是否影响本任务依赖的契约、同一消费者或集成基线。支持时用`git merge-tree --write-tree <target> <task>`预演冲突并保留退出和冲突路径；不要用两端tip的tree diff冒充一方独有变化，也不要只按ahead/behind计数决定合并。目标独有变更确实影响本任务或集成要求同步时，确认任务worktree干净后把目标分支普通merge进任务分支，并按`skills/resolving-merge-conflicts/SKILL.md`逐项保留双方行为、跑受影响检查及独立复核；无关变更且无依赖时记录独有提交/路径、预演结果和无需同步理由，不为分叉强行merge。冲突无法解释或超出授权写集时停该merge并交原owner。目标tip变化时重新核差异；该预检是事实判断，不新增gate或状态对象。
 
 实现、质量/验收、发布、Git交付、物理清理各自说明。有效finding按caller合同处置，无法修复/未验证保持incomplete，并逐条给类别、证据、owner、关闭动作或恢复条件；类别只是路由，不改档位、不放宽 AC；不自行accepted_risk，也不把质量缺失单独当停止安全交付的许可证门。只读历史证据不改。完成：每个待执行动作有当前身份、实际目标、已授权范围或具体缺口，未完成质量/保留材料可定位。
+收口前把本次材料与执行时引用过的旧判据逐条判一次，结论只能是「仍适用」「已过时」「本身有缺陷」三者之一，并写清判定所依据的当前原件与一句话理由；判「仍适用」的必须当场故意打破一次：在任务库外的临时副本上先取基线输出，再删掉或改坏该判据所引的一条通过证据，证明破坏后输出新增了点名该件（或该判据）的句子、恢复后输出与基线逐字节相同；只写「重跑仍是绿的」不算证明，读数面对该件不敏感（删件前后输出无差异）也不许当证明，做不出来就记未取得并写谁补、补到什么算有效，不许写成已证。除「仍适用」外的两种只点名缺口、写 owner 与恢复条件，不回改旧任务材料、不改其锚点，也不拿它给当前交付签字。
+
+合并后、收尾前在最终交付版本上跑前四任务自己声明过的同一批检查：argv 与参数逐字照原声明，不改命令、不加参数、不换退出码；每条写清命令、对象、运行目录、最终版本提交号、退出码，以及输出里用来判定的那一行（退出码不足以判定：命令写错时也可能退一或退零，必须同时看输出点名了什么）；缺被忽略或已归档的输入时写「因缺输入跳过」并写缺什么、谁补，不得静默跳过；单卡通过不等于集成通过：各任务自报的绿与既有红并排记录，既有红原样保留、不冲抵，差集非空或读数不一致就点名，不判整版通过。
 
 ## 2. 逐动作核授权，复用现有record/consume
 
@@ -139,7 +142,7 @@ execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name
 
 完成：最终scope和真实答复原ref可读，归档/保留逐项实际结果可定位；拒绝或未答无对应副作用。
 
-收口执行前，`core/task-close.mjs` 从当前任务原件重读三种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹）、验证声明读同次 gate 退出 0 与捕获回执、接受声明读 `quality/evidence/verdict.json` 的独立签字人、被审材料指纹、所审 gate 引用和实际下游读回。gate 红、缺证据、签字人属于实施作者、签后材料字节变化或没有读回时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。声明通过时在同一 close 证据区写 `close-claims-readback`，记录本次实际读回的门、签字、材料指纹与计划。只读核对用 `node tools/cli/check-delivery-claims.mjs --task-path=<任务>`。质量签字只证明被审材料，不代 Git 授权；commit/push/merge/archive/cleanup 仍逐项按本节取得并保存真实范围答复。同一收口链路有两道步骤门与一道缺口分类门：`closeDelivery` 在写 plan 前先判声明步骤（早门，用 caller 的 delivery 分支）；`execute` 在锁内、写本次 close 动作记录前再判同一声明步骤（执行门，用已确认计划的 `target_branch`，以它为准），缺步以 `STEP_EVIDENCE_*` 拒绝并点名，不写本次 close 动作记录、不发起 Git 动作；锁内紧接着判缺口分类：`plan.gap_triage` 每条 `class` 非空且在四类闭集内，否则以 `GAP_TRIAGE_UNCLASSIFIED` 拒绝并点名 `id:class`。两道门都不拒已带类别的 `incomplete`。
+收口执行前，`core/task-close.mjs` 从当前任务原件重读两种交付声明：实施声明读 `quality/evidence/gate-results/` 的 gate 原件（实际 argv、退出、输出字节与回执哈希、实施提交 diff、环境指纹），验证声明读同次 gate 退出 0 与捕获回执。gate 红、缺证据、实施字节与捕获时不一致时，关闭以 `DELIVERY_CLAIMS_REJECTED` 拒绝本次收口并在 close 证据区留失败原件；已显示计划、真实答复、授权和原件都不删。
 
 ## 7. 安全移除、分支删除与逐项读回
 

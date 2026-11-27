@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const TEMPLATE = join(ROOT, "skills/spec-plan/templates/phase-template.md");
@@ -27,8 +28,12 @@ function examples() {
   };
 }
 
+const EVIDENCE_BYTES = "evidence\n";
+const EVIDENCE_SHA = createHash("sha256").update(EVIDENCE_BYTES).digest("hex");
 const PLANNED = ["`planned: quality/tests/p1.json`（未生成）", "`planned: quality/evidence/p2.json`（未生成）"];
-const REAL = ["`quality/tests/p1.output`", "`quality/evidence/p2.md`"];
+const REAL = [`\`quality/tests/p1.output @sha256=${EVIDENCE_SHA}\``, `\`quality/evidence/p2.md @sha256=${EVIDENCE_SHA}\``];
+const REAL_PATHS = ["quality/tests/p1.output", "quality/evidence/p2.md"];
+const REAL_UNANCHORED = ["`quality/tests/p1.output`", "`quality/evidence/p2.md`"];
 const MISSING = ["`quality/tests/missing-p1.output`", "`quality/evidence/missing-p2.md`"];
 
 function material({ archive = false, evidence, existing = [] } = {}) {
@@ -45,7 +50,7 @@ function material({ archive = false, evidence, existing = [] } = {}) {
   }
   for (const path of existing) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), "evidence\n");
+    writeFileSync(join(root, path), EVIDENCE_BYTES);
   }
   return root;
 }
@@ -68,7 +73,7 @@ describe("run-checks material evidence path summary", () => {
   });
 
   it("counts generated and planned evidence together and keeps exit 0", () => {
-    const result = run(material({ evidence: [REAL[0], PLANNED[1]], existing: [REAL[0].replaceAll("`", "")] }));
+    const result = run(material({ evidence: [REAL[0], PLANNED[1]], existing: [REAL_PATHS[0]] }));
     expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(result.stdout).toContain("证据路径：1 份已生成，1 份 planned（未生成），0 份缺失");
   });
@@ -82,10 +87,17 @@ describe("run-checks material evidence path summary", () => {
   });
 
   it("stays quiet when every declared path is generated", () => {
-    const result = run(material({ evidence: REAL, existing: REAL.map((value) => value.replaceAll("`", "")) }));
+    const result = run(material({ evidence: REAL, existing: REAL_PATHS }));
     expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(result.stdout).toContain("[run-checks][material] PASS");
     expect(result.stdout).not.toContain("[run-checks][material] 证据路径：");
+  });
+
+  it("prints unverified evidence when a real path has no run binding", () => {
+    const result = run(material({ evidence: REAL_UNANCHORED, existing: REAL_PATHS }));
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout).toContain("证据路径：0 份已生成，0 份 planned（未生成），0 份缺失，2 份验证不了");
+    expect(result.stdout).toContain("[run-checks][material] PASS");
   });
 
   it("stays quiet for archive material whose historical paths are unverified", () => {

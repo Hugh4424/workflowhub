@@ -33,6 +33,17 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 调用方用现 `buildReviewMaterials` 核manifest、每份正文/来源及盲/揭示可见性；路径或嵌套ref不证正文送达。direction内部reconstruct→reveal→challenge按本次provider协议，只有盲包仅证重建。派发ARTIFACT + CONTRACT，排除实施者CLAIM/胜利摘要/自拟结论；处置回原件，可用Contract misread / Valid + actionable / Valid trade-off / Noise解释，不新增裁决枚举、轮次或provider替换。
 
+
+## 包级覆盖镜头
+
+审查逐卡冷读、对抗、异源时，再按下面三趟各问一句，专看跨包覆盖；本镜头只问消费点，不审文风与字段校验（后者见「不审什么」节），不改审查轮次与 provider 配置。
+
+- 冷读：这个包的问题句在 Phase 卡哪一任务被消费？答不出写「无消费点＋owner」。
+- 对抗：有没有角色写了、却没人消费的方案？答不出写「有方案无消费者＋owner」。
+- 异源：同一问题在另一来源家族里有没有被换成读者？答不出写「未证实＋owner」。
+
+本节不改审查轮次与 provider 配置。
+
 ## UI 任务时审查多问哪六件事？
 
 仅写需求、排阶段、写代码三处审查在 UI 任务时按下面六件逐问一遍，
@@ -136,6 +147,17 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 保留 provider 原身份与失败类别：ROUTE_UNAVAILABLE/REVIEW_BROKER_START_FAILED 只用于路线/启动失败；timeout、cancelled、invalid output、material missing、RATE_LIMITED 等保留真实类别。必要脱敏、realpath范围、输入/输出体量与解析限制、配置原子写、并集聚合和信号/资源清理义务仍由现有生产 owner 承接；方法改文不证明这些行为已实测。
 
 原始私有 provider 文本仅留在原有安全诊断位置，公开报告用原始记录引用、脱敏信息和真实错误，不外泄 cookie/token/password/Authorization/API key 或宿主私有路径。材料、独立质量、用户选择、Git/发布分别记录，不由 review 输出授予继续工作权限。
+
+
+## 不审什么
+
+审查只查真问题，下面三类不在审查范围：
+
+- 文风与措辞：不判用词、句长、排版。
+- 字段校验与格式：不判字段名、schema、格式是否合规范。
+- 条数与建议：不数 findings 条数、不写改法建议。
+
+本节不改审查轮次与 provider 配置。
 
 ## Long-review host convention
 

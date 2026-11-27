@@ -6,10 +6,15 @@
  * Material mode:
  *   node tools/cli/run-checks.mjs --material-root <绝对路径> [--stage=<阶段>]
  * --stage relaxes the make-decision post-phase input requirement: that stage
- * has not produced spec.md/phases yet. When --stage is omitted this reader is
- * diagnostic only: stored build-code readiness originals are read back, but a
- * missing table, missing original, stale fingerprint or drift is printed as a
- * warning and never changes the exit code. A non-archive material rooted at
+ * has not produced spec.md/phases yet. When --stage is omitted this reader does
+ * not enforce: stored build-code readiness originals are read back, but a
+ * missing table, missing original, stale fingerprint or drift never changes the
+ * exit code. Each such gap is still recorded as a named conclusion line
+ * (`[run-checks][material] 缺件结论 …`): diagnostics alone left the only machine
+ * conclusion in the task-side `limits`, so a reader of this output could not
+ * tell which phase had no original. The conclusion block is a record, not a
+ * gate -- nothing in it enters `errors` and the exit code is unchanged. A
+ * non-archive material rooted at
  * .../specs/<task> that has both phases/P*.md and decision-log.md is the
  * canonical build-code shape this reader recognizes when --stage is omitted;
  * archive and other helper directories keep the old diagnostic behavior. Only
@@ -49,7 +54,7 @@ const USAGE = [
   "  node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]",
   "  --material-root 与 --task-path 是两种模式，不能混用。",
   "  --stage 只与 --material-root 同用：make-decision 阶段允许尚无 spec.md/phases。",
-  "  省略 --stage 时只诊断：不把材料推断成交付门；缺表、缺原件、stale 或 drift 只打印 warning，退出码不变。",
+  "  省略 --stage 时只诊断：不把材料推断成交付门；缺表、缺原件、stale 或 drift 只打印 warning 与一条具名「缺件结论」行，退出码不变。",
   "  省略 --stage 时，只有 非 archive、根为 .../specs/<task>、有 phases/P*.md、有 decision-log.md 的材料",
   "  才按 build-code 面读取；其余材料保留旧的诊断行为。",
   "  显式 --stage=build-code 才把上述就绪缺口当失败（exit 1）；派发门仍是 build-code 入口 run --action=execute 首步。",
@@ -237,15 +242,53 @@ const isMain = process.argv[1]
 // A planned evidence path is an explicit known gap: not a failure, but it must
 // not hide behind errors=0. Missing paths already fail the validator below, and
 // this same line keeps their count visible next to the named errors.
+const UNVERIFIED_LABELS = Object.freeze({
+  unreadable: "打不开",
+  "content-mismatch": "内容不符",
+  "no-run-binding": "没有本次锚",
+  "not-single-path": "不是单一可打开路径",
+});
+
+function unverifiedReasonSummary(items) {
+  const counts = new Map();
+  for (const item of items ?? []) {
+    const word = String(item?.reason ?? "").split(":")[0];
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([word, count]) => `${UNVERIFIED_LABELS[word] ?? word} ${count}`).join("、");
+}
+
+// P5/C6: a material-side gap is a named conclusion, never a gate. The gap line
+// itself is printed at the site that found it (`缺件结论 …`), and this block
+// closes the run with one count. Nothing here enters `errors`, changes the exit
+// code or adds a gate; the task-level conclusion carrier stays the `limits`
+// list of `--task-path`. A gap is `{ kind, phase }` only -- the per-site text
+// already names the phase, the path and the reason.
+function logMaterialGapConclusions(gaps) {
+  if (!gaps || gaps.length === 0) return;
+  const kinds = new Map();
+  for (const gap of gaps) kinds.set(gap.kind, (kinds.get(gap.kind) ?? 0) + 1);
+  const detail = [...kinds].map(([kind, count]) => `${kind} ${count}`).join("、");
+  console.log(`[run-checks][material] 缺件结论合计=${gaps.length} 条（${detail}；`
+    + `只记录：不改退出码、不新增门；任务级未取得项仍在 --task-path 的 limits）`);
+}
+
 function logEvidencePathSummary(facts) {
   // The validator returns facts: null for structural input errors; those errors
   // are already printed, so there is no evidence breakdown to add.
   const evidence = facts?.evidence_paths;
-  if (!evidence || (evidence.planned_count === 0 && evidence.missing_count === 0)) return;
-  console.log(
-    `[run-checks][material] 证据路径：${evidence.verified_count} 份已生成，`
-    + `${evidence.planned_count} 份 planned（未生成），${evidence.missing_count} 份缺失`,
-  );
+  if (!evidence) return;
+  // Archive material stays quiet: historical paths are not today's gate, and
+  // re-printing them every run trains readers to ignore the line.
+  const quiet = evidence.planned_count === 0 && evidence.missing_count === 0
+    && (evidence.unverified_count === 0 || evidence.archive_diagnostic === true);
+  if (quiet) return;
+  let line = `[run-checks][material] 证据路径：${evidence.verified_count} 份已生成，`
+    + `${evidence.planned_count} 份 planned（未生成），${evidence.missing_count} 份缺失`;
+  if (evidence.unverified_count > 0) {
+    line += `，${evidence.unverified_count} 份验证不了（${unverifiedReasonSummary(evidence.unverified)}）`;
+  }
+  console.log(line);
 }
 
 // Material-only callers have no task flag. A recorded task branch supplies the
@@ -530,8 +573,8 @@ export function acceptanceP8Problems(phaseBody, { recordRoot = null, materialRoo
   return problems;
 }
 
-/** 从执行清单读 P6 失败处置记录；清单不在时不新增缺件结论，交给材料 owner。 */
-function runFailureRecordChecks(root, facts, recordRoot) {
+/** 从执行清单读 P6 失败处置记录；清单不在时记一条缺件结论，不是新增门。 */
+function runFailureRecordChecks(root, facts, recordRoot, { gaps = [] } = {}) {
   const errors = [];
   for (const phase of facts?.phase_rows ?? []) {
     const acs = phase.acs ?? [];
@@ -541,7 +584,17 @@ function runFailureRecordChecks(root, facts, recordRoot) {
       continue;
     }
     const checklist = join(recordRoot, "quality", "evidence", "build-code", `execution-checklist-${String(phase.id).toLowerCase()}.md`);
-    if (!existsSync(checklist)) continue;
+    if (!existsSync(checklist)) {
+      // P5/C6: a missing checklist is a named conclusion, not a gate. The
+      // enforcing branch cannot state it (the material reader has no certified
+      // task-root scale), so this line names the phase and the path and the
+      // conclusion count closes the run; it never enters `errors` or the exit
+      // code, and the task-side `limits` stays the task-level carrier.
+      gaps.push({ kind: "execution-checklist.missing", phase: phase.id });
+      console.log(`[run-checks][material] 缺件结论 execution-checklist.missing phase=${phase.id} `
+        + `${root} ${phase.path} 执行清单缺 ${phase.id}：${checklist}（只记录，不进 errors、不改退出码）`);
+      continue;
+    }
     let text;
     try { text = readFileSync(checklist, "utf8"); }
     catch (error) {
@@ -561,16 +614,21 @@ function readinessProbeWorktree(materialRoot) {
   return at > 0 ? absolute.slice(0, at) : null;
 }
 
-async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = false } = {}) {
+async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = false, gaps = [] } = {}) {
   const phases = facts?.readiness?.phases ?? [];
   if (phases.length === 0) return [];
   const errors = [];
   // Only explicit build-code enforces readiness. Earlier stages may declare
   // probes before the build-code entry has recorded their originals.
   const enforce = explicit && stage === "build-code";
-  const fail = (message) => {
-    if (enforce) errors.push(message);
-    else console.log(`[run-checks][material] ${message} (diagnostic only: ${explicit ? `stage=${stage}` : "--stage was omitted"}; rerun with --stage=build-code to enforce)`);
+  // P5/C6: the non-enforcing branch states a conclusion (`缺件结论` plus the
+  // kind and the phase) instead of only a warning. It is still a record: the
+  // exit code, `errors` and the dispatch gate never read this list.
+  const gap = (kind, message, phase = "unknown") => {
+    if (enforce) { errors.push(message); return; }
+    gaps.push({ kind, phase });
+    console.log(`[run-checks][material] 缺件结论 ${kind} phase=${phase} ${message} `
+      + `(diagnostic only: ${explicit ? `stage=${stage}` : "--stage was omitted"}; rerun with --stage=build-code to enforce)`);
   };
   const declared = phases.filter((phase) => phase.declared);
   for (const phase of phases.filter((entry) => !entry.declared)) {
@@ -581,16 +639,18 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
         + `(stage=build-code requires the five columns 命令/期望/证据/机器或人判/负责人; owner=计划负责人)`);
       continue;
     }
-    console.log(`[run-checks][material] readiness phase=${phase.phase_id} declared=false status=unverified`
+    gaps.push({ kind: "readiness.missing-table", phase: phase.phase_id });
+    console.log(`[run-checks][material] 缺件结论 readiness.missing-table phase=${phase.phase_id} readiness phase=${phase.phase_id} declared=false status=unverified`
       + ` (${stage === "build-code" ? "stage inferred from the material shape" : `stage=${stage ?? "unspecified"}`} `
-      + `allows no readiness table; the build-code entry requires one)`);
+      + `allows no readiness table; the build-code entry requires one; diagnostic only)`);
   }
   if (declared.length === 0) return errors;
   const recordDir = recordRoot ? join(recordRoot, "quality", "tests") : null;
   for (const phase of declared) {
     const human = phase.rows.filter((row) => row.kind === "human");
     if (!recordRoot || !recordDir) {
-      fail(`${root} readiness phase=${phase.phase_id} has no authenticated task root to read its original`);
+      gap("readiness.no-task-root",
+        `${root} readiness phase=${phase.phase_id} has no authenticated task root to read its original`, phase.phase_id);
       continue;
     }
     let names;
@@ -598,14 +658,20 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
     const pattern = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-\\d{3}-readiness-${String(phase.phase_id).toLowerCase()}(-stale)?\\.json$`);
     const matches = names.filter((name) => pattern.test(name)).sort();
     if (matches.length === 0) {
-      fail(`${root} readiness result missing: phase=${phase.phase_id} has no stored original; `
-        + `run the build-code entry (run --action=execute first step) to record it (owner=${phase.rows[0]?.owner ?? "计划负责人"})`);
+      gap("readiness.missing-original",
+        `${root} readiness result missing: phase=${phase.phase_id} has no stored original; `
+        + `run the build-code entry (run --action=execute first step) to record it (owner=${phase.rows[0]?.owner ?? "计划负责人"})`,
+        phase.phase_id);
       continue;
     }
     const ref = join(recordDir, matches.at(-1));
     let stored;
     try { stored = JSON.parse(readFileSync(ref, "utf8")); }
-    catch (error) { fail(`${root} readiness original is not readable: ${ref} (${error.code ?? error.message})`); continue; }
+    catch (error) {
+      gap("readiness.original-unreadable",
+        `${root} readiness original is not readable: ${ref} (${error.code ?? error.message})`, phase.phase_id);
+      continue;
+    }
     // 2026-11-26 方案 C: compare this Phase's judged objects (its readiness rows
     // and the real state of its probe targets), never the whole material set.
     const probeCwd = readinessProbeWorktree(root)
@@ -613,8 +679,9 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
     const currentReadiness = probeCwd
       ? readinessFingerprint({ phasePath: phase.path, rows: phase.rows, cwd: probeCwd }) : null;
     if (stored.status === "stale") {
-      fail(`${root} readiness stale: stored result ${ref} is itself a stale refusal `
-        + `(${stored.stale_reason ?? "reason unavailable"}); rerun the build-code entry to recover`);
+      gap("readiness.stale",
+        `${root} readiness stale: stored result ${ref} is itself a stale refusal `
+        + `(${stored.stale_reason ?? "reason unavailable"}); rerun the build-code entry to recover`, phase.phase_id);
       continue;
     }
     const legacy = stored.schema_version !== "readiness.v2" || typeof stored.readiness_sha256 !== "string";
@@ -625,22 +692,26 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
         ? ["probe working directory is unavailable"]
         : legacyReadinessChanges({ record: stored, rows: phase.rows, cwd: probeCwd });
       if (changes.length) {
-        fail(`${root} readiness stale (legacy ${stored.schema_version ?? "unknown"}): judged objects changed: `
-          + `${changes.join("; ")}; current ${currentReadiness ?? "unknown"} (original ${ref})`);
+        gap("readiness.stale",
+          `${root} readiness stale (legacy ${stored.schema_version ?? "unknown"}): judged objects changed: `
+          + `${changes.join("; ")}; current ${currentReadiness ?? "unknown"} (original ${ref})`, phase.phase_id);
         continue;
       }
       console.log(`[run-checks][material] readiness phase=${phase.phase_id} legacy ${stored.schema_version ?? "unknown"}: `
         + `fingerprint scheme changed; recorded rows and probe targets unchanged; rerun the entry to record readiness.v2 (original ${ref})`);
     } else if (currentReadiness === null) {
-      fail(`${root} readiness stale: cannot resolve the probe working directory for ${ref}`);
+      gap("readiness.stale",
+        `${root} readiness stale: cannot resolve the probe working directory for ${ref}`, phase.phase_id);
       continue;
     } else if (stored.readiness_sha256 !== currentReadiness) {
-      fail(`${root} readiness stale: stored result ${ref} is bound to readiness_sha256 `
-        + `${stored.readiness_sha256}, current ${currentReadiness}`);
+      gap("readiness.stale",
+        `${root} readiness stale: stored result ${ref} is bound to readiness_sha256 `
+        + `${stored.readiness_sha256}, current ${currentReadiness}`, phase.phase_id);
       continue;
     }
     if (stored.status !== "pass") {
-      fail(`${root} readiness status is ${JSON.stringify(stored.status)} for ${ref}, not pass`);
+      gap("readiness.status",
+        `${root} readiness status is ${JSON.stringify(stored.status)} for ${ref}, not pass`, phase.phase_id);
       continue;
     }
     let failed = false;
@@ -648,7 +719,9 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
     for (const row of phase.rows) {
       const evidence = readinessEvidenceStatus(row.evidence, { recordRoot, materialRoot: root });
       if (evidence.status === "invalid" || evidence.status === "missing") {
-        fail(`${root} readiness phase=${phase.phase_id} row=${JSON.stringify(row.command)} ${evidence.problem} (owner=${row.owner})`);
+        gap("readiness.evidence",
+          `${root} readiness phase=${phase.phase_id} row=${JSON.stringify(row.command)} ${evidence.problem} (owner=${row.owner})`,
+          phase.phase_id);
         failed = true;
       }
       if (row.kind === "human") continue;
@@ -669,8 +742,10 @@ async function runReadinessChecks(root, facts, recordRoot, stage, { explicit = f
         + `expected=${row.expected} exit=${probe?.exit_code ?? "unknown"} status=${status} owner=${row.owner} `
         + `evidence=${row.evidence} evidence_status=${evidence.status} receipt=${probe?.receipt_ref ?? "missing"}`);
       if (drift) {
-        fail(`${root} readiness original drift: phase=${phase.phase_id} machine_row=${machineIndex} `
-          + `does not match command/expected/exit/argv/receipt in ${ref} (owner=${row.owner}); rerun the build-code entry`);
+        gap("readiness.drift",
+          `${root} readiness original drift: phase=${phase.phase_id} machine_row=${machineIndex} `
+          + `does not match command/expected/exit/argv/receipt in ${ref} (owner=${row.owner}); rerun the build-code entry`,
+          phase.phase_id);
         failed = true;
       }
     }
@@ -745,7 +820,12 @@ async function runMaterialChecks(root, { stage } = {}) {
     }
     const effectiveStage = stage ?? inferMaterialStage(root, hasPhase, typeof inspection.files["decision-log.md"] === "string" && inspection.files["decision-log.md"].trim() !== "");
     const recordRoot = result.ok ? await materialTaskRecordRoot(root) : null;
-    const readinessErrors = result.ok ? await runReadinessChecks(root, result.facts, recordRoot, effectiveStage, { explicit: stage !== undefined }) : [];
+    // The named-gap record for this run. It is a conclusion carrier only: the
+    // `errors` array below, the exit code and the dispatch gate never read it.
+    const gapConclusions = [];
+    const readinessErrors = result.ok
+      ? await runReadinessChecks(root, result.facts, recordRoot, effectiveStage, { explicit: stage !== undefined, gaps: gapConclusions })
+      : [];
     // AC-P8-001 与 P6 失败处置记录只在显式 build-code 面上强制；省略 --stage 时
     // 与就绪检查同样只打印诊断，不改变旧材料的历史退出码。
     const enforcement = stage === "build-code";
@@ -762,16 +842,60 @@ async function runMaterialChecks(root, { stage } = {}) {
         const body = phases[p8.path] ?? inspection.files[p8.path] ?? "";
         for (const problem of acceptanceP8Problems(body, { recordRoot, materialRoot: root })) note(acceptanceErrors, `${root} ${p8.path} ${problem}`);
       }
-      for (const error of runFailureRecordChecks(root, result.facts, recordRoot)) note(failureRecordErrors, error);
+      for (const error of runFailureRecordChecks(root, result.facts, recordRoot, { gaps: gapConclusions })) note(failureRecordErrors, error);
     }
     const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases), ...readinessErrors, ...acceptanceErrors, ...failureRecordErrors];
+    // A side: the card status is printed on every run (with or without --stage,
+    // archived or not) with the fingerprint and the full id lists. A named error
+    // per forced item is only added for non-archive material at build-code, so
+    // historical material never gains a new failing gate.
+    const acStatus = result.facts?.ac_status ?? null;
+    if (acStatus) {
+      console.log(`[run-checks][material] ac_status=${JSON.stringify({
+        total_declared: acStatus.total_declared, resolved: acStatus.resolved, counts: acStatus.counts,
+        conflicts: acStatus.conflicts, clean_pass: acStatus.clean_pass,
+        pass_without_ref: acStatus.pass_without_ref,
+        unparsed: (acStatus.unparsed ?? []).map((item) => ({ id: item.id, path: item.path ?? null, line: item.line ?? null, reason: item.reason })),
+        fingerprint: acStatus.fingerprint,
+      })}`);
+      const archivedMaterial = result.facts?.evidence_paths?.archive_diagnostic === true
+        || /(?:^|[/\\])archive(?:[/\\]|$)/.test(root ?? "");
+      if (!archivedMaterial) {
+        for (const conflict of acStatus.conflicts ?? []) {
+          const [first, second] = conflict.sources ?? [];
+          note(errors, `ac_status ${conflict.id} 两处状态冲突（${first?.path}:${first?.line} ${first?.raw_status} / ${second?.path}:${second?.line} ${second?.raw_status}）`);
+        }
+        // A criterion with no status slot on any card (`no-slot-on-any-card`) is a
+        // normal shape for readiness/plan materials and is never a material
+        // error; only a slot that exists but states an unknown word is enforced.
+        for (const item of acStatus.unparsed ?? []) {
+          if (item.reason !== "unparsed-grade") continue;
+          note(errors, `ac_status ${item.id ?? "unknown"} 状态词无法解析（${item.path ?? "unknown"}:${item.line ?? "?"} ${item.reason}）`);
+        }
+        // A card that states fail / missing / deferred is a named result: it must
+        // appear as an error row, not only inside the JSON summary.
+        for (const entry of acStatus.entries ?? []) {
+          if (!["fail", "missing", "deferred"].includes(entry.status)) continue;
+          const first = (entry.sources ?? [])[0];
+          note(errors, `ac_status ${entry.id} 卡面判为 ${entry.status}（${first?.path ?? "unknown"}:${first?.line ?? "?"}；fingerprint=${String(acStatus.fingerprint).slice(0, 12)}）`);
+        }
+        for (const id of acStatus.pass_without_ref ?? []) {
+          note(errors, `ac_status ${id} pass 但无证据引用（clean_pass=${acStatus.clean_pass}/${acStatus.counts?.pass ?? 0}，fingerprint=${String(acStatus.fingerprint).slice(0, 12)}）`);
+        }
+      }
+    }
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
+    // The gap conclusions print on both exits: a failing material still names
+    // which readiness originals or checklists were absent, and a passing one
+    // states how many recorded gaps it carries. Neither changes the exit code.
     if (errors.length) {
+      logMaterialGapConclusions(gapConclusions);
       logEvidencePathSummary(result.facts);
       console.log(`[run-checks][material] errors=${errors.length}`);
       return false;
     }
     console.log(`[run-checks][material] PASS ${root} phase_count=${result.facts.phase_count} task_count=${result.facts.task_count} errors=0`);
+    logMaterialGapConclusions(gapConclusions);
     logEvidencePathSummary(result.facts);
     return true;
   } catch (error) { console.error(`[run-checks][material] cannot read material root ${root}: ${error.code ?? error.message}`); return false; }
