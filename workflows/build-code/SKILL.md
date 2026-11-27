@@ -383,7 +383,7 @@ caller 随后机械保存 provenance 封套，只含 task_id、stage、raw_ref �
 
 页面 producer 仅调用同一个 public status，使用 manifest 身份、绝对 task-path 和认证 cwd，stageStatus 是内存 DTO。顶部、阶段栏、主对象视图显示同一有限结论和原件；Task 自己的交付与验收独立呈现。无新引用保持原页面投影，调用错误明确显示，不用十环 completed 猜终末 pass。
 
-首判来源与当前适用分开：acceptance 的原 refs 保其当时快照/版本与 immutable verdict，不将历史方法全文件 hash 强等当前。当前终末 raw 每条 current_applicability 写 basis 与 refs，说明原判据现在为何仍适用、已做哪些必要补充；当前 materials/implementation、真实修复范围与 proof 源字节才须对应当前。无关段落演进不抹原首判，真正功能规则改变而缺适用或独立补证仍 incomplete。删除实现路径以 deleted:true、sha256:null、base_sha256 保存已认证基线原字节与当前真实缺席事实，不伪造现存文件。
+首判来源与当前适用分开：acceptance 的原 refs 保其当时快照/版本与 immutable verdict，不将历史方法全文件 hash 强等当前。当前终末 raw 每条 current_applicability 写 basis 与 refs，说明原判据现在为何仍适用、已做哪些必要补充；当前 materials/implementation、真实修复范围与 proof 源字节才须对应当前。无关段落演进不抹原首判，真正功能规则改变而缺适用或独立补证仍 incomplete。删除实现路径以 deleted:true、sha256:null、base_sha256 保存已认证基线原字节与当前真实缺席事实，不伪造现存文件。旧判据三态与集成态读数见 `skills/stage-close/SKILL.md` 第 1 节；本段不复述。
 
 有效 finding 的 fixed 须有实际 fix 与独立复验；rejected_invalid 须有同原 finding/review 的独立无效性解释和来源，不造修复。两者都保原发现字节，accepted_risk 不能由本投影自动推导。终末独立 reader 同次核修复可复用自己真实 terminal-assessor 的 pre-dispatch 身份作为 proof 来源；已验证公开 raw 必须在 finding_verification_attestations 中逐条列 finding_id 与准确 proof_ref:{ref,sha256}，不能只靠身份相同。不为同次判断另造一次 dispatch、审查或自引用 hash 循环。
 
