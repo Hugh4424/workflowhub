@@ -13,7 +13,7 @@ import { readTaskFacts } from "../runtime/task/task-store.mjs";
 import { openTask } from "../runtime/task/task-handle.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
-import { readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
+import { deliveryCommit, readDeliveryClaims, recordCloseClaimsReadback } from "../runtime/task/delivery-claims.mjs";
 import { readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
@@ -802,7 +802,14 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
       cleanupScan = inspectWorktreeCleanup(plan.worktree_root);
     }
   } catch (error) { readErrors.push(`worktree read: ${error.message}`); }
-  const facts = { delivery_committed: sourceAvailable && Boolean(commitAction || task) && (plan.source.changes.length === 0 || sourceCommit !== plan.source.head), merge: Boolean(merged), archive,
+  // The two commits are read from the same action records the claims reader
+  // uses: the source from a completed commit, the target only from a completed
+  // merge (a commit action's target_head is the pre-merge tip, not a target).
+  const commitFacts = deliveryCommit({ actions, repo: c.root });
+  const facts = { delivery_committed: sourceAvailable && Boolean(commitAction || task) && (plan.source.changes.length === 0 || sourceCommit !== plan.source.head),
+    source_commit: commitFacts.source_commit, target_commit: commitFacts.target_commit,
+    target_commit_reason: commitFacts.target_commit_reason, delivered: commitFacts.delivered,
+    merge: Boolean(merged), archive,
     push: remote.status === "available" && remote.oid === target, worktree_cleanup: plan.preserve_existing_workspace ? false : !existing,
     formal_cleanup_safe: !existing || cleanupScan?.safe === true, branch_cleanup: plan.preserve_existing_workspace ? false : task === null,
     remote_branch_cleanup: plan.preserve_existing_workspace ? false : remoteTask.status === "absent",
@@ -1317,14 +1324,23 @@ async function assertDeclaredStepsComplete(taskDir, delivery = {}, { recordClaim
   if (coverage.evaluable !== true && coverage.definition_unavailable) {
     throw failure("STEP_EVIDENCE_UNDEFINED", `收口前读不到步骤定义：${coverage.definition_unavailable.stages.join("、")}；声明步骤无法判定，${recordClaim}`);
   }
+  // The card status divergence is copied from the report the terminal chain
+  // produced; the close gate never re-judges the card itself.
+  const divergence = (() => {
+    const entries = Array.isArray(report?.ac_status?.divergence) ? report.ac_status.divergence : [];
+    if (!entries.length) return "";
+    const ids = [...new Set(entries.flatMap((entry) => Array.isArray(entry.ids) ? entry.ids : []))];
+    const named = ids.length ? ids.join("、") : entries.map((entry) => entry.code).join("、");
+    return `；卡面状态与合同原件不一致：${named}（fingerprint ${String(report?.ac_status?.fingerprint ?? "").slice(0, 12)}）`;
+  })();
   if (coverage.exit_code !== 0) {
     const missing = (coverage.declared ?? []).map(row => `${row.source}#${row.step_slug}（${row.state}）`).join("；");
     // Distinguish the two causes of a rejection: a declared-step gap names the
     // steps; the pre-existing make-decision named-evidence gap is not a declared
     // step, so it must not be reported as "declared steps: unavailable".
-    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；${recordClaim}`);
-    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；${recordClaim}`);
-    throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前步骤判定未通过（未取得具名缺步原因）；${recordClaim}`);
+    if (missing) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前声明步骤未完成：${missing}；${recordClaim}${divergence}`);
+    if (coverage.named_evidence_gap) throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前 make-decision 具名证据缺口未完成（本行不是声明步骤缺口）；${recordClaim}${divergence}`);
+    throw failure("STEP_EVIDENCE_INCOMPLETE", `收口前步骤判定未通过（未取得具名缺步原因）；${recordClaim}${divergence}`);
   }
 }
 // The supplied real user reply covers the displayed action set. Record each

@@ -794,6 +794,38 @@ async function runMaterialChecks(root, { stage } = {}) {
       for (const error of runFailureRecordChecks(root, result.facts, recordRoot)) note(failureRecordErrors, error);
     }
     const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases), ...readinessErrors, ...acceptanceErrors, ...failureRecordErrors];
+    // A side: the card status is printed on every run (with or without --stage,
+    // archived or not) with the fingerprint and the full id lists. A named error
+    // per forced item is only added for non-archive material at build-code, so
+    // historical material never gains a new failing gate.
+    const acStatus = result.facts?.ac_status ?? null;
+    if (acStatus) {
+      console.log(`[run-checks][material] ac_status=${JSON.stringify({
+        total_declared: acStatus.total_declared, resolved: acStatus.resolved, counts: acStatus.counts,
+        conflicts: acStatus.conflicts, clean_pass: acStatus.clean_pass,
+        pass_without_ref: acStatus.pass_without_ref,
+        unparsed: (acStatus.unparsed ?? []).map((item) => ({ id: item.id, path: item.path ?? null, line: item.line ?? null, reason: item.reason })),
+        fingerprint: acStatus.fingerprint,
+      })}`);
+      const archivedMaterial = result.facts?.evidence_paths?.archive_diagnostic === true
+        || /(?:^|[/\\])archive(?:[/\\]|$)/.test(root ?? "");
+      if (!archivedMaterial) {
+        for (const conflict of acStatus.conflicts ?? []) {
+          const [first, second] = conflict.sources ?? [];
+          note(errors, `ac_status ${conflict.id} 两处状态冲突（${first?.path}:${first?.line} ${first?.raw_status} / ${second?.path}:${second?.line} ${second?.raw_status}）`);
+        }
+        // A criterion with no status slot on any card (`no-slot-on-any-card`) is a
+        // normal shape for readiness/plan materials and is never a material
+        // error; only a slot that exists but states an unknown word is enforced.
+        for (const item of acStatus.unparsed ?? []) {
+          if (item.reason !== "unparsed-grade") continue;
+          note(errors, `ac_status ${item.id ?? "unknown"} 状态词无法解析（${item.path ?? "unknown"}:${item.line ?? "?"} ${item.reason}）`);
+        }
+        for (const id of acStatus.pass_without_ref ?? []) {
+          note(errors, `ac_status ${id} pass 但无证据引用（clean_pass=${acStatus.clean_pass}/${acStatus.counts?.pass ?? 0}，fingerprint=${String(acStatus.fingerprint).slice(0, 12)}）`);
+        }
+      }
+    }
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
     if (errors.length) {
       logEvidencePathSummary(result.facts);

@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { phaseFilesFromIndex } from "./material-workspace.mjs";
-import { materialFingerprint } from "../stage/stage-content-contracts.mjs";
+import { acCardStatuses, applyRefVerdicts, checkEvidencePath, materialFingerprint } from "../stage/stage-content-contracts.mjs";
 import { readTaskFacts } from "./task-store.mjs";
 import { appendRecord } from "../interface/safe-write.mjs";
 
@@ -203,6 +203,9 @@ function materialSnapshot(taskPath) {
   return {
     sha256: materialFingerprint({ spec: spec ?? "", index: index ?? "", phases }),
     root, archived, missing, files, phases,
+    // Raw bodies let the delivery reader recompute the same card status with the
+    // same pure function the material check and the terminal chain use.
+    spec: spec ?? "", index: index ?? "",
   };
 }
 
@@ -229,7 +232,16 @@ function taskWorktreeRoot(manifest, repo) {
 // reader only looked at the last pointer. The identity is recomputed here from
 // the captured argv and the current Phase text; the artifact's recorded
 // `gate_identity` must agree with it.
-const DECLARED_GATE = /^[ \t]*[-*][ \t]+\*\*gate_cmd\*\*[ \t]*[:：][ \t]*`([^`]+)`/gm;
+// One matcher for the `**gate_cmd**` declaration line. Both the gate-identity
+// reader and the coverage reader derive from this single pattern so they cannot
+// drift; the backticked command is extracted by one helper, not a second regex.
+const GATE_DECL_PATTERN = String.raw`^[ \t]*[-*][ \t]+\*\*gate_cmd\*\*[ \t]*[:：][ \t]*(.*)$`;
+const GATE_DECL_GLOBAL = new RegExp(GATE_DECL_PATTERN, "gm");
+const GATE_DECL_LINE = new RegExp(GATE_DECL_PATTERN);
+function declaredGateCommand(tail) {
+  const match = /^`([^`]+)`/.exec(String(tail ?? "").trim());
+  return match ? match[1].trim() : null;
+}
 const PHASE_REF = /^phases\/(P[1-9][0-9]*)(?:-|\.)/;
 
 // Minimal POSIX word split for a declared shell command. Only quoting and
@@ -306,9 +318,9 @@ export function declaredPhaseGates(phases) {
   for (const [ref, body] of Object.entries(phases ?? {})) {
     if (typeof body !== "string") continue;
     const phaseId = PHASE_REF.exec(ref)?.[1] ?? null;
-    for (const match of body.matchAll(DECLARED_GATE)) {
-      const gate = match[1].trim();
-      if (gate) gates.push(Object.freeze({ phase_id: phaseId, phase_ref: ref, gate_cmd: gate, gate_cmd_sha256: sha256(gate) }));
+    for (const match of body.matchAll(GATE_DECL_GLOBAL)) {
+      const gate = declaredGateCommand(match[1]);
+      if (gate !== null) gates.push(Object.freeze({ phase_id: phaseId, phase_ref: ref, gate_cmd: gate, gate_cmd_sha256: sha256(gate) }));
     }
   }
   return gates;
@@ -447,6 +459,328 @@ function readReadback(taskPath, material, gate, verdict) {
   return { status: "pass", reasons: [], evidence: matched.at(-1) };
 }
 
+
+// --- Version reconciliation: report, commits, reuse, gate coverage ----------
+// Four facts that used to be absent from the delivery side. All four are pure
+// projections of originals the reader already holds; none of them changes a
+// claim, a selection or an exit code.
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (plain(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+// The report reference is declared by the closeout step evidence, never guessed
+// from the directory (stage-close:12: the caller names the one report, no newest
+// file). Zero or several different paths is a named unknown.
+function finalReportRef(taskPath) {
+  const directory = join(resolve(taskPath), "quality", "evidence", "step-evidence");
+  let names;
+  try { names = readdirSync(directory).filter((name) => name.endsWith(".json")).sort(); }
+  catch (error) { if (error.code === "ENOENT") return { ref: null, reason: "no-closeout-step-evidence" }; throw error; }
+  const refs = new Set();
+  // Every step-evidence file that could not be read is named so an `unknown`
+  // report is attributable, never a silent skip.
+  const skipped = [];
+  for (const name of names) {
+    let record;
+    try { record = JSON.parse(readFileSync(join(directory, name), "utf8")); }
+    catch (error) { skipped.push(Object.freeze({ name, reason: `unparseable-json: ${error.code ?? error.message}` })); continue; }
+    if (!plain(record)) { skipped.push(Object.freeze({ name, reason: "not-a-json-object" })); continue; }
+    // Only this stage's closeout declares this stage's report; another stage's
+    // closeout record names its own handoff, not the build-code final report.
+    if (record.step_slug !== "closeout") continue;
+    if (!Array.isArray(record.inputs)) { skipped.push(Object.freeze({ name, reason: "closeout-inputs-not-an-array" })); continue; }
+    if (!/build-code/.test(`${record.source ?? ""} ${name}`)) continue;
+    for (const input of record.inputs) {
+      if (!text(input)) continue;
+      const path = input.replace(/:\d+(?:-\d+)?$/, "").trim();
+      if (path === "" || isAbsolute(path) || path.includes("\\") || path.split("/").some((part) => !part || part === "." || part === "..")) continue;
+      refs.add(path);
+    }
+  }
+  if (refs.size === 0) return { ref: null, reason: "no-closeout-step-evidence", skipped };
+  if (refs.size > 1) return { ref: null, reason: "ambiguous-closeout-inputs", skipped };
+  return { ref: [...refs][0], reason: null, skipped };
+}
+
+const REPORT_STATUS = /(\d+)\s*(pass|incomplete|partial|inconclusive|unavailable|inconsistent|fail|deferred|missing)\b/g;
+const REPORT_NON_PASS = new Set(["incomplete", "partial", "inconclusive", "unavailable", "inconsistent", "fail", "deferred", "missing"]);
+
+// Reads the declared total and its own status parts from one machine-readable
+// place: the single ```json section, else the one summary line. The report is a
+// reconciliation object, so a missing line is a named unknown, not a pass.
+export function reportReconciliation({ taskPath = null, reportBytes = null, acStatus = null } = {}) {
+  const empty = { ref: null, sha256: null, source: "unknown", declared_total: null, parts_sum: null, diff: null, status_counts: {}, status_mismatches: [], non_pass_rows: null, reported_non_pass: null, consistent: false, coverage_limits: [], skipped_step_evidence: [] };
+  let bytes = reportBytes, ref = null, reason = null, skippedStepEvidence = [];
+  if (bytes === null || bytes === undefined) {
+    if (!text(taskPath) || !isAbsolute(taskPath)) return Object.freeze({ ...empty, reason: "no-task-path" });
+    const resolved = finalReportRef(taskPath);
+    skippedStepEvidence = resolved.skipped ?? [];
+    if (resolved.ref === null) return Object.freeze({ ...empty, reason: resolved.reason, skipped_step_evidence: skippedStepEvidence });
+    ref = resolved.ref;
+    try { bytes = readTaskRelative(taskPath, ref); }
+    catch (error) { return Object.freeze({ ...empty, ref, reason: `report-unreadable: ${error.code ?? error.message}`, skipped_step_evidence: skippedStepEvidence }); }
+  }
+  const raw = Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes);
+  const sha = sha256(Buffer.isBuffer(bytes) ? bytes : Buffer.from(raw, "utf8"));
+  let declaredTotal = null, counts = {}, source = "unknown", nonPassRows = null;
+  const jsonSection = /```json\s*\r?\n([\s\S]*?)```/m.exec(raw);
+  if (jsonSection) {
+    try {
+      const parsed = JSON.parse(jsonSection[1]);
+      if (plain(parsed) && (Number.isInteger(parsed.declared_total) || plain(parsed.status_counts))) {
+        declaredTotal = Number.isInteger(parsed.declared_total) ? parsed.declared_total : null;
+        if (plain(parsed.status_counts)) for (const [key, value] of Object.entries(parsed.status_counts)) if (Number.isInteger(value)) counts[key] = value;
+        nonPassRows = Number.isInteger(parsed.non_pass_rows) ? parsed.non_pass_rows : null;
+        source = "json-section";
+      }
+    } catch { /* a broken fence falls through to the summary line */ }
+  }
+  if (source === "unknown") {
+    const line = raw.split(/\r?\n/).map((value) => value.replace(/\*\*/g, "")).find((value) => /^\s*\d+\s*条判据中/.test(value));
+    if (line) {
+      const total = /^\s*(\d+)\s*条判据中/.exec(line);
+      declaredTotal = Number(total[1]);
+      for (const match of line.matchAll(REPORT_STATUS)) counts[match[2]] = Number(match[1]);
+      // A line that names a total but no status part is not the canonical
+      // summary: free prose is never parsed into a count.
+      if (Object.keys(counts).length > 0) source = "summary-line";
+      nonPassRows = raw.split(/\r?\n/).filter((value) => {
+        if (!/^\s*\|/.test(value)) return false;
+        return value.split("|").some((cell) => REPORT_NON_PASS.has(cell.replace(/[`*\s]/g, "")));
+      }).length;
+    }
+  }
+  if (source === "unknown") {
+    return Object.freeze({ ...empty, ref, sha256: sha, reason: "summary-line-not-found", skipped_step_evidence: skippedStepEvidence });
+  }
+  const values = Object.values(counts);
+  const partsSum = values.length ? values.reduce((left, right) => left + right, 0) : null;
+  const diff = declaredTotal !== null && partsSum !== null ? declaredTotal - partsSum : null;
+  const mismatches = [];
+  const cardCounts = plain(acStatus?.counts) ? acStatus.counts : {};
+  let sameAsCard = true;
+  for (const [status, value] of Object.entries(counts)) {
+    if (!Number.isInteger(cardCounts[status])) continue;
+    if (cardCounts[status] !== value) { mismatches.push({ status, report: value, card: cardCounts[status] }); sameAsCard = false; }
+  }
+  const consistent = declaredTotal !== null && partsSum === declaredTotal
+    && (plain(acStatus) ? declaredTotal === acStatus.total_declared && sameAsCard : true);
+  const reportedNonPass = Object.entries(counts).filter(([status]) => status !== "pass").reduce((left, [, value]) => left + value, 0);
+  const coverageLimits = [];
+  if (Number.isInteger(nonPassRows) && nonPassRows !== reportedNonPass) {
+    coverageLimits.push(`非 pass 表 ${nonPassRows} 行与自述 ${reportedNonPass} 条差 ${Math.abs(nonPassRows - reportedNonPass)}；只记覆盖限制，不作通过条件`);
+  }
+  return Object.freeze({
+    ref, sha256: sha, source, reason: null,
+    declared_total: declaredTotal, parts_sum: partsSum, diff,
+    status_counts: Object.freeze({ ...counts }),
+    status_mismatches: Object.freeze(mismatches.map((item) => Object.freeze(item))),
+    non_pass_rows: nonPassRows, reported_non_pass: reportedNonPass,
+    consistent, coverage_limits: Object.freeze(coverageLimits),
+    reported_declared_total: declaredTotal,
+    skipped_step_evidence: Object.freeze(skippedStepEvidence),
+  });
+}
+
+// The target commit is the completed merge's target head, never a commit
+// action's target head: that one is the pre-merge branch tip, and comparing a
+// source commit against it would flag every normal delivery as non-ancestor.
+// `delivered` means "a source commit exists and the delivery action completed";
+// it never implies the merge landed.
+export function deliveryCommit({ actions = [], repo = null } = {}) {
+  const rows = (Array.isArray(actions) ? actions : []).filter(plain);
+  const completed = rows.filter((row) => row.status === "completed");
+  const commit = completed.filter((row) => row.operation === "commit" && OID.test(row.source_head ?? "")).at(-1) ?? null;
+  const merge = completed.filter((row) => row.operation === "merge" && OID.test(row.target_head ?? "")).at(-1) ?? null;
+  const sourceCommit = commit?.source_head ?? null;
+  const targetCommit = merge?.target_head ?? null;
+  let ancestry = "unknown";
+  if (targetCommit !== null && sourceCommit !== null && text(repo)) {
+    try {
+      const result = git(repo, ["merge-base", "--is-ancestor", sourceCommit, targetCommit], { optional: true });
+      ancestry = result.status === 0 ? true : false;
+    } catch { ancestry = "unknown"; }
+  }
+  return Object.freeze({
+    source_commit: sourceCommit,
+    target_commit: targetCommit,
+    target_commit_reason: sourceCommit === null ? "no-commit-action" : (targetCommit === null ? "no-completed-merge" : null),
+    delivered: sourceCommit !== null && commit !== null,
+    ancestry,
+    rules: Object.freeze({
+      source_commit: "completed commit action's source_head",
+      target_commit: "completed merge action's target_head",
+      delivered: "a source commit exists and the commit action completed; it does not imply the merge landed",
+    }),
+  });
+}
+
+const REUSE_INPUT_OK = (value) => plain(value) && text(value.path ?? value.ref) && HEX.test(value.sha256 ?? "");
+const VERSION_HEX = (value) => typeof value === "string" && HEX.test(value);
+const VERSION_OID = (value) => typeof value === "string" && OID.test(value);
+
+// A reuse key names the same command, inputs and scope; it deliberately leaves
+// the observed time out, so two executions of one command agree. Reuse is then
+// bounded by the verification version: only an identical version can be reused,
+// a moved version is a named refusal, and a narrower scope is partial.
+export function evidenceReuseKey({ argv = null, cwd = null, inputs = null, scope = null, tool = null, observed_at = null, version = null, previous = null } = {}) {
+  const reasons = [];
+  const typedInputs = Array.isArray(inputs) && inputs.length > 0 && inputs.every(REUSE_INPUT_OK)
+    ? inputs.map((item) => ({ path: item.path ?? item.ref, sha256: String(item.sha256).toLowerCase() })) : null;
+  if (!Array.isArray(argv) || argv.length === 0 || argv.some((value) => typeof value !== "string")) reasons.push("missing:argv");
+  if (!text(cwd)) reasons.push("missing:cwd");
+  if (typedInputs === null) reasons.push("missing:inputs");
+  if (!Array.isArray(scope) || scope.length === 0 || scope.some((value) => typeof value !== "string")) reasons.push("missing:scope");
+  if (!text(tool)) reasons.push("missing:tool");
+  const key = reasons.length === 0
+    ? sha256(canonicalJson({ argv, cwd, inputs: typedInputs, scope: [...scope].sort(), tool })) : null;
+  const observedAt = text(observed_at) ? observed_at : null;
+
+  const source = plain(version) ? version : {};
+  let verificationVersion = null;
+  if (VERSION_HEX(source.material_sha256) && VERSION_HEX(source.environment_sha256) && VERSION_OID(source.source_commit)
+      && (source.target_commit === null || VERSION_OID(source.target_commit))) {
+    verificationVersion = Object.freeze({
+      material_sha256: source.material_sha256.toLowerCase(),
+      source_commit: source.source_commit.toLowerCase(),
+      target_commit: source.target_commit === null ? null : source.target_commit.toLowerCase(),
+      environment_sha256: source.environment_sha256.toLowerCase(),
+    });
+  }
+  let reuse = "unknown", stillApplicable = "unknown";
+  const affected = [];
+  if (key === null) {
+    // No comparable identity: "unknown", never a silent reuse.
+  } else if (verificationVersion === null) {
+    reasons.push("missing-version");
+  } else if (!plain(previous) || !text(previous.key)) {
+    reasons.push("no-prior-record");
+  } else if (previous.key !== key) {
+    // The key includes the scope, so a scope-only change still has a comparable
+    // identity: recompute this record against the prior scope and treat the
+    // dropped items as the named partial.
+    const priorScope = Array.isArray(previous.scope) ? previous.scope : [];
+    const sameCommandAtPriorScope = sha256(canonicalJson({ argv, cwd, inputs: typedInputs, scope: [...priorScope].sort(), tool }));
+    const dropped = priorScope.filter((item) => !scope.includes(item));
+    if (sameCommandAtPriorScope === previous.key && dropped.length) {
+      reuse = "partial";
+      stillApplicable = false;
+      affected.push(...dropped);
+    } else if (sameCommandAtPriorScope === previous.key) {
+      reuse = "true";
+      stillApplicable = true;
+    } else {
+      reasons.push("different-key");
+    }
+  } else if (canonicalJson(previous.verification_version ?? null) !== canonicalJson(verificationVersion)) {
+    const priorVersion = plain(previous.verification_version) ? previous.verification_version : {};
+    for (const field of ["material_sha256", "source_commit", "target_commit", "environment_sha256"]) {
+      if (canonicalJson(priorVersion[field] ?? null) !== canonicalJson(verificationVersion[field] ?? null)) {
+        reasons.push(`version:${field === "material_sha256" ? "material" : field === "environment_sha256" ? "environment" : field}`);
+        affected.push(field);
+      }
+    }
+    reuse = "false";
+    stillApplicable = false;
+  } else {
+    const priorScope = Array.isArray(previous.scope) ? previous.scope : [...scope];
+    const dropped = priorScope.filter((item) => !scope.includes(item));
+    if (dropped.length) { reuse = "partial"; stillApplicable = false; affected.push(...dropped); }
+    else { reuse = "true"; stillApplicable = true; }
+  }
+  return Object.freeze({
+    key, verification_version: verificationVersion, observed_at: observedAt,
+    // Echo the scope so this record can itself be the `previous` of a next
+    // comparison (a scope-only narrowing must stay detectable).
+    scope: Array.isArray(scope) ? Object.freeze([...scope]) : null,
+    still_applicable: stillApplicable, reuse, affected: Object.freeze([...new Set(affected)]),
+    reasons: Object.freeze([...new Set(reasons)]),
+  });
+}
+
+const GATE_PHASE_LEVEL = /^phases\/(P[1-9][0-9]*)(?:-|\.)/;
+
+function phaseSort(left, right) { return Number(left.slice(1)) - Number(right.slice(1)); }
+
+// Declared gate coverage: how many gate commands the cards declare, how many are
+// readable, how many captures exist, which captures bind no declared gate, and
+// which Phases were never covered. A non-empty difference is a reported fact;
+// it never becomes a failure gate and never changes an exit code.
+export function declaredGateCoverage({ phases = {}, captures = [], selected = null } = {}) {
+  const declared = [];
+  for (const [ref, body] of Object.entries(phases ?? {})) {
+    if (typeof body !== "string") continue;
+    const phaseId = GATE_PHASE_LEVEL.exec(ref)?.[1] ?? null;
+    let inTaskCard = false;
+    for (const [index, line] of body.split(/\r?\n/).entries()) {
+      if (/^###\s+T\d{3,}\b/.test(line)) { inTaskCard = true; continue; }
+      if (/^##\s+/.test(line)) { inTaskCard = false; continue; }
+      const match = GATE_DECL_LINE.exec(line);
+      if (!match) continue;
+      const raw = match[1].trim();
+      const command = declaredGateCommand(raw);
+      declared.push(Object.freeze({
+        phase_ref: ref, phase_id: phaseId, line: index + 1,
+        level: inTaskCard ? "task" : "phase",
+        gate_cmd: command ?? raw,
+        readable: command !== null,
+        reason: command === null ? "not-backticked" : null,
+      }));
+    }
+  }
+  const phaseLevel = declared.filter((item) => item.level === "phase");
+  const taskLevel = declared.filter((item) => item.level === "task");
+  const readable = declared.filter((item) => item.readable).length;
+  const unreadable = declared.filter((item) => !item.readable).map((item) => Object.freeze({
+    phase_ref: item.phase_ref, line: item.line, reason: item.reason ?? "not-backticked",
+  }));
+  const declaredPhaseIds = [...new Set(phaseLevel.map((item) => item.phase_id).filter((id) => id !== null))].sort(phaseSort);
+  const bound = new Map();
+  let unbound = 0;
+  const orphan = [];
+  for (const capture of Array.isArray(captures) ? captures : []) {
+    const identity = capture?.gate_identity ?? null;
+    if (identity === null || identity === undefined) { unbound += 1; continue; }
+    const phaseId = typeof identity.phase_id === "string" ? identity.phase_id : null;
+    if (phaseId === null) continue;
+    bound.set(phaseId, (bound.get(phaseId) ?? 0) + 1);
+    if (!declaredPhaseIds.includes(phaseId)) orphan.push(Object.freeze({ ref: capture.ref ?? null, phase_id: phaseId }));
+  }
+  const byPhase = {};
+  for (const id of [...bound.keys()].sort(phaseSort)) byPhase[id] = bound.get(id);
+  const uncovered = declaredPhaseIds.filter((id) => !bound.has(id));
+  const unexecutable = declared
+    .filter((item) => /<[^<>\s]+>/.test(item.gate_cmd))
+    .map((item) => Object.freeze({
+      phase_id: item.phase_id, phase_ref: item.phase_ref, line: item.line,
+      reason: "unsubstituted-placeholder", gate_cmd: item.gate_cmd,
+    }));
+  return Object.freeze({
+    declared_total: declared.length,
+    phase_level: phaseLevel.length,
+    task_level: taskLevel.length,
+    readable,
+    unreadable: Object.freeze(unreadable),
+    coverage_denominator: declaredPhaseIds.length,
+    declared_phases: Object.freeze(declaredPhaseIds),
+    captured: Array.isArray(captures) ? captures.length : 0,
+    unbound,
+    by_phase: Object.freeze(byPhase),
+    uncovered: Object.freeze(uncovered),
+    orphan: Object.freeze(orphan),
+    unexecutable: Object.freeze(unexecutable),
+    selected: selected ?? null,
+    declarations: Object.freeze(declared),
+    definitions: Object.freeze({
+      unbound: "captures whose gate_identity is null: they are bound to no declared gate",
+      orphan: "captures whose gate_identity.phase_id is set but is not one of the declared phase-level Phases",
+    }),
+  });
+}
+
 export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
   if (!text(taskPath) || !isAbsolute(taskPath)) throw new TypeError("readDeliveryClaims requires an absolute task path");
   const root = resolve(taskPath);
@@ -468,6 +802,54 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
   const repo = realpathSync(manifest.target_repo_root);
   const worktree = taskWorktreeRoot(manifest, repo);
   const currentEnvironment = environmentFingerprint();
+
+  // Same pure parse and same evidence reader as the material check and the
+  // terminal chain: the delivery side never merges its own card status.
+  const acSeed = acCardStatuses({ spec: material.spec ?? "", phases: material.phases ?? {} });
+  const acVerdicts = {};
+  for (const entry of acSeed.entries) {
+    for (const [index, ref] of entry.refs.entries()) {
+      if (ref.kind !== "task-relative") continue;
+      if (ref.token.endsWith("/")) { acVerdicts[`${entry.id}#${index}`] = { status: "unverified", reason: "directory-path: 引用的是目录而不是单一原件" }; continue; }
+      const checked = checkEvidencePath(ref.token, [], root);
+      acVerdicts[`${entry.id}#${index}`] = { status: checked.status, ...(checked.reason ? { reason: checked.reason } : {}) };
+    }
+  }
+  const acStatus = applyRefVerdicts(acSeed, acVerdicts);
+  const closeActions = [], unreadableCloseActions = [];
+  try {
+    const directory = join(root, "quality", "evidence", "close");
+    for (const name of readdirSync(directory).filter((value) => /-close-action\.json$/.test(value)).sort()) {
+      try {
+        const record = JSON.parse(readFileSync(join(directory, name), "utf8"));
+        if (plain(record)) closeActions.push(record);
+        else unreadableCloseActions.push(`quality/evidence/close/${name}`);
+      } catch { unreadableCloseActions.push(`quality/evidence/close/${name}`); }
+    }
+  } catch (error) { if (error.code !== "ENOENT") throw error; }
+  // The capture surface is the facts' `gate:` markers only; a directory scan
+  // would introduce a "newest file" reading the close rules forbid.
+  const captures = [], captureOriginals = [], unreadableCaptures = [];
+  for (const marker of markers) {
+    if (marker.invalid) { unreadableCaptures.push(marker.invalid); continue; }
+    let artifact;
+    try { artifact = JSON.parse(readTaskRelative(root, marker.ref).toString("utf8")); }
+    catch { unreadableCaptures.push(marker.ref); continue; }
+    if (!plain(artifact)) { unreadableCaptures.push(marker.ref); continue; }
+    captureOriginals.push({ ref: marker.ref, artifact });
+    captures.push(Object.freeze({ ref: marker.ref, gate_identity: artifact.gate_identity ?? null }));
+  }
+  const evidenceReuse = captureOriginals.map(({ ref, artifact }) => Object.freeze({
+    ref,
+    ...evidenceReuseKey({
+      argv: artifact.argv, cwd: artifact.cwd, inputs: artifact.inputs, scope: artifact.material_files,
+      tool: artifact.capture_route ?? null, observed_at: artifact.started_at,
+      version: {
+        material_sha256: artifact.material_sha256, source_commit: artifact.head, target_commit: null,
+        environment_sha256: artifact.environment_sha256,
+      },
+    }),
+  }));
 
   const claims = {};
   let gate = null, verdict = null, verdictRef = null;
@@ -606,6 +988,20 @@ export function readDeliveryClaims({ taskPath, requireReadback = true } = {}) {
     claims: Object.freeze(Object.fromEntries(CLAIM_NAMES.map((name) => [name, Object.freeze(claims[name])]))),
     claim_codes: Object.freeze(Object.fromEntries(CLAIM_NAMES.map((name) => [name, claims[name].code ?? null]))),
     environment: Object.freeze({ sha256: currentEnvironment, platform: process.platform, arch: process.arch, node: process.version, node_major: process.versions.node.split(".")[0], graphify: graphifyIdentity() }),
+    // Five reconciliation facts. They are reported, never folded into a claim
+    // status or an exit code.
+    ac_status: Object.freeze({ ...acStatus }),
+    report: reportReconciliation({ taskPath: root, acStatus }),
+    delivery_commit: Object.freeze({ ...deliveryCommit({ actions: closeActions, repo }), unreadable: Object.freeze(unreadableCloseActions) }),
+    evidence_reuse: Object.freeze(evidenceReuse),
+    evidence_reuse_unreadable: Object.freeze(unreadableCaptures),
+    gate_coverage: declaredGateCoverage({
+      phases: material.phases ?? {},
+      captures,
+      selected: selection.pointer
+        ? Object.freeze({ ref: selection.pointer.ref, phase_id: selection.declared?.phase_id ?? null, exit_code: gate?.artifact?.exit_code ?? null })
+        : null,
+    }),
   });
 }
 
