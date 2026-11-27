@@ -244,7 +244,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 - **未决 3（OPEN-03）**：`task-breakdown` 是被三阶段原生吸收还是长期外挂（decision-log:696 OI-3）。影响：删除条件待定。谁定：WP9 收口时按技能消费者与删除条件定。
 - **未决 4（OPEN-04）**：包 9 异源审查未跑（p9/design.md:500 U4、decision-log:698 OI-5）。影响：AC-15 只能按「记法合规」判，不按「有原件」判。谁定：主会话；恢复条件＝真实派发一次。
 - **未决 5（OPEN-05）**：新增四组需求（R-018–R-023）只有主会话转述、无一手指令原话（p9/design.md:502 U6）。影响：不影响判据，只影响来源强度。谁定：主会话补到需求索引。
-- **未决 6（OPEN-06）**：判定者独立性口径两处不同步（decision-log:538 要求比较≠交付者；p6/card.md 记用户裁决「不记谁来判」只覆盖包 6）。影响：本文件把「独立判定者」写成具名不适用（见 Appendix B），不据此判 AC。谁定：主会话统一两处措辞。
+- **未决 6（OPEN-06，已由主会话统一）**：口径取 decision-log:539 的实质要求——**判定者必须可比较且独立于交付者**（同一人、身份缺失或无法比较 → 记自证/未取得）；用户 2026-11-26「不记谁来判」的裁决只覆盖包 6 的**字段**，不取消「判定者≠交付者」的实质要求。本文件因此：AC 判词必须由未参与该 Phase 写作的人或独立上下文出件（`quality/reviews/` 或 `quality/tests/` 落原件），字段形态不强制具名。
 - **未决 7（OPEN-07）**：子代理真实 token 无 producer（p9/design.md:497 U1）。影响：WP9 的上下文成本只能报「读了几份几节」。谁定：主会话。
 
 ## 实现设计（全局权威）
@@ -330,7 +330,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 | D3 | `core/task-close.mjs:778`、`:805` | `:778 let sourceCommit = task ?? actions.filter(...).at(-1)?.source_head ?? …`；`:805 const facts = { delivery_committed: sourceAvailable && …` | 在 `:805` 的 `facts` 对象内**插入** `source_commit`／`target_commit`（值来自 `:778` 的 `sourceCommit` 与既有 `target_head`，`:1244` 的 completed 行已有该键）；`delivery_committed` 布尔保留不改 |
 | D4 | `runtime/task/delivery-claims.mjs:232`、`:326` | `const DECLARED_GATE = /^[ \t]*[-*][ \t]+\*\*gate_cmd\*\*[ \t]*[:：][ \t]*…/gm;`（逐字见 `:232`）；`export function gateIdentityFromCapture({ phases, command, phaseId = null } = {})` | **DO NOT TOUCH** 两处；在 `:450` claim 区之前**新增导出** `declaredGateCoverage({ phases, captures })`，内部只调这两处 |
 | D5 | 同文件，`:450` 之前（与 D4 同插入区） | claim 区起于 `:450`，`claim_codes` 在 `:607` | **新增** `evidenceReuseKey({ argv, cwd, inputs, scope, tool })` 与 `verificationVersion` 判定（`started_at/ended_at` 不进 key） |
-| D6 | `tools/cli/run-checks.mjs:691` | `async function runMaterialChecks(root, { stage } = {}) {` | 在输出段追加 D4／D5 的读数（不新建 CLI；`--task-path` 与 `--material-root` 两模式已存在，见 `:22`／`:48-51`／`:61`） |
+| D6 | `tools/cli/run-checks.mjs:691` | `async function runMaterialChecks(root, { stage } = {}) {` | 在输出段追加 `ac_status` 读数（不新建 CLI；`--task-path` 与 `--material-root` 两模式已存在，见 `:22`／`:48-51`／`:61`）；D4／D5 的 `gate_coverage`／`evidence_reuse` 由 `check-delivery-claims` 读，本文件不接 |
 | D7 | `runtime/task/final-chain-runner.mjs:417` | 同 C7 的那一行 | P6 在 C7 交付后**第二次**改同一行表达式，加 `ac_status` 读取 |
 | D8 | `runtime/task/delivery-claims.mjs:360`、`:384`、`:607` | `gate_unbound`／`gate_unwrap_depth` 读点、`claim_codes:` | **DO NOT TOUCH**：三个已登记字段只消费不改 |
 | D9 | `tools/cli/stage-runtime.mjs:1163-1199` | `:1166 gate_unbound: gateIdentity.unbound,`、`:1167 gate_unwrap_depth: gateIdentity.depth,` | **DO NOT TOUCH** |
@@ -391,8 +391,8 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 | `facts.ac_status`（新键，`:1428` 内） | P6 | `tools/cli/run-checks.mjs`（材料检查）、`runtime/task/final-chain-runner.mjs:417`（终末链）、`core/task-close.mjs`（关单） | 字段缺 → 三处同记 `未取得`，不各自重算、不静默取一个 |
 | `acCardStatuses(markdown)`（新增导出） | P6 | 只在 `facts` 生成处调用一次 | 解析不出 → 该条 `unknown`；总数与逐条数不等 → 输出差值；冲突条永远算「不一致」并保留两个原值 |
 | `source_commit`／`target_commit`（新键，`core/task-close.mjs:805` 内） | P6 | 关单 reader、`tools/cli/check-delivery-claims.mjs` | 只有布尔 → `未取得`；源提交不是合并目标祖先 → 点名；不给任务库文件编提交号 |
-| `declaredGateCoverage({phases, captures})`（新增导出，`delivery-claims.mjs:450` 前） | P6 | `tools/cli/run-checks.mjs` 输出段 | 差集非空 → 逐个点名；带未替换占位符 → 判「不可执行」；退出码零不当覆盖 |
-| `evidenceReuseKey(...)`／`verificationVersion`（新增导出） | P6 | 同上 | 缺 `inputs` 或版本 → `unknown` 且不得复用；范围/时点变 → 只判 `partial` 并列出受影响项 |
+| `declaredGateCoverage({phases, captures})`（新增导出，`delivery-claims.mjs:450` 前） | P6 | `tools/cli/check-delivery-claims.mjs`（读 `readDeliveryClaims` 返回的 `gate_coverage`；`run-checks` 输出段只加 `ac_status`，不接这两项） | 差集非空 → 逐个点名；带未替换占位符 → 判「不可执行」；退出码零不当覆盖 |
+| `evidenceReuseKey(...)`／`verificationVersion`（新增导出） | P6 | 同上（`check-delivery-claims.mjs` 读 `evidence_reuse`） | 缺 `inputs` 或版本 → `unknown` 且不得复用；范围/时点变 → 只判 `partial` 并列出受影响项 |
 | `skills/task-breakdown/SKILL.md`＋4 份 references | P3 | 三处入口前言、三个子流程 `steps.json`、`check-stage-steps.mjs:1430`／`:1852`（当次读取回执） | 文件不可读／锚不解析 → 该步走既有 `skillLoadFailure` 记「未判定」，不静默放行 |
 | `tests/contract/task-breakdown-wiring.test.mjs` | P3 | `node --test`（审查与终末） | 非 0 → 接线断，回 P3 补；不靠旧卡或空集顶替 |
 
@@ -420,7 +420,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 | `runtime/stage/stage-content-contracts.mjs` | MODIFY | P5 → P6 | P5 加 `:279` 的 `export`、P6 加 D2 函数与 `:1428` 的 `ac_status`。依据：P6 的逐条状态要消费 P5 的四类结论，不只是同文件冲突 |
 | `tools/cli/stage-runtime.mjs` | MODIFY | P5 | 唯一写者（`:1891`）；`:1163-1199` 的 gate-results 不动 |
 | `runtime/evidence/acceptance-evidence-validator.mjs` | DO NOT TOUCH | — | `:1` 唯一导入 `canonical-utils.mjs`；`grep -c 'node:fs'` = 0（K2）。2026-11-26 实读 |
-| `tools/cli/run-checks.mjs` | MODIFY | P5 → P6 | P5 改 `:544` 缺件结论、P6 在 `runMaterialChecks`(`:691`) 输出段接 D4／D5。依据：同一函数体，且 AC-04 的缺件点名要先于 AC-06 的三处结论 |
+| `tools/cli/run-checks.mjs` | MODIFY | P5 → P6 | P5 改 `:544` 缺件结论、P6 在 `runMaterialChecks`(`:691`) 输出段接 `ac_status`（D4／D5 的 `gate_coverage`／`evidence_reuse` 由 `check-delivery-claims` 读，不在此列）。依据：同一函数体，且 AC-04 的缺件点名要先于 AC-06 的三处结论 |
 | `runtime/task/final-chain-runner.mjs` | MODIFY | P5 → P6 | P5 改 `:417` 的 `applicable`、P6 第二次改同一行加 `ac_status`。依据：同一行表达式，必须串行 |
 | `tests/contract/evidence-path-existence.test.mjs` | MODIFY | P5 | 只改受四态影响的断言前提（7 例补内容指纹，另补 3 例：无锚／字节不符／打不开）；唯一写者 |
 | `tests/contract/run-checks-evidence-summary.test.mjs` | MODIFY | P5 | 只改受摘要行新增「未验证」影响的期望（2 例）；唯一写者 |
@@ -850,17 +850,17 @@ Phase 级（每条边写真实输入）：
   成本：executor=实现者＋独立审查角色；estimate_min=40；hard_cap_min=90；resources=四份技能、上下文包模板、任务 4 三坏例；observation=9 行与六项、测试/审查分列、三句反写、六列、三坏例；retry_cap=1；evidence_tier=文档级。
 
 - [ ] **AC-18 包级问题与方案全覆盖**
-  场景：读包级覆盖账、10 个包的问题/方案行、8 份 Phase 卡。
+  场景：读包级覆盖账、10 个包的问题/方案行、9 份 Phase 卡（P1–P9）。
   判定方式：人读＋命令。
-  判法：①覆盖账有 10 个「## 包 N」节、97 行四值（覆盖/部分/缺/未取得）无空格；②每个「缺/部分」有 owner 与恢复条件；③每个包的问题与方案至少一条被某 Phase/Task/AC 消费；④四值外无词，结论列不出现「通过」；⑤审计 §2.2 判缺的每一件与 §6 的每一行，都在账里指到消费点、修复任务或具名缺口之一，三者都指不到时该条只能记部分，不得判 pass。
+  判法：①覆盖账有 10 个「## 包 N」节、97 行四值（覆盖/部分/缺/未取得）无空格；②每个「缺/部分」有 owner 与恢复条件；③每个包的问题与方案至少一条被某 Phase/Task/AC 消费（**包粒度**：每包至少一条真被消费即成立；件级逐行消费位不单独判，只在记账瑕疵里具名）；④四值外无词，结论列不出现「通过」；⑤审计 §2.2 判缺的每一件与 §6 的每一行，都在账里指到消费点、修复任务或具名缺口之一，三者都指不到时该条只能记部分，不得判 pass。
   通过：①10 节 97 行；②缺口有主；③10/10 有消费；④无第五值；⑤缺件行都指到消费点或修复任务。
   失败：只写包名不写消费位；缺口无 owner；把「部分」写成「通过」；缺件行只有 owner 而没有消费点或修复任务。
   证据：`quality/evidence/build-plan/package-coverage-ledger.md`；关联 P9 卡。
 - [ ] **AC-19 单一事实源一致**
   场景：读 spec「单一事实源」表与 P1/P2/P8、三份技能里的同一数值。
   判定方式：机器可判。
-  判法：①`spec.md` 有「## 单一事实源」节，五事实各一行（角色数、AC 数、轮次、任务数、包数）；②AC 条数与表同值；③P1 五个名字（执行者、审查者、开发者、独立审查者、独立测试者）各 ≥1 处、`六个名字` 0 命中；④P2「冷读最多两轮／内核上限两轮」0 命中、`上限归内核 R1` 仍在；⑤P8 卡不出现「16 条 AC」字样（只许出现在「17＝16＋1」的算式里）、判 AC-01–AC-17 共 17 条并出 17 行表；AC-18／AC-19 由 P9 首判、P8 消费，全文 19 条与单一事实源同值。
-  通过：①五行非空；②同值；③五个名字各 ≥1、`六个名字` 0（0/5）；④0/≥4；⑤0 处「16 条 AC」、17 条/17 行、19 条同值。
+  判法：①`spec.md` 有「## 单一事实源」节，五事实各一行（角色数、AC 数、轮次、任务数、包数）；②AC 条数与表同值；③P1 五个名字（执行者、审查者、开发者、独立审查者、独立测试者）各 ≥1 处、`六个名字` 0 命中；④P2「冷读最多两轮／内核上限两轮」0 命中、`上限归内核 R1` 仍在；⑤P8 卡不出现「16 条 AC」字样（只许出现在「17＝16＋1」的算式里）；P8 对 AC-01–AC-17 各判一行，AC-18／AC-19 各记一行「P9 首判、P8 消费」，全文 19 行，与单一事实源「AC 条数 19」同值。
+  通过：①五行非空；②同值；③五个名字各 ≥1、`六个名字` 0（0/5）；④0/≥4；⑤0 处「16 条 AC」、19 行（17 判定＋2 消费）与 19 条同值。
   失败：卡上另写一套数；表外有第二份定义。
   证据：spec 表、P1/P2/P8 卡、三份技能；关联 P9 卡。
 
