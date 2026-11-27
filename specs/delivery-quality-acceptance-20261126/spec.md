@@ -217,7 +217,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 
 ## 谁先谁后？
 
-分八段，顺序按 decision-log:228 的包依赖（10 → 9 → 8 → 1 → 2 → 3 → 4 → 5 → 6 → 7）压成八个交付结果：P1 先做角色节，P2 再做入口禁令；P3–P8 各自首判自己的 AC，P8 是唯一末验收。
+分九段，顺序按 decision-log:228 的包依赖（10 → 9 → 8 → 1 → 2 → 3 → 4 → 5 → 6 → 7）压成八个交付结果：P1 先做角色节，P2 再做入口禁令；P3–P9 各自首判自己的 AC，P8 是唯一末验收（P9 只补包级覆盖与单一事实源，不改 AC-01–AC-17 判法）。
 
 **执行必然串行**：四个 `workflows/*/SKILL.md` 被 3–5 个包共用（`build-code` 最多 5 个 Phase），任一段的判定器都在读这些文件的字节，所以不存在两段并行；但串行不等于切细——切法仍按「一个能独立验收的结果」，不按文件或包数。每段的写集与写主见「实现设计」§5，依赖边见 §6。
 
@@ -233,7 +233,7 @@ phase-maker、task-maker、run-phase 三个技能现在只有导航与零散读�
 | P8 | 前置任务与全 AC 收口 | 在最终合并版本上，前四任务 127 条逐条只有四种结论、结论列没有本包自己的「通过」；旧判据三态齐且「仍适用」被当场破坏变红；集成态只跑前四任务声明过的命令；全部 17 条 AC 在最终字节上给出结论。 | P7 | AC-12（首判）＋ AC-03／04／06／13／14／15 的最终字节重跑；其余 AC 消费首判原件一次 | WP7 | `skills/stage-close/SKILL.md`（`:12` 邻域）、`workflows/build-code/SKILL.md`（`:386` 邻域） | 独立审查角色在最终提交后：读 `quality/evidence/p7-replay/` 的判词表／三态表／集成态读数表，跑 `grep -n "T08"`，重跑上列 6 条 AC 的命令并逐条给结论。 |
 | P9 | 包级覆盖补齐与根治 | 交付包级覆盖账（10 个包节、97 行四值、40 行缺口带 owner）、五处卡面漂移同值、四处根治各在唯一文件，并首判 AC-18／AC-19；只改卡面词面与 spec 一致性，不改 AC-01–AC-17 判法、不改已完成 Phase 交付字节。 | P8 | AC-18（首判）、AC-19（首判）；AC-13①② 只读复核未被动；其余 AC 只登记判点缺口 | WP1–WP10（全包覆盖） | `spec.md`、`phases/P1`–`P8` 四张卡的漂移句、`skills/phase-maker/SKILL.md`、`workflows/build-plan/SKILL.md`、`skills/wh-review/SKILL.md`、任务根 `quality/evidence/build-plan/package-coverage-ledger.md` | 独立审查角色在本段提交后：读覆盖账与五处卡面实际字节，跑 P9 卡 `gate_cmd`（ORACLE-P9-PACKAGE-COVERAGE）与五条验收读数，逐条判 AC-18／AC-19 与四处根治。 |
 
-切超过 8 段时不必写合并理由——本计划恰为 8 段；把 P4 再拆成两段的被否理由、以及把 P2–P8 七段并成三段的被否理由见「实现设计」§11。包 10 的 P1 是真实交付，不是执行建议第 0 阶段；执行建议第 0 阶段不适用（`workflows/build-plan/SKILL.md` 的规则未触发）。（节号沿用原编号：§2 与 §4 的内容分别在「代码锚点」与「接口与失败语义」两节内，§11 不存在，回指按原编号读。）
+切超过 9 段时不必写合并理由——本计划恰为 9 段；把 P4 再拆成两段的被否理由、以及把 P2–P8 七段并成三段的被否理由见「实现设计」§11。包 10 的 P1 是真实交付，不是执行建议第 0 阶段；执行建议第 0 阶段不适用（`workflows/build-plan/SKILL.md` 的规则未触发）。（节号沿用原编号：§2 与 §4 的内容分别在「代码锚点」与「接口与失败语义」两节内，§11 不存在，回指按原编号读。）
 
 ## 还有什么没定？
 
@@ -819,7 +819,7 @@ Phase 级（每条边写真实输入）：
   四个文件是 `workflows/make-decision/SKILL.md`、`workflows/build-prd/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`。②`grep -n "需要三角色分开做时\|不报缺独立审查\|仅复杂任务\|可以只写卡" workflows/make-decision/SKILL.md workflows/build-code/SKILL.md workflows/make-decision/flows/small/SKILL.md skills/decision-maker/SKILL.md` 必须无输出（退出码 1）。③`node --test tests/contract/four-skill-wiring.test.mjs` 必须退 0。
   通过：四个文件都输出 `PARA=n/n`（同一空行段内既有同义词又有禁令）；②无输出；③退 0。
   失败：出现 `NO-PARA` 或 `PARA=0/n`；②有命中（旧出口还在）；③红。
-  证据：四条 `PARA` 输出、②的 grep 结果与③的测试输出，落 `quality/evidence/p9/replay/`。关联 FR-20；包卡 AC-P9-01、AC-P9-02、AC-P9-05。
+  证据：四条 `PARA` 输出、②的 grep 结果与③的测试输出，落 `quality/evidence/decision-maker/p9/replay/`。关联 FR-20；包卡 AC-P9-01、AC-P9-02、AC-P9-05。
   成本：executor=实现者；estimate_min=10；hard_cap_min=25；resources=四份入口正文、四份步骤表、接线契约测试；observation=PARA 比值、grep 退出码、测试退出码；retry_cap=1；evidence_tier=命令级。
 
 - [ ] **AC-15 审查只做一次，异源一次，结论直连不转述**
@@ -828,7 +828,7 @@ Phase 级（每条边写真实输入）：
   判法：①`grep -n "最多派一次异源" skills/decision-maker/SKILL.md workflows/make-decision/SKILL.md` 两处都必须搜到；②同样的搜法在 `workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/build-prd/SKILL.md` 三处必须搜不到（退出码 1）；③`grep -c "复读" skills/decision-maker/SKILL.md` 必须输出 0（退出 1）；`workflows/make-decision/SKILL.md` 同样无命中；其它技能不要求清零，保留原义；④`test -r quality/evidence/decision-maker/p9/heterologous.md`，或该文件不存在时读同目录记法（`unavailable`＋owner＋恢复条件）；⑤读 `quality/evidence/decision-maker/p9/replay/review-notice-sample.md`，只能有一行、含相对路径与「自己判断」，且 `grep -nE "条发现|严重度|必须改"` 无输出；⑥处置两栏：`quality/evidence/decision-maker/p<N>/review.md` 的「## 处置」节里 `grep -c "改了什么"` 与 `grep -c "没改"` 各必须有输出。
   通过：①都在、②都没有、③输出 0（退出 1）、④原件可读或记法合规、⑤通知最小、⑥两栏可读且指针 `test -r` 为真；④⑤⑥ 未取得时记未取得＋owner，不挡其它 AC，Done 只判有证据的项。
   失败：限次句出现在不该有的三处；「复读」仍在；异源未派却写成通过；通知夹带条数或建议；处置只有一栏。
-  证据：六条读数与通知样例，落 `quality/evidence/p9/replay/`。关联 FR-21、FR-22、FR-23；包卡 AC-P9-06、AC-P9-12、AC-P9-13。
+  证据：六条读数与通知样例，落 `quality/evidence/decision-maker/p9/replay/`。关联 FR-21、FR-22、FR-23；包卡 AC-P9-06、AC-P9-12、AC-P9-13。
   成本：executor=实现者；estimate_min=15；hard_cap_min=40；resources=两份技能正文、三份入口、异源原件、通知样例；observation=搜到／搜不到、文件可读性、两栏；retry_cap=1；evidence_tier=命令级。
 
 - [ ] **AC-16 单元总结可回读、复盘三句实指、上下文成本有读数**
@@ -837,7 +837,7 @@ Phase 级（每条边写真实输入）：
   判法：①`test -r quality/evidence/reflection/unit-*.md`（至少一条），头部含总结原文五条、发出时刻（`%Y-%m-%d %H:%M`）与会话标识；②`grep -n "原读数 → 现读数" skills/stage-reflection/SKILL.md` 必须搜到，且四个技能里搜不到（指针化）；③`grep -nE "读了 ?[0-9]+ ?份" quality/evidence/decision-maker/p9/replay/dispatch-sample-reply.md` 必须搜到；④读 `quality/evidence/decision-maker/p9/replay/closeout-cost-lens.md`，三类读数齐、耗时写「未取得」。
   通过：①总结可回读且五条与人话一致；②三句下限只在复盘技能一处；③派发说明有五段与最小阅读集、回传报出读了几份几节；④成本镜头三类读数为真实现象。
   失败：总结夹确认请求；复盘只有「顺利完成」；成本镜头写无源估时；四个技能里各写一套复盘下限。
-  证据：单元记录、派发说明与回传、成本镜头报告，落 `quality/evidence/reflection/` 与 `quality/evidence/p9/replay/`。关联 FR-24；包卡 AC-P9-07..11。
+  证据：单元记录、派发说明与回传、成本镜头报告，落 `quality/evidence/reflection/` 与 `quality/evidence/decision-maker/p9/replay/`。关联 FR-24；包卡 AC-P9-07..11。
   成本：executor=实现者＋独立审查角色；estimate_min=20；hard_cap_min=45；resources=单元记录、派发样例、成本报告；observation=五条原文、读数、三类成本读数；retry_cap=1；evidence_tier=命令级。
 
 - [ ] **AC-17 四技能角色与原始需求翻译契约**
@@ -859,8 +859,8 @@ Phase 级（每条边写真实输入）：
 - [ ] **AC-19 单一事实源一致**
   场景：读 spec「单一事实源」表与 P1/P2/P8、三份技能里的同一数值。
   判定方式：机器可判。
-  判法：①`spec.md` 有「## 单一事实源」节，五事实各一行（角色数、AC 数、轮次、任务数、包数）；②AC 条数与表同值；③P1 五个名字（执行者、审查者、开发者、独立审查者、独立测试者）各 ≥1 处、`六个名字` 0 命中；④P2「冷读最多两轮／内核上限两轮」0 命中、`上限归内核 R1` 仍在；⑤P8「16 条」0、17 处同值（P8 卡 17 条 AC、17 行表，与单一事实源一致）。
-  通过：①五行非空；②同值；③五个名字各 ≥1、`六个名字` 0（0/5）；④0/≥4；⑤0/17。
+  判法：①`spec.md` 有「## 单一事实源」节，五事实各一行（角色数、AC 数、轮次、任务数、包数）；②AC 条数与表同值；③P1 五个名字（执行者、审查者、开发者、独立审查者、独立测试者）各 ≥1 处、`六个名字` 0 命中；④P2「冷读最多两轮／内核上限两轮」0 命中、`上限归内核 R1` 仍在；⑤P8 卡不出现「16 条 AC」字样（只许出现在「17＝16＋1」的算式里）、判 AC-01–AC-17 共 17 条并出 17 行表；AC-18／AC-19 由 P9 首判、P8 消费，全文 19 条与单一事实源同值。
+  通过：①五行非空；②同值；③五个名字各 ≥1、`六个名字` 0（0/5）；④0/≥4；⑤0 处「16 条 AC」、17 条/17 行、19 条同值。
   失败：卡上另写一套数；表外有第二份定义。
   证据：spec 表、P1/P2/P8 卡、三份技能；关联 P9 卡。
 
